@@ -83,8 +83,4 @@ Private project - All rights reserved
 
 ## 👤 Author
 
-Arnauld NGAHA
-
----
-
-*Built with ❤️ for modern project management*
+Arnauld ZEH
