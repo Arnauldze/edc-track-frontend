@@ -19,10 +19,14 @@ export interface CreateUserDto {
   phone?: string;
   position?: string;
   department?: string;
-  login: string;
-  password: string;
+  login?: string;
+  password?: string;
   platformRole?: 'admin' | 'user';
   status?: 'active' | 'inactive';
+}
+
+export interface CreateUserResponse extends User {
+  temporaryPassword?: string;
 }
 
 export interface UpdateUserDto {
@@ -56,13 +60,18 @@ export const userService = {
   /**
    * Create user
    */
-  async create(data: CreateUserDto): Promise<User> {
+  async create(data: CreateUserDto): Promise<CreateUserResponse> {
     const backendData = {
       ...transformUserToBackend(data),
-      password: data.password,
+      ...(data.password && { password: data.password }),
+      ...(data.login && { login: data.login }),
     };
-    const response = await apiClient.post<ApiResponse<BackendUser>>('/users', backendData);
-    return transformUserFromBackend(response.data.data!);
+    const response = await apiClient.post<ApiResponse<BackendUser & { temporaryPassword?: string }>>('/users', backendData);
+    const rawData = response.data.data!;
+    return {
+      ...transformUserFromBackend(rawData),
+      temporaryPassword: rawData.temporaryPassword,
+    };
   },
 
   /**

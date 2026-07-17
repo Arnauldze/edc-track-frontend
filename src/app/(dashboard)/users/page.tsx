@@ -9,12 +9,12 @@ import {
   deleteUser,
   type User,
 } from "@/lib/userStore";
-import { Plus, Edit2, Trash2, Search, Mail, Phone, Briefcase, Upload } from "lucide-react";
+import { Plus, Edit2, Trash2, Search, Mail, Phone, Briefcase, Upload, RotateCcw } from "lucide-react";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorDisplay } from "@/components/ui/ErrorDisplay";
-import { getErrorMessage } from "@/services/api/client";
+import { getErrorMessage, apiClient } from "@/services/api/client";
 
 const EDC_POSITIONS = [
   "Directeur Général",
@@ -36,6 +36,8 @@ export default function UsersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showCredentials, setShowCredentials] = useState<{ login: string; password: string } | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -96,8 +98,8 @@ export default function UsersPage() {
         department: "",
         status: "active",
         platformRole: "user",
-        login: "",
-        password: "user123",
+        login: "", // Sera généré automatiquement
+        password: "", // Sera généré automatiquement
       });
     }
     setShowModal(true);
@@ -111,7 +113,7 @@ export default function UsersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.login) {
+    if (!formData.firstName || !formData.lastName || !formData.email) {
       toast.error("Veuillez remplir les champs obligatoires");
       return;
     }
@@ -133,7 +135,7 @@ export default function UsersPage() {
         await updateUser(editingUser.id, updateData);
         toast.success("Utilisateur modifié");
       } else {
-        // Create new user
+        // Create new user - login et password seront générés automatiquement par le backend
         const createData = {
           firstName: formData.firstName,
           lastName: formData.lastName,
@@ -141,12 +143,20 @@ export default function UsersPage() {
           phone: formData.phone,
           position: formData.position,
           department: formData.department,
-          login: formData.login,
-          password: formData.password,
           platformRole: formData.platformRole,
           status: formData.status,
         };
-        await addUser(createData);
+
+        const response = await addUser(createData);
+
+        // Afficher les credentials générés
+        if (response.temporaryPassword) {
+          setShowCredentials({
+            login: response.login,
+            password: response.temporaryPassword,
+          });
+        }
+
         toast.success("Utilisateur créé");
       }
 
@@ -176,6 +186,27 @@ export default function UsersPage() {
     }
   };
 
+  const handleResetPassword = async (userId: string) => {
+    try {
+      setResettingPassword(userId);
+      const response = await apiClient.post(`/users/${userId}/generate-credentials`);
+      const data = response.data;
+
+      if (data.success) {
+        setShowCredentials({
+          login: data.data.login,
+          password: data.data.temporaryPassword,
+        });
+        toast.success("Mot de passe réinitialisé avec succès");
+      } else {
+        toast.error(data.message || "Erreur lors de la réinitialisation");
+      }
+    } catch (err: any) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setResettingPassword(null);
+    }
+  };
 
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -410,6 +441,17 @@ export default function UsersPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
+                    {/* Bouton Réinitialiser le mot de passe */}
+                    <button
+                      onClick={() => handleResetPassword(user.id)}
+                      disabled={resettingPassword === user.id}
+                      className="p-2 text-[var(--text-tertiary)] hover:text-orange-500 hover:bg-orange-500/10 rounded-[var(--radius-md)] transition-colors disabled:opacity-50"
+                      title="Réinitialiser le mot de passe"
+                    >
+                      {resettingPassword === user.id ? <LoadingSpinner size="sm" /> : <RotateCcw size={14} />}
+                    </button>
+
+                    {/* Bouton Modifier */}
                     <button
                       onClick={() => handleOpenModal(user)}
                       className="p-2 text-[var(--text-tertiary)] hover:text-[var(--accent)] hover:bg-[var(--accent-subtle)] rounded-[var(--radius-md)] transition-colors"
@@ -417,6 +459,8 @@ export default function UsersPage() {
                     >
                       <Edit2 size={14} />
                     </button>
+
+                    {/* Bouton Supprimer */}
                     <button
                       onClick={() => handleDelete(user.id, `${user.firstName} ${user.lastName}`)}
                       className="p-2 text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-500/10 rounded-[var(--radius-md)] transition-colors"
@@ -488,35 +532,6 @@ export default function UsersPage() {
                   required
                 />
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                  Login *
-                </label>
-                <input
-                  type="text"
-                  value={formData.login}
-                  onChange={(e) => setFormData({ ...formData, login: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
-                  required={!editingUser}
-                  disabled={!!editingUser}
-                />
-              </div>
-
-              {!editingUser && (
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                    Mot de passe *
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
-                    required
-                  />
-                </div>
-              )}
 
               <div>
                 <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
@@ -625,6 +640,78 @@ export default function UsersPage() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(null)}
       />
+
+      {/* Modal Credentials */}
+      {showCredentials && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] shadow-xl max-w-md w-full p-6">
+            <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">
+              Identifiants de connexion
+            </h2>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+                  Login
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={showCredentials.login}
+                    readOnly
+                    className="flex-1 px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)]"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(showCredentials.login);
+                      toast.success("Login copié");
+                    }}
+                    className="px-3 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+                  >
+                    Copier
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+                  Mot de passe temporaire
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={showCredentials.password}
+                    readOnly
+                    className="flex-1 px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] font-mono"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(showCredentials.password);
+                      toast.success("Mot de passe copié");
+                    }}
+                    className="px-3 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+                  >
+                    Copier
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-[var(--radius-md)] p-3">
+                <p className="text-xs text-yellow-600">
+                  ⚠️ Copiez ces identifiants maintenant. Vous ne pourrez plus les voir après avoir fermé cette fenêtre.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowCredentials(null)}
+              className="w-full px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+            >
+              J&apos;ai noté les identifiants
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
