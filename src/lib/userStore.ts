@@ -3,7 +3,7 @@
 // NO HARDCODED DATA - All data from API
 // ══════════════════════════════════════════════════════════════
 
-import { userService, type User, type CreateUserDto, type UpdateUserDto } from "@/services/api/userService";
+import { userService, type User, type CreateUserDto, type CreateUserResponse, type UpdateUserDto } from "@/services/api/userService";
 import { teamService, type TeamAssignment } from "@/services/api/teamService";
 import type { ProjectRole } from "@/lib/rbacStore";
 
@@ -25,7 +25,7 @@ export function getUserFullName(user: User): string {
   return `${user.firstName} ${user.lastName}`;
 }
 
-export async function addUser(user: CreateUserDto): Promise<User> {
+export async function addUser(user: CreateUserDto): Promise<CreateUserResponse> {
   return await userService.create(user);
 }
 
@@ -107,5 +107,5 @@ export async function updateTeamAssignment(
 }
 
 // Re-export types
-export type { User, CreateUserDto, UpdateUserDto, TeamAssignment };
+export type { User, CreateUserDto, CreateUserResponse, UpdateUserDto, TeamAssignment };
 
