@@ -110,10 +110,10 @@ export default function AddMemberModal({
   // Rôles assignables selon le rôle de l'utilisateur courant
   const getAssignableRoles = (): ProjectRole[] => {
     if (isAdmin) {
-      // Admin peut assigner tous les rôles
+      // L'administrateur a tous les droits et peut attribuer tous les rôles (y compris Chef de Projet)
       return ALL_PROJECT_ROLES;
     }
-    // Chef de projet peut assigner contributeur et view uniquement
+    // Pour un Chef de Projet (non-admin), le rôle Chef de Projet (et supérieurs) ne s'affiche pas
     return ["contributeur", "view"] as ProjectRole[];
   };
 

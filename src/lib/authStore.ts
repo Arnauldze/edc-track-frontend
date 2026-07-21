@@ -15,6 +15,7 @@ export type AuthSession = {
   lastName: string;
   email: string;
   platformRole: PlatformRole;
+  canCreateProjects?: boolean;
   position?: string;
   department?: string;
   loginAt: string;
@@ -43,6 +44,7 @@ export async function login(credentials: LoginRequest): Promise<AuthSession> {
     lastName: response.user.lastName,
     email: response.user.email,
     platformRole: response.user.platformRole,
+    canCreateProjects: response.user.canCreateProjects,
     position: response.user.position,
     department: response.user.department,
     loginAt: new Date().toISOString(),
@@ -93,6 +95,11 @@ export function isLoggedIn(): boolean {
 
 export function isAdmin(): boolean {
   return getCurrentSession()?.platformRole === "admin";
+}
+
+export function canCreateProjects(): boolean {
+  const session = getCurrentSession();
+  return session?.platformRole === "admin" || session?.canCreateProjects === true;
 }
 
 export function getJwtToken(): string | null {

@@ -15,6 +15,7 @@ export interface BackendUser {
   department?: string;
   status: 'active' | 'inactive';
   platformRole: 'admin' | 'user';
+  canCreateProjects?: boolean;
   login: string;
   createdAt: string;
 }
@@ -29,6 +30,7 @@ export interface FrontendUser {
   department?: string;
   status: 'active' | 'inactive';
   platformRole: 'admin' | 'user';
+  canCreateProjects?: boolean;
   login: string;
   createdAt: string;
 }
@@ -43,6 +45,7 @@ export const transformUserFromBackend = (user: BackendUser): FrontendUser => ({
   department: user.department,
   status: user.status,
   platformRole: user.platformRole,
+  canCreateProjects: user.canCreateProjects,
   login: user.login,
   createdAt: user.createdAt,
 });

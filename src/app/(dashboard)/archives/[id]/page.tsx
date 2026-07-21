@@ -516,6 +516,8 @@ export default function ProjectConfigPage() {
   const [showTrashModal, setShowTrashModal] = useState<{ phase: string } | null>(
     null,
   );
+  const [showTrashBin, setShowTrashBin] = useState(false);
+  const [trashedDocs, setTrashedDocs] = useState<TrackedDocument[]>([]);
   const [showPermanentDeleteModal, setShowPermanentDeleteModal] = useState<{
     docId: string;
     fileName: string;
@@ -540,11 +542,15 @@ export default function ProjectConfigPage() {
     async function loadDocsFromBackend() {
       setIsLoadingDocs(true);
       try {
-        const [etudeTracked, passationTracked, executionTracked] = await Promise.all([
+        const [etudeTracked, passationTracked, executionTracked, trashed] = await Promise.all([
           getTrackedDocumentsLatest(PROJECT.id, "etude", undefined, context),
           getTrackedDocumentsLatest(PROJECT.id, "passation", undefined, context),
           getTrackedDocumentsLatest(PROJECT.id, "execution", undefined, context),
+          getTrashedDocuments(PROJECT.id),
         ]);
+
+        // Charger les documents de la corbeille
+        setTrashedDocs(trashed);
 
         // Grouper les documents par dossier
         const groupByFolder = (docs: TrackedDocument[]): DocData[] => {
@@ -882,6 +888,10 @@ export default function ProjectConfigPage() {
       await moveTrackedDocumentToTrash(file.trackingId, reason);
       if (file?.name) toast.info(`Fichier déplacé en corbeille : ${file.name}`);
       
+      // Rafraîchir la liste de la corbeille
+      const trashed = await getTrashedDocuments(PROJECT.id);
+      setTrashedDocs(trashed);
+      
       setter((prev) =>
         prev.map((docRow, di) => {
           if (di !== docIdx) return docRow;
@@ -1073,11 +1083,6 @@ export default function ProjectConfigPage() {
     contextTitle: string;
     phase: string;
   }) => {
-    const validCount = docs.filter((d) => d.status === "valide").length;
-    const pct =
-      docs.length > 0 ? Math.round((validCount / docs.length) * 100) : 0;
-    const barColor =
-      pct >= 80 ? "bg-green-500" : pct >= 40 ? "bg-blue-500" : "bg-amber-500";
     const gridStyle = {
       gridTemplateColumns:
         "minmax(250px,2.5fr) 100px minmax(120px,1.5fr) 130px",
@@ -1105,28 +1110,8 @@ export default function ProjectConfigPage() {
                 ({contextTitle})
               </span>
             </h3>
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-1.5 bg-[var(--bg-inset)] rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${barColor}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="text-[11px] font-bold text-[var(--text-primary)]">
-                {pct}%
-              </span>
-            </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={async () => {
-                const trashed = await getTrashedDocuments(PROJECT.id, phase, context);
-                setShowTrashModal({ phase });
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] transition-colors border border-[var(--border-default)] shadow-sm"
-            >
-              <Trash2 size={13} /> Corbeille
-            </button>
             <button
               onClick={() => setCreateFolderModal({ phase })}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-bold text-[var(--accent)] hover:bg-[var(--accent-subtle)] transition-colors border border-[var(--accent-subtle)] hover:border-[var(--accent)] shadow-sm"
@@ -1799,13 +1784,19 @@ export default function ProjectConfigPage() {
               </h1>
             </div>
           </div>
-          <Link
-            href={`/projects/${PROJECT.id}/team`}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+          <button
+            onClick={() => setShowTrashBin(!showTrashBin)}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-600 border border-red-500/20 rounded-[var(--radius-md)] text-sm font-semibold hover:bg-red-500/20 transition-all shadow-sm"
+            title="Voir les documents supprimés"
           >
-            <Users size={16} />
-            Équipe projet
-          </Link>
+            <Trash2 size={16} />
+            Corbeille
+            {trashedDocs.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                {trashedDocs.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -1973,6 +1964,149 @@ export default function ProjectConfigPage() {
 
         {/* MAIN CONTENT */}
         <div className="flex-1 overflow-y-auto px-8 py-6">
+          {/* Vue Corbeille */}
+          {showTrashBin ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                    <Trash2 size={20} className="text-red-500" />
+                    Corbeille
+                  </h2>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
+                    Documents supprimés - {trashedDocs.length} fichier{trashedDocs.length > 1 ? "s" : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowTrashBin(false)}
+                  className="px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-default)] rounded-[var(--radius-md)] hover:bg-[var(--bg-surface-hover)] transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+
+              {trashedDocs.length === 0 ? (
+                <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] p-12 text-center">
+                  <Trash2 size={48} className="mx-auto text-[var(--text-tertiary)] opacity-30 mb-3" />
+                  <p className="text-sm font-medium text-[var(--text-secondary)]">La corbeille est vide</p>
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">Les documents supprimés apparaîtront ici</p>
+                </div>
+              ) : (
+                <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden">
+                  <div className="grid grid-cols-[2fr_1fr_1fr_120px_100px] gap-4 px-5 py-3 bg-[var(--bg-inset)] border-b border-[var(--border-subtle)] text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
+                    <span>Fichier</span>
+                    <span>Dossier</span>
+                    <span>Phase</span>
+                    <span>Supprimé le</span>
+                    <span>Actions</span>
+                  </div>
+                  {trashedDocs.map((doc, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-[2fr_1fr_1fr_120px_100px] gap-4 px-5 py-3 border-b border-[var(--border-subtle)] items-center hover:bg-[var(--bg-surface-hover)] transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {getFileIcon(doc.fileType || "pdf")}
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-[var(--text-primary)] truncate">
+                            {doc.fileName}
+                          </div>
+                          <div className="text-[10px] text-[var(--text-tertiary)]">
+                            {doc.fileSize || "—"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[12px] text-[var(--text-secondary)] truncate">
+                        {doc.folderName}
+                      </div>
+                      <div className="text-[12px] text-[var(--text-secondary)]">
+                        {doc.phase}
+                      </div>
+                      <div className="text-[11px] text-[var(--text-tertiary)]">
+                        {doc.deletedAt ? formatUploadDate(doc.deletedAt) : "—"}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await restoreTrackedDocumentFromTrash(doc._id);
+                              toast.success("Document restauré");
+                              // Recharger les documents de la corbeille
+                              const trashed = await getTrashedDocuments(PROJECT.id);
+                              setTrashedDocs(trashed);
+                              // Recharger les documents actifs
+                              const [etudeTracked, passationTracked, executionTracked] = await Promise.all([
+                                getTrackedDocumentsLatest(PROJECT.id, "etude", undefined, context),
+                                getTrackedDocumentsLatest(PROJECT.id, "passation", undefined, context),
+                                getTrackedDocumentsLatest(PROJECT.id, "execution", undefined, context),
+                              ]);
+                              // Regrouper et mettre à jour
+                              const groupByFolder = (docs: TrackedDocument[]): DocData[] => {
+                                const folderMap = new Map<string, FileData[]>();
+                                docs.forEach((doc) => {
+                                  const files = folderMap.get(doc.folderName) || [];
+                                  files.push({
+                                    name: doc.fileName,
+                                    size: doc.fileSize || "0 KB",
+                                    type: (["pdf", "dwg", "zip", "xls", "doc"].includes(doc.fileType || "")
+                                      ? doc.fileType
+                                      : "pdf") as FileData["type"],
+                                    status: (doc.status === "valide"
+                                      ? "valide"
+                                      : doc.status === "rejete"
+                                        ? "manquant"
+                                        : "encours") as FileStatus,
+                                    lastModif: formatUploadDate(doc.createdAt || new Date().toISOString()),
+                                    lastModifBy: doc.uploadedBy,
+                                    trackingId: doc._id,
+                                    version: doc.version || 1,
+                                    rejectionReason: doc.tracking?.rejectionReason,
+                                  });
+                                  folderMap.set(doc.folderName, files);
+                                });
+                                return Array.from(folderMap.entries()).map(([folderName, files]) => ({
+                                  name: folderName,
+                                  desc: `${files.length} fichier${files.length > 1 ? "s" : ""}`,
+                                  type: "folder" as const,
+                                  date: files[0]?.lastModif || todayStr(),
+                                  status: deriveFolderStatus(files),
+                                  files,
+                                  lastModif: files.length > 0 ? files[files.length - 1]?.lastModif : undefined,
+                                  lastModifBy: files.length > 0 ? files[files.length - 1]?.lastModifBy : undefined,
+                                }));
+                              };
+                              setEtudeDocs(groupByFolder(etudeTracked));
+                              setPassationDocs(groupByFolder(passationTracked));
+                              setExecutionDocs(groupByFolder(executionTracked));
+                            } catch (error) {
+                              toast.error("Erreur lors de la restauration");
+                            }
+                          }}
+                          className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-[var(--radius-sm)] transition-colors"
+                          title="Restaurer"
+                        >
+                          <CheckCircle2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowPermanentDeleteModal({
+                              docId: doc._id,
+                              fileName: doc.fileName,
+                            });
+                          }}
+                          className="p-1.5 text-red-600 hover:bg-red-500/10 rounded-[var(--radius-sm)] transition-colors"
+                          title="Supprimer définitivement"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+          <>
           {/* Étude Globale (default — no component selected) */}
           {!currentComp && (
             <>
@@ -2108,6 +2242,8 @@ export default function ProjectConfigPage() {
                 phase={currentPhase}
               />
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

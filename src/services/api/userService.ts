@@ -22,6 +22,7 @@ export interface CreateUserDto {
   login?: string;
   password?: string;
   platformRole?: 'admin' | 'user';
+  canCreateProjects?: boolean;
   status?: 'active' | 'inactive';
 }
 
@@ -37,6 +38,7 @@ export interface UpdateUserDto {
   position?: string;
   department?: string;
   status?: 'active' | 'inactive';
+  canCreateProjects?: boolean;
 }
 
 export const userService = {
