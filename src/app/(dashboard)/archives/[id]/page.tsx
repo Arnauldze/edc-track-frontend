@@ -2023,7 +2023,7 @@ export default function ProjectConfigPage() {
                         {doc.phase}
                       </div>
                       <div className="text-[11px] text-[var(--text-tertiary)]">
-                        {doc.deletedAt ? formatUploadDate(doc.deletedAt) : "—"}
+                        {doc.trashedAt ? formatUploadDate(doc.trashedAt) : "—"}
                       </div>
                       <div className="flex items-center gap-1">
                         <button

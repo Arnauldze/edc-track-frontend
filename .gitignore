@@ -50,5 +50,8 @@ verify-integration.js
 *.md
 !README.md
 
+# Preview files
+/public/structure-activities-preview.html
+
 # IDE
 .vscode/
