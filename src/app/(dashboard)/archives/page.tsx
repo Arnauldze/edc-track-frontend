@@ -54,8 +54,8 @@ export default function ArchivesPage() {
                     // Estimer la taille (simulé pour l'instant - devrait venir de la DB)
                     totalSize += Math.random() * 5000000; // 0-5MB par fichier
                     
-                    if (doc.status === "approved") validatedCount++;
-                    else if (doc.status === "rejected") rejectedCount++;
+                    if (doc.status === "valide") validatedCount++;
+                    else if (doc.status === "rejete") rejectedCount++;
                     else pendingCount++;
                 });
 
