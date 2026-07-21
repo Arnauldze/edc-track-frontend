@@ -68,6 +68,7 @@ export default function UsersPage() {
     department: "",
     status: "active" as "active" | "inactive",
     platformRole: "user" as "admin" | "user",
+    canCreateProjects: false,
     login: "",
     password: "user123", // Default for demo
   });
@@ -84,6 +85,7 @@ export default function UsersPage() {
         department: user.department || "",
         status: user.status,
         platformRole: user.platformRole,
+        canCreateProjects: (user as any).canCreateProjects || false,
         login: user.login,
         password: "", // Don't show existing password
       });
@@ -98,6 +100,7 @@ export default function UsersPage() {
         department: "",
         status: "active",
         platformRole: "user",
+        canCreateProjects: false,
         login: "", // Sera généré automatiquement
         password: "", // Sera généré automatiquement
       });
@@ -600,6 +603,27 @@ export default function UsersPage() {
                   <option value="admin">Administrateur</option>
                 </select>
               </div>
+
+              {/* Checkbox canCreateProjects - seulement pour utilisateurs non-admin */}
+              {formData.platformRole !== "admin" && (
+                <div className="flex items-start gap-2 p-3 bg-blue-500/5 border border-blue-500/10 rounded-[var(--radius-md)]">
+                  <input
+                    type="checkbox"
+                    id="canCreateProjects"
+                    checked={formData.canCreateProjects}
+                    onChange={(e) => setFormData({ ...formData, canCreateProjects: e.target.checked })}
+                    className="mt-0.5 w-4 h-4 text-[var(--accent)] bg-[var(--bg-inset)] border-[var(--border-default)] rounded focus:ring-[var(--accent)]/20"
+                  />
+                  <label htmlFor="canCreateProjects" className="flex-1 text-xs text-[var(--text-secondary)] cursor-pointer">
+                    <span className="font-semibold text-[var(--text-primary)] block mb-0.5">
+                      Peut créer des projets
+                    </span>
+                    <span className="text-[var(--text-tertiary)]">
+                      Permet à cet utilisateur d'accéder au menu "Initialisation" et de créer de nouveaux projets. Il devient automatiquement chef du projet créé.
+                    </span>
+                  </label>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-4">
                 <button

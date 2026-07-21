@@ -83,19 +83,15 @@ interface ColGroup {
 }
 
 const COL_GROUPS: ColGroup[] = [
+  // Colonne de numérotation
   {
-    label: "Identification",
-    color: "rgb(59, 130, 246)", // blue
+    label: "N°",
+    color: "rgb(100, 116, 139)", // gray
     cols: [
       { key: "numero", label: "N°", width: 50, type: "text" },
-      { key: "designation", label: "Désignation du Projet", width: 250, type: "text" },
-      { key: "typeAO", label: "Type d'AO", width: 80, type: "select", options: TYPES_AO },
-      { key: "typePrestation", label: "Type prestation", width: 90, type: "select", options: TYPES_PRESTATION },
-      { key: "montantPrevisionnel", label: "Montant prév. (FCFA)", width: 130, type: "text" },
-      { key: "sourceFinancement", label: "Source financement", width: 120, type: "text" },
-      { key: "imputationBudgetaire", label: "Imputation budg.", width: 120, type: "text" },
     ],
   },
+  // Le groupe "Identification" a été déplacé vers "Informations Générales" en haut de la page
   {
     label: "Processus de sélection",
     color: "rgb(234, 179, 8)", // yellow

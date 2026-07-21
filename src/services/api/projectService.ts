@@ -20,6 +20,8 @@ export interface Component {
   id: string;
   name: string;
   budget?: number;
+  devise?: string; // Devise du budget de cette composante (USD, EUR, FCFA, etc.)
+  ponderation?: number; // Pourcentage de pondération (0-100)
   typeActivite?: 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi'; // Optionnel, rempli si c'est le niveau le plus bas
   sousComposants: SousComposant[];
 }

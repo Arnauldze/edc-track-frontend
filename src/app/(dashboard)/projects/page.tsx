@@ -1,30 +1,89 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Plus, Users, Edit2 } from "lucide-react";
+import { Settings, Plus, Search, Filter, ArrowUpDown } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { getProjects, formatProjectBudget, getProjectLocation, type Project } from "@/lib/projectStore";
+import { getProjects, type Project } from "@/lib/projectStore";
+import { teamService } from "@/services/api/teamService";
+import { getUserById } from "@/lib/userStore";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorDisplay } from "@/components/ui/ErrorDisplay";
 import { getErrorMessage } from "@/services/api/client";
+import { ProjectCard } from "@/components/projects/ProjectCard";
 
 // ══════════════════════════════════════
 // PAGE — INITIALISATION
 // ══════════════════════════════════════
 
+type ProjectWithTeam = Project & {
+    teamMembers: Array<{ initials: string; color: string }>;
+};
+
+const ROLE_COLORS: Record<string, string> = {
+    coordinateur_general: "bg-purple-500",
+    coordinateur: "bg-indigo-500",
+    chef_projet: "bg-blue-500",
+    contributeur: "bg-amber-500",
+    view: "bg-gray-500",
+};
+
 export default function ProjectsPage() {
-    const router = useRouter();
-    const [projects, setProjects] = useState<Project[]>([]);
+    const [projects, setProjects] = useState<ProjectWithTeam[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState<string | null>(null);
+    const [sortBy, setSortBy] = useState<"name" | "date" | "budget">("name");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     const fetchProjects = async () => {
         try {
             setLoading(true);
             setError(null);
             const data = await getProjects();
-            setProjects(data);
+
+            // Fetch team members for each project
+            const projectsWithTeam = await Promise.all(
+                data.map(async (project) => {
+                    try {
+                        const team = await teamService.getProjectTeam(project.code);
+                        
+                        // Get user details and create avatar data
+                        const teamMembers = await Promise.all(
+                            team.slice(0, 5).map(async (assignment) => {
+                                try {
+                                    const user = await getUserById(assignment.userId);
+                                    if (user) {
+                                        return {
+                                            initials: `${user.firstName[0]}${user.lastName[0]}`.toUpperCase(),
+                                            color: ROLE_COLORS[assignment.projectRole] || "bg-gray-500",
+                                        };
+                                    }
+                                } catch (err) {
+                                    console.error("Error fetching user:", err);
+                                }
+                                return null;
+                            })
+                        );
+
+                        return {
+                            ...project,
+                            teamMembers: teamMembers.filter((m) => m !== null) as Array<{
+                                initials: string;
+                                color: string;
+                            }>,
+                        };
+                    } catch (err) {
+                        console.error(`Error fetching team for project ${project.code}:`, err);
+                        return {
+                            ...project,
+                            teamMembers: [],
+                        };
+                    }
+                })
+            );
+
+            setProjects(projectsWithTeam);
         } catch (err: any) {
             setError(getErrorMessage(err));
         } finally {
@@ -35,6 +94,44 @@ export default function ProjectsPage() {
     useEffect(() => {
         fetchProjects();
     }, []);
+
+    // Fonction helper pour calculer le statut basé sur la progression
+    const getProjectStatus = (project: ProjectWithTeam): string => {
+        const progress = project.progress || 0;
+        if (progress === 0) return "non_debute";
+        if (progress === 100) return "termine";
+        return "en_cours";
+    };
+
+    // Filtrer les projets selon la recherche et le statut
+    const filteredProjects = projects
+        .filter(project => {
+            // Filtre recherche
+            const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                project.code.toLowerCase().includes(searchQuery.toLowerCase());
+            
+            // Filtre statut (basé sur progression calculée)
+            const projectStatus = getProjectStatus(project);
+            const matchesStatus = !statusFilter || projectStatus === statusFilter;
+            
+            return matchesSearch && matchesStatus;
+        })
+        .sort((a, b) => {
+            // Tri
+            let comparison = 0;
+            
+            if (sortBy === "name") {
+                comparison = a.name.localeCompare(b.name);
+            } else if (sortBy === "date") {
+                const dateA = a.dateDebut ? new Date(a.dateDebut).getTime() : 0;
+                const dateB = b.dateDebut ? new Date(b.dateDebut).getTime() : 0;
+                comparison = dateA - dateB;
+            } else if (sortBy === "budget") {
+                comparison = (a.budget || 0) - (b.budget || 0);
+            }
+            
+            return sortOrder === "asc" ? comparison : -comparison;
+        });
 
     if (loading) {
         return (
@@ -55,101 +152,104 @@ export default function ProjectsPage() {
     return (
         <div className="px-[var(--page-px)] py-[var(--page-py)] min-h-full">
             {/* ── Header ── */}
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-start mb-8">
                 <div>
-                    <h1 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2.5 tracking-tight">
-                        <Settings size={20} strokeWidth={1.8} className="text-[var(--text-tertiary)]" />
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                         Initialisation
                     </h1>
-                    <p className="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">
                         Créez, configurez et paramétrez vos projets d&apos;infrastructure
                     </p>
                 </div>
                 <Link
                     href="/projects/new"
-                    className="flex items-center gap-1.5 bg-[var(--text-primary)] text-[var(--text-inverted)] px-4 py-2 rounded-[var(--radius-md)] text-[13px] font-semibold hover:opacity-90 transition-opacity shadow-[var(--shadow-sm)]"
+                    className="flex items-center gap-2 bg-[var(--text-primary)] text-[var(--text-inverted)] px-4 py-2.5 rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-[var(--shadow-sm)]"
                 >
-                    <Plus size={14} /> Nouveau projet
+                    <Plus size={16} /> Nouveau projet
                 </Link>
             </div>
 
-            {/* ── Project List ── */}
-            <div className="flex flex-col gap-3">
-                {projects.map((project) => {
-                    const totalComp = project.components?.length || 0;
-                    const totalSC = project.components?.reduce((s, c) => s + (c.sousComposants?.length || 0), 0) || 0;
-                    const totalAct = project.components?.reduce((s, c) => 
-                        s + (c.sousComposants?.reduce((ss, sc) => ss + (sc.activities?.length || 0), 0) || 0), 0) || 0;
-                    
-                    return (
-                        <div 
-                            key={project.code} 
-                            onClick={() => router.push(`/projects/${project.code}`)}
-                            className="group bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all duration-200 cursor-pointer"
+            {/* ── Toolbar ── */}
+            <div className="flex items-center justify-between gap-4 mb-6">
+                {/* Search */}
+                <div className="flex-1 max-w-md relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+                    <input
+                        type="text"
+                        placeholder="Rechercher un projet, un code..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                    />
+                </div>
+
+                {/* Filters */}
+                <div className="flex items-center gap-2">
+                    {/* Status Filter */}
+                    <div className="relative">
+                        <select
+                            value={statusFilter || ""}
+                            onChange={(e) => setStatusFilter(e.target.value || null)}
+                            className="appearance-none pl-9 pr-8 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] transition-colors cursor-pointer focus:outline-none focus:border-[var(--accent)]"
                         >
-                            <div className="flex items-center">
-                                {/* Accent stripe */}
-                                <div className="w-1 self-stretch flex-shrink-0 bg-blue-500" />
+                            <option value="">Tous les statuts</option>
+                            <option value="non_debute">Non débuté</option>
+                            <option value="en_cours">En cours</option>
+                            <option value="termine">Terminé</option>
+                        </select>
+                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
+                    </div>
 
-                                <div className="flex flex-1 items-center px-5 py-4 gap-6">
-                                    {/* Project Info */}
-                                    <div className="flex-1 min-w-[180px]">
-                                        <h3 className="text-[14px] font-semibold text-[var(--text-primary)]">
-                                            {project.name}
-                                        </h3>
-                                        <div className="flex items-center gap-2 mt-1 text-[12px] text-[var(--text-secondary)]">
-                                            <span className="px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[var(--bg-inset)] text-[var(--text-secondary)] text-[10px] font-semibold">
-                                                {project.code}
-                                            </span>
-                                            <span className="text-[var(--text-tertiary)]">·</span>
-                                            <span>{getProjectLocation(project)}</span>
-                                            <span className="text-[var(--text-tertiary)]">·</span>
-                                            <span>{formatProjectBudget(project)}</span>
-                                        </div>
-                                    </div>
+                    {/* Sort Dropdown */}
+                    <div className="relative">
+                        <select
+                            value={`${sortBy}-${sortOrder}`}
+                            onChange={(e) => {
+                                const [newSortBy, newSortOrder] = e.target.value.split("-") as [typeof sortBy, typeof sortOrder];
+                                setSortBy(newSortBy);
+                                setSortOrder(newSortOrder);
+                            }}
+                            className="appearance-none pl-9 pr-8 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] transition-colors cursor-pointer focus:outline-none focus:border-[var(--accent)]"
+                        >
+                            <option value="name-asc">Nom (A-Z)</option>
+                            <option value="name-desc">Nom (Z-A)</option>
+                            <option value="date-asc">Date (anciens)</option>
+                            <option value="date-desc">Date (récents)</option>
+                            <option value="budget-asc">Budget (croissant)</option>
+                            <option value="budget-desc">Budget (décroissant)</option>
+                        </select>
+                        <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
+                    </div>
+                </div>
+            </div>
 
-                                    {/* Structure summary */}
-                                    <div className="flex items-center gap-3 text-[11px]">
-                                        <div className="flex flex-col items-center px-3 py-1.5 bg-[var(--bg-inset)] rounded-[var(--radius-md)]">
-                                            <span className="font-bold text-[var(--text-primary)]">{totalComp}</span>
-                                            <span className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase">Comp.</span>
-                                        </div>
-                                        <div className="flex flex-col items-center px-3 py-1.5 bg-[var(--bg-inset)] rounded-[var(--radius-md)]">
-                                            <span className="font-bold text-[var(--text-primary)]">{totalSC}</span>
-                                            <span className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase">S/C</span>
-                                        </div>
-                                        <div className="flex flex-col items-center px-3 py-1.5 bg-[var(--bg-inset)] rounded-[var(--radius-md)]">
-                                            <span className="font-bold text-[var(--text-primary)]">{totalAct}</span>
-                                            <span className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase">Activ.</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Quick actions */}
-                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                        <Link
-                                            href={`/projects/${project.code}/team`}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-default)] transition-all"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <Users size={12} /> Équipe
-                                        </Link>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-
-                {projects.length === 0 && (
-                    <div className="text-center py-16 text-[var(--text-tertiary)]">
-                        <Settings size={48} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">Aucun projet configuré</p>
-                        <Link href="/projects/new" className="text-[var(--accent)] text-sm font-semibold hover:underline mt-2 inline-block">
+            {/* ── Projects Grid ── */}
+            {filteredProjects.length === 0 ? (
+                <div className="text-center py-16 text-[var(--text-tertiary)]">
+                    <Settings size={48} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">
+                        {searchQuery ? "Aucun projet trouvé" : "Aucun projet configuré"}
+                    </p>
+                    {!searchQuery && (
+                        <Link
+                            href="/projects/new"
+                            className="text-[var(--accent)] text-sm font-semibold hover:underline mt-2 inline-block"
+                        >
                             Créer votre premier projet
                         </Link>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {filteredProjects.map((project) => (
+                        <ProjectCard 
+                            key={project.code} 
+                            project={project} 
+                            teamMembers={project.teamMembers}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

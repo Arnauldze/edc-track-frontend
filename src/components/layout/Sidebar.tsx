@@ -21,34 +21,22 @@ import { useTheme } from "next-themes";
 import { alertService } from "@/services/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { UserSessionSwitcher } from "@/components/auth/AuthProvider";
-import { getUserProjects } from "@/lib/userStore";
+import { canCreateProjects } from "@/lib/authStore";
 
 export function Sidebar() {
     const pathname = usePathname();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [alertsCount, setAlertsCount] = useState(0);
-    const [hasChefProjetRole, setHasChefProjetRole] = useState(false);
+    const [canCreate, setCanCreate] = useState(false);
     const { theme, setTheme } = useTheme();
     const { isAdmin, user } = usePermissions();
 
     useEffect(() => {
         setMounted(true);
         
-        // Check if user is a chef_projet on ANY project
-        const checkUserRole = async () => {
-            if (user) {
-                try {
-                    const projects = await getUserProjects(user.id);
-                    const isChef = projects.some((a: any) => a.projectRole === "chef_projet");
-                    setHasChefProjetRole(isChef);
-                } catch (error) {
-                    console.error('Error checking user role:', error);
-                }
-            }
-        };
-        
-        checkUserRole();
+        // Check if user can create projects
+        setCanCreate(canCreateProjects());
         
         // Fetch unread alerts count
         const fetchAlertsCount = async () => {
@@ -68,17 +56,18 @@ export function Sidebar() {
     }, []);
 
     const navigation = [
-        { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
-        { name: "Initialisation", href: "/projects", icon: Settings },
-        { name: "Planification", href: "/planification", icon: Calendar },
-        { name: "Archives", href: "/archives", icon: FolderOpen },
-        { name: "Suivi", href: "/suivi", icon: Eye },
-        { name: "Utilisateurs", href: "/users", icon: Users },
+        { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, adminOnly: false },
+        { name: "Initialisation", href: "/projects", icon: Settings, adminOnly: true },
+        { name: "Planification", href: "/planification", icon: Calendar, adminOnly: false },
+        { name: "Archives", href: "/archives", icon: FolderOpen, adminOnly: false },
+        { name: "Suivi", href: "/suivi", icon: Eye, adminOnly: false },
+        { name: "Utilisateurs", href: "/users", icon: Users, adminOnly: true },
         {
             name: "Alertes",
             href: "/alerts",
             icon: Bell,
             badge: alertsCount > 0 ? alertsCount : undefined,
+            adminOnly: false,
         },
     ];
 
@@ -107,12 +96,15 @@ export function Sidebar() {
 
             {/* ── Navigation ── */}
             <div className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
-                {navigation.map((item) => {
-                    // Masquer "Utilisateurs" sauf pour l'admin
-                    // TEMPORAIREMENT DÉSACTIVÉ POUR LES TESTS: Permet à tout le monde de tout voir
-                    // if (item.name === "Utilisateurs" && !isAdmin) return null;
-                    // if (item.name === "Initialisation" && !isAdmin && !hasChefProjetRole) return null;
-
+                {navigation
+                    .filter((item) => {
+                        // Filtrer "Initialisation" : admin OU canCreateProjects
+                        if (item.name === "Initialisation" && !isAdmin && !canCreate) return false;
+                        // Filtrer "Utilisateurs" : admin seulement
+                        if (item.name === "Utilisateurs" && !isAdmin) return false;
+                        return true;
+                    })
+                    .map((item) => {
                     const active = isActive(item.href);
                     return (
                         <Link

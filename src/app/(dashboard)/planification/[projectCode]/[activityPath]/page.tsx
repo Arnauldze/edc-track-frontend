@@ -358,7 +358,7 @@ export default function ActivityPlanningPage() {
       {/* CONTENT */}
       <div className={`flex-1 overflow-y-auto ${hasPassation ? 'px-3' : 'px-8'} py-6`}>
         <div className={`${hasPassation ? 'max-w-full px-2' : 'max-w-5xl'} mx-auto space-y-6`}>
-          {/* Paramètres d'activité - Compact Layout */}
+          {/* Identification & Informations générales - Compact Layout */}
           <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] shadow-sm">
             {/* Header / Toggle Config */}
             <button 
@@ -367,7 +367,7 @@ export default function ActivityPlanningPage() {
             >
               <div className="flex items-center gap-3">
                 <Settings size={18} className="text-[var(--accent)]" />
-                <span className="font-bold text-[14px] text-[var(--text-primary)]">Configuration de l'activité</span>
+                <span className="font-bold text-[14px] text-[var(--text-primary)]">Identification & Informations Générales</span>
                 {!showConfig && (
                   <div className="flex gap-2 ml-4">
                     {hasEtudePrealable && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">Étude</span>}
@@ -380,31 +380,78 @@ export default function ActivityPlanningPage() {
             </button>
 
             {showConfig && (
-              <div className="p-5 border-t border-[var(--border-subtle)] grid grid-cols-1 md:grid-cols-12 gap-8">
-                {/* Left side: Types */}
-                <div className="md:col-span-4 space-y-3">
-                  <label className="block text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-3">Phases à planifier</label>
-                  <div className="flex flex-col gap-2">
-                    <label className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent)] transition-colors cursor-pointer bg-[var(--bg-surface)]">
-                      <input type="checkbox" checked={hasEtudePrealable} onChange={(e) => setHasEtudePrealable(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
-                      <span className="text-[13px] font-medium text-[var(--text-primary)]">Étude Préalable</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent)] transition-colors cursor-pointer bg-[var(--bg-surface)]">
-                      <input type="checkbox" checked={hasPassation} onChange={(e) => setHasPassation(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
-                      <span className="text-[13px] font-medium text-[var(--text-primary)]">Passation</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] hover:border-[var(--accent)] transition-colors cursor-pointer bg-[var(--bg-surface)]">
-                      <input type="checkbox" checked={hasExecution} onChange={(e) => setHasExecution(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
-                      <span className="text-[13px] font-medium text-[var(--text-primary)]">Exécution</span>
-                    </label>
-                  </div>
-                </div>
+              <div className="p-5 border-t border-[var(--border-subtle)]">
+                {/* Informations générales en haut */}
+                <div className="mb-6 bg-[var(--bg-inset)] p-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
+                  <label className="block text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-4">Informations Générales & Identification</label>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Row 1 */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Désignation du Projet</label>
+                      <input 
+                        type="text" 
+                        value={activityName}
+                        disabled
+                        className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] text-[var(--text-secondary)] cursor-not-allowed" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Type de Prestation</label>
+                      <select 
+                        value={activityType}
+                        disabled
+                        className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] cursor-not-allowed"
+                      >
+                        <option value="travaux">Travaux</option>
+                        <option value="fourniture">Fourniture</option>
+                        <option value="services">Services</option>
+                        <option value="etudes">Études</option>
+                        <option value="pi">Prestations Intellectuelles</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Type d'AO</label>
+                      <select 
+                        className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--accent)]"
+                      >
+                        <option value="">Sélectionner...</option>
+                        <option value="DC">DC - Demande de Cotation</option>
+                        <option value="AONO">AONO - Appel d'Offres National Ouvert</option>
+                        <option value="AONR">AONR - Appel d'Offres National Restreint</option>
+                        <option value="AOIO">AOIO - Appel d'Offres International Ouvert</option>
+                        <option value="AMI">AMI - Appel à Manifestation d'Intérêt</option>
+                        <option value="greaGre">Gré à gré</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Montant Prévisionnel</label>
+                      <input 
+                        type="text" 
+                        placeholder="Montant en FCFA"
+                        className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--accent)]" 
+                      />
+                    </div>
+                    
+                    {/* Row 2 */}
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Source de Financement</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: Banque Mondiale, Budget national..."
+                        className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--accent)]" 
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Imputation Budgétaire</label>
+                      <input 
+                        type="text" 
+                        placeholder="Code d'imputation budgétaire"
+                        className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--accent)]" 
+                      />
+                    </div>
 
-                {/* Right side: Config */}
-                <div className="md:col-span-8">
-                  <label className="block text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-3">Informations Générales</label>
-                  <div className="grid grid-cols-2 gap-5 bg-[var(--bg-inset)] p-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
-                    <div className="col-span-2">
+                    {/* Row 3 - Budget et infos existantes */}
+                    <div className="md:col-span-4">
                       <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Budget Initial</label>
                       <BudgetMultiDevise budgets={budgetInitial} onChange={setBudgetInitial} />
                     </div>
@@ -412,11 +459,84 @@ export default function ActivityPlanningPage() {
                       <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Date T0 (Début global)</label>
                       <input type="date" value={dateT0} onChange={(e) => setDateT0(e.target.value)} className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--accent)]" />
                     </div>
-                    <div>
+                    <div className="md:col-span-3">
                       <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Responsable</label>
                       <input type="text" value={responsablePrincipal} onChange={(e) => setResponsablePrincipal(e.target.value)} placeholder="Nom du responsable" className="w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)]" />
                     </div>
                   </div>
+                </div>
+
+                {/* Phases à planifier - Style toggle switch */}
+                <label className="block text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-3">Phases à Planifier</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Étude Préalable */}
+                  <button
+                    type="button"
+                    onClick={() => setHasEtudePrealable(!hasEtudePrealable)}
+                    className={`relative p-4 rounded-[var(--radius-md)] border-2 transition-all ${
+                      hasEtudePrealable
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                        : 'border-[var(--border-default)] bg-[var(--bg-surface)] opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[13px] font-bold ${hasEtudePrealable ? 'text-blue-700 dark:text-blue-400' : 'text-[var(--text-secondary)]'}`}>
+                        Étude Préalable
+                      </span>
+                      <div className={`w-10 h-5 rounded-full transition-colors ${hasEtudePrealable ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${hasEtudePrealable ? 'translate-x-5' : 'translate-x-0.5'} mt-0.5`} />
+                      </div>
+                    </div>
+                    <div className={`text-[10px] ${hasEtudePrealable ? 'text-blue-600 dark:text-blue-500' : 'text-[var(--text-tertiary)]'}`}>
+                      {hasEtudePrealable ? 'Activé - Cliquez pour désactiver' : 'Désactivé - Cliquez pour activer'}
+                    </div>
+                  </button>
+
+                  {/* Passation */}
+                  <button
+                    type="button"
+                    onClick={() => setHasPassation(!hasPassation)}
+                    className={`relative p-4 rounded-[var(--radius-md)] border-2 transition-all ${
+                      hasPassation
+                        ? 'border-green-500 bg-green-50 dark:bg-green-950/30'
+                        : 'border-[var(--border-default)] bg-[var(--bg-surface)] opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[13px] font-bold ${hasPassation ? 'text-green-700 dark:text-green-400' : 'text-[var(--text-secondary)]'}`}>
+                        Passation
+                      </span>
+                      <div className={`w-10 h-5 rounded-full transition-colors ${hasPassation ? 'bg-green-500' : 'bg-gray-300'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${hasPassation ? 'translate-x-5' : 'translate-x-0.5'} mt-0.5`} />
+                      </div>
+                    </div>
+                    <div className={`text-[10px] ${hasPassation ? 'text-green-600 dark:text-green-500' : 'text-[var(--text-tertiary)]'}`}>
+                      {hasPassation ? 'Activé - Cliquez pour désactiver' : 'Désactivé - Cliquez pour activer'}
+                    </div>
+                  </button>
+
+                  {/* Exécution */}
+                  <button
+                    type="button"
+                    onClick={() => setHasExecution(!hasExecution)}
+                    className={`relative p-4 rounded-[var(--radius-md)] border-2 transition-all ${
+                      hasExecution
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/30'
+                        : 'border-[var(--border-default)] bg-[var(--bg-surface)] opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[13px] font-bold ${hasExecution ? 'text-purple-700 dark:text-purple-400' : 'text-[var(--text-secondary)]'}`}>
+                        Exécution
+                      </span>
+                      <div className={`w-10 h-5 rounded-full transition-colors ${hasExecution ? 'bg-purple-500' : 'bg-gray-300'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${hasExecution ? 'translate-x-5' : 'translate-x-0.5'} mt-0.5`} />
+                      </div>
+                    </div>
+                    <div className={`text-[10px] ${hasExecution ? 'text-purple-600 dark:text-purple-500' : 'text-[var(--text-tertiary)]'}`}>
+                      {hasExecution ? 'Activé - Cliquez pour désactiver' : 'Désactivé - Cliquez pour activer'}
+                    </div>
+                  </button>
                 </div>
               </div>
             )}
@@ -432,7 +552,33 @@ export default function ActivityPlanningPage() {
           )}
 
           {hasPassation && (
-            <PlanningFormPassation data={passationData} onChange={setPassationData} />
+            <>
+              {/* Bouton Portail PPM */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-[var(--radius-lg)] p-5 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white shadow-md">
+                    <FileText size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-green-800 dark:text-green-300 mb-1">
+                      Plan de Passation des Marchés (PPM)
+                    </h3>
+                    <p className="text-[11px] text-green-700 dark:text-green-400">
+                      Renommer : <strong>Planification de la passation</strong>
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href={`/planification/${projectCode}/ppm`}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-[var(--radius-md)] text-[13px] font-bold shadow-md hover:shadow-lg transition-all"
+                >
+                  <FileText size={16} />
+                  Portail vers le PPM
+                </Link>
+              </div>
+
+              <PlanningFormPassation data={passationData} onChange={setPassationData} />
+            </>
           )}
 
           {hasExecution && (
