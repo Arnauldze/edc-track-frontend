@@ -18,6 +18,7 @@ import { ProjectInfoCard } from "@/components/projects/ProjectInfoCard";
 import { ProjectTeamCard } from "@/components/projects/ProjectTeamCard";
 import { CURRENCIES, DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 import { formatMoney } from "@/lib/utils";
+import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 
 type ConfirmState = {
   type: "component" | "subcomponent" | "activity";
@@ -50,6 +51,9 @@ export default function ProjectConfigPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = typeof params.id === "string" ? params.id : Array.isArray(params.id) ? params.id[0] : "";
+  
+  // Navigation guard
+  const { blockNavigation, unblockNavigation } = useNavigationGuard();
 
   const [project, setProject] = useState<Project | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<"info" | "structure" | "team">("info");
@@ -153,17 +157,96 @@ export default function ProjectConfigPage() {
 
   const markChanged = () => setHasChanges(true);
 
+  // ── Auto-save local (localStorage) ──
+  const DRAFT_KEY = `project-structure-draft-${projectId}`;
+  
+  // Sauvegarder dans localStorage avec debounce
+  useEffect(() => {
+    if (isEditingStructure && hasChanges) {
+      const timer = setTimeout(() => {
+        const draft = {
+          components,
+          timestamp: new Date().toISOString(),
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        console.log('💾 Draft sauvegardé localement:', draft.timestamp);
+      }, 2000); // Sauvegarde après 2 secondes d'inactivité
+
+      return () => clearTimeout(timer);
+    }
+  }, [components, isEditingStructure, hasChanges, DRAFT_KEY]);
+
+  // Vérifier s'il existe un draft au chargement
+  useEffect(() => {
+    const checkDraft = () => {
+      const savedDraft = localStorage.getItem(DRAFT_KEY);
+      if (savedDraft) {
+        try {
+          const draft = JSON.parse(savedDraft);
+          const draftDate = new Date(draft.timestamp);
+          const now = new Date();
+          const diffMinutes = Math.floor((now.getTime() - draftDate.getTime()) / 60000);
+          
+          if (diffMinutes < 60) { // Draft de moins d'1 heure
+            const restore = confirm(
+              `Une modification non enregistrée a été trouvée (${diffMinutes} minute(s) ago).\n\nVoulez-vous la restaurer ?`
+            );
+            if (restore) {
+              setComponents(draft.components);
+              toast.success("Brouillon restauré avec succès");
+            } else {
+              localStorage.removeItem(DRAFT_KEY);
+            }
+          } else {
+            // Draft trop ancien, on le supprime
+            localStorage.removeItem(DRAFT_KEY);
+          }
+        } catch (error) {
+          console.error('Erreur lecture draft:', error);
+          localStorage.removeItem(DRAFT_KEY);
+        }
+      }
+    };
+
+    if (project && components.length > 0) {
+      checkDraft();
+    }
+  }, [project]); // Exécuter une seule fois au chargement du projet
+
+  // Nettoyer le draft après sauvegarde réussie
+  const clearDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    console.log('🗑️ Draft local supprimé');
+  };
+
+  // ── Protection beforeunload (fermeture onglet) ──
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isEditingStructure && hasChanges) {
+        e.preventDefault();
+        e.returnValue = ''; // Chrome nécessite returnValue
+        return ''; // Certains navigateurs utilisent la valeur de retour
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isEditingStructure, hasChanges]);
+
   // ── Mode édition ──
   const handleStartEditing = () => {
     setOriginalComponents(JSON.parse(JSON.stringify(components)));
     setIsEditingStructure(true);
     setHasChanges(false);
+    blockNavigation("Vous avez des modifications non enregistrées. Voulez-vous quitter sans enregistrer ?");
   };
 
   const handleCancelEditing = () => {
     setComponents(originalComponents);
     setIsEditingStructure(false);
     setHasChanges(false);
+    clearDraft(); // Supprimer le draft local
+    unblockNavigation();
   };
 
   const handleSaveStructure = async () => {
@@ -183,6 +266,8 @@ export default function ProjectConfigPage() {
       setIsEditingStructure(false);
       setHasChanges(false);
       setOriginalComponents([]); // Réinitialiser l'état original
+      clearDraft(); // Supprimer le draft local après succès
+      unblockNavigation();
       toast.success("Structure du projet mise à jour");
     } catch (error: any) {
       console.error('❌ Erreur sauvegarde:', error);
