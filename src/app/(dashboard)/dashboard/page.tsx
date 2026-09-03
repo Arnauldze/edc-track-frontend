@@ -1,55 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { LayoutDashboard, Users, FolderKanban, AlertCircle, TrendingUp } from "lucide-react";
-import { getProjectStats } from "@/lib/projectStore";
-import { getUsers } from "@/lib/userStore";
-import { getUnreadCount } from "@/lib/alertStore";
-import { getErrorMessage } from "@/services/api/client";
+import { useProjectStats } from "@/hooks/useProjects";
+import { useUsers } from "@/hooks/useUsers";
+import { useAlertsCount } from "@/hooks/useAlerts";
 import { LoadingPage } from "@/components/ui/LoadingSpinner";
 import { ErrorPage } from "@/components/ui/ErrorDisplay";
 
 export default function DashboardPage() {
-    const [stats, setStats] = useState({
-        totalProjects: 0,
-        avgProgress: 0,
-        totalUsers: 0,
-        unreadAlerts: 0,
-    });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    // Utilisation de React Query - les données sont mises en cache automatiquement
+    const { data: projectStats, isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useProjectStats();
+    const { data: users, isLoading: usersLoading, error: usersError, refetch: refetchUsers } = useUsers();
+    const { data: alertsCount, isLoading: alertsLoading, error: alertsError, refetch: refetchAlerts } = useAlertsCount();
 
-    const fetchStats = async () => {
-        try {
-            setLoading(true);
-            setError(null);
+    // Combinaison des états de chargement
+    const loading = projectsLoading || usersLoading || alertsLoading;
+    const error = projectsError || usersError || alertsError;
 
-            // Fetch all stats in parallel
-            const [projectStats, users, alertCount] = await Promise.all([
-                getProjectStats(),
-                getUsers(),
-                getUnreadCount(),
-            ]);
-
-            setStats({
-                totalProjects: projectStats.total,
-                avgProgress: Math.round(projectStats.avgProgress),
-                totalUsers: users.length,
-                unreadAlerts: alertCount,
-            });
-        } catch (err: any) {
-            setError(getErrorMessage(err));
-        } finally {
-            setLoading(false);
-        }
+    // Fonction de retry globale
+    const handleRetry = () => {
+        refetchProjects();
+        refetchUsers();
+        refetchAlerts();
     };
 
-    useEffect(() => {
-        fetchStats();
-    }, []);
-
     if (loading) return <LoadingPage />;
-    if (error) return <ErrorPage error={error} retry={fetchStats} />;
+    if (error) return <ErrorPage error={error instanceof Error ? error.message : "Une erreur est survenue"} retry={handleRetry} />;
+
+    const stats = {
+        totalProjects: projectStats?.total || 0,
+        avgProgress: Math.round(projectStats?.avgProgress || 0),
+        totalUsers: users?.length || 0,
+        unreadAlerts: alertsCount || 0,
+    };
 
     return (
         <div className="p-6 space-y-6">
