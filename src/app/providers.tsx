@@ -3,6 +3,7 @@
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
     const [mounted, setMounted] = useState(false);
@@ -16,10 +17,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-            <AuthProvider>
-                {children}
-            </AuthProvider>
-        </ThemeProvider>
+        <ReactQueryProvider>
+            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+                <AuthProvider>
+                    {children}
+                </AuthProvider>
+            </ThemeProvider>
+        </ReactQueryProvider>
     );
 }

@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { teamService, type TeamAssignment } from "@/services/api/teamService";
-import { getUserById } from "@/lib/userStore";
+import { getUserById, getUsers, type User } from "@/lib/userStore";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorDisplay } from "@/components/ui/ErrorDisplay";
 import { PROJECT_ROLE_LABELS, type ProjectRole } from "@/lib/rbacStore";
+import AddMemberModal, { type MemberFormData } from "@/components/team/AddMemberModal";
 
 interface ProjectTeamCardProps {
   projectId: string;
+  project?: any; // Projet optionnel pour le modal
 }
 
 interface TeamMemberDisplay extends TeamAssignment {
@@ -29,6 +31,7 @@ export function ProjectTeamCard({ projectId }: ProjectTeamCardProps) {
   const [members, setMembers] = useState<TeamMemberDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   useEffect(() => {
     fetchTeam();
@@ -83,6 +86,26 @@ export function ProjectTeamCard({ projectId }: ProjectTeamCardProps) {
     return member.entityName || `${member.level} non spécifié`;
   };
 
+  const handleInviteMember = async (data: MemberFormData) => {
+    try {
+      await teamService.assign({
+        userId: data.userId,
+        projectId: projectId,
+        projectRole: data.projectRole,
+        level: data.level,
+        entityId: data.entityId,
+        entityName: data.entityName,
+      });
+      
+      // Recharger l'équipe
+      await fetchTeam();
+      setShowInviteModal(false);
+    } catch (err: any) {
+      console.error("Erreur lors de l'invitation:", err);
+      throw err; // Le modal gèrera l'erreur
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] shadow-[var(--shadow-sm)] p-6">
@@ -108,6 +131,7 @@ export function ProjectTeamCard({ projectId }: ProjectTeamCardProps) {
       <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between">
         <h3 className="text-lg font-bold text-[var(--text-primary)]">Équipe</h3>
         <button
+          onClick={() => setShowInviteModal(true)}
           className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-inset)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-xs font-semibold text-[var(--text-secondary)] transition-colors"
           title="Inviter un membre"
         >
