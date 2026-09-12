@@ -68,6 +68,13 @@ export interface Financement {
   tauxChange?: Record<string, number>; // Ex: { "USD": 600, "EUR": 655 }
 }
 
+export interface ProjectPermissions {
+  projectCode: string;
+  platformRole: string;
+  projectRole: string | null;
+  permissions: string[];
+}
+
 /** Membre d'équipe renvoyé par la jointure serveur de GET /projects. */
 export interface ProjectTeamMember {
   userId: string;
@@ -114,8 +121,9 @@ export interface UpdateProjectDto {
   progress?: number;
   localisation?: Localisation;
   financement?: Financement;
-  dateDebut?: string;
-  dateFin?: string;
+  /** `null` efface la date ; une clé absente la laisse inchangée. */
+  dateDebut?: string | null;
+  dateFin?: string | null;
   components?: Component[];
 }
 
@@ -134,6 +142,15 @@ export const projectService = {
    */
   async getByCode(code: string): Promise<Project> {
     const response = await apiClient.get<ApiResponse<Project>>(`/projects/${code}`);
+    return response.data.data!;
+  },
+
+  /**
+   * Permissions effectives de l'utilisateur courant sur le projet, calculées
+   * par le serveur (rôle le plus élevé, coordinateur général global).
+   */
+  async getMyPermissions(code: string): Promise<ProjectPermissions> {
+    const response = await apiClient.get<ApiResponse<ProjectPermissions>>(`/projects/${code}/permissions`);
     return response.data.data!;
   },
 

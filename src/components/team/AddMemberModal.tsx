@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Search, CheckCircle2, AlertCircle, Info, Shield } from "lucide-react";
-import { getUsers, type User } from "@/lib/userStore";
+import { getUserDirectory, type DirectoryUser } from "@/lib/userStore";
 import {
   type ProjectRole,
   PROJECT_ROLE_LABELS,
@@ -41,10 +41,10 @@ export default function AddMemberModal({
   editingAssignment,
 }: AddMemberModalProps) {
   const { isAdmin, isChefProjet } = usePermissions(projectId);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<DirectoryUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<DirectoryUser | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<MemberFormData>({
@@ -79,8 +79,9 @@ export default function AddMemberModal({
 
   const loadUsers = async () => {
     try {
-      const users = await getUsers();
-      setAllUsers(users.filter((u) => u.status === "active"));
+      // L'annuaire ne renvoie que les comptes actifs, et reste accessible au
+      // chef de projet — la liste complète (getUsers) est réservée à l'admin.
+      setAllUsers(await getUserDirectory());
     } catch (error) {
       console.error("Error loading users:", error);
       setAllUsers([]);
@@ -93,7 +94,7 @@ export default function AddMemberModal({
     return searchStr.includes(searchQuery.toLowerCase());
   });
 
-  const handleUserSelect = (user: User) => {
+  const handleUserSelect = (user: DirectoryUser) => {
     setSelectedUser(user);
     setFormData({ ...formData, userId: user.id });
     setSearchQuery(`${user.firstName} ${user.lastName}`);

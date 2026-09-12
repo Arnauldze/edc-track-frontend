@@ -3,7 +3,7 @@
 // NO HARDCODED DATA - All data from API
 // ══════════════════════════════════════════════════════════════
 
-import { userService, type User, type CreateUserDto, type CreateUserResponse, type UpdateUserDto } from "@/services/api/userService";
+import { userService, type User, type DirectoryUser, type CreateUserDto, type CreateUserResponse, type UpdateUserDto } from "@/services/api/userService";
 import { teamService, type TeamAssignment } from "@/services/api/teamService";
 import type { ProjectRole } from "@/lib/rbacStore";
 
@@ -11,6 +11,10 @@ import type { ProjectRole } from "@/lib/rbacStore";
 
 export async function getUsers(): Promise<User[]> {
   return await userService.getAll();
+}
+
+export async function getUserDirectory(): Promise<DirectoryUser[]> {
+  return await userService.getDirectory();
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
@@ -107,5 +111,5 @@ export async function updateTeamAssignment(
 }
 
 // Re-export types
-export type { User, CreateUserDto, CreateUserResponse, UpdateUserDto, TeamAssignment };
+export type { User, DirectoryUser, CreateUserDto, CreateUserResponse, UpdateUserDto, TeamAssignment };
 

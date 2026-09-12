@@ -9,13 +9,15 @@ import {
   Search, MoreHorizontal, AlertCircle, Info,
 } from "lucide-react";
 import { getProjectById, updateProject, deleteProject, isComponentLowestLevel, isSousComposantLowestLevel, type Project, type Component, type SousComposant } from "@/lib/projectStore";
-import { getProjectTeam, getUserById, getUserFullName, type TeamAssignment, getUsers, addTeamAssignment, removeTeamAssignment, type User } from "@/lib/userStore";
+import { getProjectTeam, getUserById, getUserDirectory, type TeamAssignment, type DirectoryUser, addTeamAssignment, removeTeamAssignment } from "@/lib/userStore";
 import { PROJECT_ROLE_LABELS, PROJECT_ROLE_COLORS, type ProjectRole } from "@/lib/rbacStore";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import AddMemberModal, { type MemberFormData } from "@/components/team/AddMemberModal";
 import { ProjectInfoCard } from "@/components/projects/ProjectInfoCard";
 import { ProjectTeamCard } from "@/components/projects/ProjectTeamCard";
+import { EditProjectInfoModal } from "@/components/projects/EditProjectInfoModal";
+import { useProjectPermissions } from "@/hooks/useProjectPermissions";
 import { CURRENCIES, DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 import { formatMoney } from "@/lib/utils";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
@@ -120,40 +122,52 @@ export default function ProjectConfigPage() {
   };
 
   // ── Team data ──
+  // Source unique pour la carte Équipe de l'onglet Informations et pour
+  // l'onglet Équipe : un ajout depuis l'une se reflète dans l'autre.
   const [teamAssignments, setTeamAssignments] = useState<TeamAssignment[]>([]);
-  const [teamUsers, setTeamUsers] = useState<Map<string, any>>(new Map());
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [teamUsers, setTeamUsers] = useState<Map<string, DirectoryUser>>(new Map());
+  const [teamLoading, setTeamLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<TeamAssignment | null>(null);
   const [deleteTeamConfirm, setDeleteTeamConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [showEditInfoModal, setShowEditInfoModal] = useState(false);
 
-  useEffect(() => {
-    async function loadTeam() {
-      const team = await getProjectTeam(projectId);
-      setTeamAssignments(team);
+  const { can } = useProjectPermissions(projectId);
 
-      // Charger les utilisateurs
-      const usersMap = new Map();
-      for (const assignment of team) {
-        const user = await getUserById(assignment.userId);
-        if (user) {
-          usersMap.set(assignment.userId, user);
-        }
+  const reloadTeam = useCallback(async () => {
+    try {
+      // Équipe et annuaire en parallèle : deux requêtes, au lieu d'un
+      // /users/:id séquentiel par membre.
+      const [team, directory] = await Promise.all([getProjectTeam(projectId), getUserDirectory()]);
+      const usersById = new Map(directory.map((u) => [u.id, u]));
+
+      // L'annuaire ne liste que les comptes actifs. Un membre désactivé mais
+      // encore affecté doit rester visible, ne serait-ce que pour pouvoir le retirer.
+      const missing = [...new Set(team.map((a) => a.userId))].filter((id) => !usersById.has(id));
+      const fallback = await Promise.all(missing.map((id) => getUserById(id)));
+      for (const user of fallback) {
+        if (user) usersById.set(user.id, user);
       }
-      setTeamUsers(usersMap);
+
+      setTeamAssignments(team);
+      setTeamUsers(usersById);
+    } catch (error) {
+      console.error("Error loading team:", error);
+      toast.error("Impossible de charger l'équipe du projet");
+    } finally {
+      setTeamLoading(false);
     }
-    loadTeam();
   }, [projectId]);
 
-  // Charger tous les utilisateurs pour le modal
   useEffect(() => {
-    async function loadAllUsers() {
-      const users = await getUsers();
-      setAllUsers(users);
-    }
-    loadAllUsers();
-  }, []);
+    reloadTeam();
+  }, [reloadTeam]);
+
+  const openInviteModal = () => {
+    setEditingAssignment(null);
+    setShowAddModal(true);
+  };
 
   const markChanged = () => setHasChanges(true);
 
@@ -680,19 +694,26 @@ export default function ProjectConfigPage() {
                 </span>
               </div>
 
-              <button
-                onClick={() => toast.info("Modification des informations du projet")}
-                className="flex items-center gap-2 px-4 py-1.5 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
-              >
-                <Edit2 size={13} />
-                Modifier les informations
-              </button>
+              {can("structure:edit") && (
+                <button
+                  onClick={() => setShowEditInfoModal(true)}
+                  className="flex items-center gap-2 px-4 py-1.5 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                >
+                  <Edit2 size={13} />
+                  Modifier les informations
+                </button>
+              )}
             </div>
 
             {/* Layout 2 colonnes : Infos projet + Équipe */}
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
               <ProjectInfoCard project={project} />
-              <ProjectTeamCard projectId={project.code} />
+              <ProjectTeamCard
+                assignments={teamAssignments}
+                usersById={teamUsers}
+                loading={teamLoading}
+                onInvite={can("team:add") ? openInviteModal : undefined}
+              />
             </div>
           </div>
         )}
@@ -1306,6 +1327,17 @@ export default function ProjectConfigPage() {
         )}
       </div>
 
+      {/* Modal d'édition des informations du projet */}
+      <EditProjectInfoModal
+        isOpen={showEditInfoModal}
+        project={project}
+        onClose={() => setShowEditInfoModal(false)}
+        onSaved={(saved) => {
+          setProject(saved);
+          setShowEditInfoModal(false);
+        }}
+      />
+
       {/* Modal d'ajout/modification de membre */}
       <AddMemberModal
         isOpen={showAddModal}
@@ -1344,16 +1376,7 @@ export default function ProjectConfigPage() {
             }
 
             // Recharger l'équipe
-            const team = await getProjectTeam(projectId);
-            setTeamAssignments(team);
-            const usersMap = new Map();
-            for (const assignment of team) {
-              const user = await getUserById(assignment.userId);
-              if (user) {
-                usersMap.set(assignment.userId, user);
-              }
-            }
-            setTeamUsers(usersMap);
+            await reloadTeam();
 
             setShowAddModal(false);
             setEditingAssignment(null);
@@ -1382,16 +1405,7 @@ export default function ProjectConfigPage() {
               toast.success("Membre retiré de l'équipe");
 
               // Recharger l'équipe
-              const team = await getProjectTeam(projectId);
-              setTeamAssignments(team);
-              const usersMap = new Map();
-              for (const assignment of team) {
-                const user = await getUserById(assignment.userId);
-                if (user) {
-                  usersMap.set(assignment.userId, user);
-                }
-              }
-              setTeamUsers(usersMap);
+              await reloadTeam();
 
               setDeleteTeamConfirm(null);
             } catch (error) {
