@@ -7,7 +7,6 @@
 
 import React, { useEffect, useState } from "react";
 import { getCurrentSession, logout, type AuthSession } from "@/lib/authStore";
-import { getUsers, type User } from "@/lib/userStore";
 import { ChevronDown, LogOut, Shield, User as UserIcon } from "lucide-react";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -17,28 +16,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 // ── User Session Display ──
 
+// La session contient déjà nom, prénom, e-mail, fonction et rôle : inutile de
+// charger toute la table utilisateurs pour afficher l'avatar de l'utilisateur
+// courant. Cet appel se déclenchait à chaque navigation, sidebar oblige.
 export function UserSessionSwitcher() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setSession(getCurrentSession());
-    
-    // Load users from API
-    const loadUsers = async () => {
-      try {
-        const data = await getUsers();
-        setUsers(data);
-      } catch (error) {
-        console.error("Failed to load users:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadUsers();
 
     const handle = () => {
       setSession(getCurrentSession());
@@ -47,7 +33,7 @@ export function UserSessionSwitcher() {
     return () => window.removeEventListener("auth-changed", handle);
   }, []);
 
-  const currentUser = users.find((u) => u.id === session?.userId);
+  const currentUser = session;
 
   const handleLogout = async () => {
     try {
@@ -59,7 +45,7 @@ export function UserSessionSwitcher() {
     }
   };
 
-  if (!session || !currentUser) return null;
+  if (!currentUser) return null;
 
   return (
     <div className="relative">

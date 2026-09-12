@@ -68,6 +68,14 @@ export interface Financement {
   tauxChange?: Record<string, number>; // Ex: { "USD": 600, "EUR": 655 }
 }
 
+/** Membre d'équipe renvoyé par la jointure serveur de GET /projects. */
+export interface ProjectTeamMember {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  projectRole: string;
+}
+
 export interface Project {
   code: string;
   name: string;
@@ -82,6 +90,8 @@ export interface Project {
   components: Component[];
   createdBy: string;
   createdAt: string;
+  /** Présent sur les listes (GET /projects), absent sur le détail. */
+  team?: ProjectTeamMember[];
 }
 
 export interface CreateProjectDto {

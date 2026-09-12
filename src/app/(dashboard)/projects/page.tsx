@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { Settings, Plus, Search, Filter, ArrowUpDown } from "lucide-react";
 import Link from "next/link";
 import { getProjects, type Project } from "@/lib/projectStore";
-import { teamService } from "@/services/api/teamService";
-import { getUserById } from "@/lib/userStore";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorDisplay } from "@/components/ui/ErrorDisplay";
 import { getErrorMessage } from "@/services/api/client";
@@ -40,50 +38,21 @@ export default function ProjectsPage() {
         try {
             setLoading(true);
             setError(null);
+
+            // GET /projects renvoie déjà l'équipe de chaque projet. Cette page
+            // appelait auparavant /team/project/:code puis /users/:id par
+            // membre, soit 1 + N + (N x membres) allers-retours.
             const data = await getProjects();
 
-            // Fetch team members for each project
-            const projectsWithTeam = await Promise.all(
-                data.map(async (project) => {
-                    try {
-                        const team = await teamService.getProjectTeam(project.code);
-                        
-                        // Get user details and create avatar data
-                        const teamMembers = await Promise.all(
-                            team.slice(0, 5).map(async (assignment) => {
-                                try {
-                                    const user = await getUserById(assignment.userId);
-                                    if (user) {
-                                        return {
-                                            initials: `${user.firstName[0]}${user.lastName[0]}`.toUpperCase(),
-                                            color: ROLE_COLORS[assignment.projectRole] || "bg-gray-500",
-                                        };
-                                    }
-                                } catch (err) {
-                                    console.error("Error fetching user:", err);
-                                }
-                                return null;
-                            })
-                        );
-
-                        return {
-                            ...project,
-                            teamMembers: teamMembers.filter((m) => m !== null) as Array<{
-                                initials: string;
-                                color: string;
-                            }>,
-                        };
-                    } catch (err) {
-                        console.error(`Error fetching team for project ${project.code}:`, err);
-                        return {
-                            ...project,
-                            teamMembers: [],
-                        };
-                    }
-                })
+            setProjects(
+                data.map((project) => ({
+                    ...project,
+                    teamMembers: (project.team ?? []).slice(0, 5).map((member) => ({
+                        initials: `${member.firstName?.[0] ?? ""}${member.lastName?.[0] ?? ""}`.toUpperCase(),
+                        color: ROLE_COLORS[member.projectRole] || "bg-gray-500",
+                    })),
+                })),
             );
-
-            setProjects(projectsWithTeam);
         } catch (err: any) {
             setError(getErrorMessage(err));
         } finally {
