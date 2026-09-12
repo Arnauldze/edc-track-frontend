@@ -12,6 +12,16 @@ import {
 
 export type User = FrontendUser;
 
+/** Entrée de l'annuaire : identification seule, accessible à tout utilisateur connecté. */
+export interface DirectoryUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  position?: string;
+  department?: string;
+}
+
 export interface CreateUserDto {
   firstName: string;
   lastName: string;
@@ -54,6 +64,15 @@ export const userService = {
   /**
    * Get user by ID
    */
+  /**
+   * Annuaire des utilisateurs actifs, pour choisir un membre d'équipe.
+   * Contrairement à getAll (admin uniquement), ouvert au chef de projet.
+   */
+  async getDirectory(): Promise<DirectoryUser[]> {
+    const response = await apiClient.get<ApiResponse<DirectoryUser[]>>('/users/directory');
+    return response.data.data || [];
+  },
+
   async getById(id: string): Promise<User> {
     const response = await apiClient.get<ApiResponse<BackendUser>>(`/users/${id}`);
     return transformUserFromBackend(response.data.data!);
