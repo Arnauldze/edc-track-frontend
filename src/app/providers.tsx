@@ -1,21 +1,14 @@
 "use client";
 
 import { ThemeProvider } from "next-themes";
-import { useEffect, useState } from "react";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
+// Les providers enveloppent l'arbre dès le rendu serveur : les court-circuiter
+// avant le montage priverait les pages de leur QueryClient au prerender.
+// L'écart d'hydratation du thème est déjà couvert par le suppressHydrationWarning
+// posé sur <html> dans layout.tsx.
 export function Providers({ children }: { children: React.ReactNode }) {
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    if (!mounted) {
-        return <>{children}</>;
-    }
-
     return (
         <ReactQueryProvider>
             <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
