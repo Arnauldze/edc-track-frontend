@@ -12,7 +12,7 @@ interface NavigationGuardContextType {
 
 const NavigationGuardContext = createContext<NavigationGuardContextType | undefined>(undefined);
 
-export function NavigationGuardProvider({ children }: { children: React.Node }) {
+export function NavigationGuardProvider({ children }: { children: React.ReactNode }) {
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockedMessage, setBlockedMessage] = useState<string>();
   const router = useRouter();
