@@ -21,6 +21,7 @@ import { useStructureEditor } from "@/hooks/useStructureEditor";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StructureEditBar, StructureRowMenu, type StructureAction } from "./StructureEditBar";
+import { PROJECT_ROOT_ID, formatBudget, formatDuration, rollupStructure, type Metrics } from "@/lib/planningRollup";
 import { TIME_SCALES, buildTimeline, daysBetween, dateToX, suggestScale, xToDate, type TimeScale } from "@/lib/timescale";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -86,6 +87,8 @@ const COLUMN_DEFS: ColumnDef[] = [
   { id: "dateDebut", label: "Début", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateDebut" },
   { id: "dateFin", label: "Fin", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateFin" },
   { id: "duree", label: "Durée", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "duree" },
+  { id: "avancement", label: "Avanc.", width: "90px", align: "center", defaultVisible: true, filterType: "number", field: "progress" },
+  { id: "budget", label: "Budget", width: "80px", align: "right", defaultVisible: true, filterType: "number", field: "budget" },
   { id: "delai", label: "Délai", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "delai" },
   { id: "dateEcheance", label: "Échéance", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateEcheance" },
   { id: "predecesseur", label: "Préd.", width: "60px", align: "center", defaultVisible: true, filterType: "ref", field: "predecesseur" },
@@ -149,6 +152,16 @@ interface TaskRow {
   predecesseur?: string;
   successeur?: string;
   
+  // Synthèse (voir lib/planningRollup.ts)
+  /** Durée calculée, déjà mise en forme (unités de structure). */
+  dureeLabel?: string;
+  progress?: number;
+  budget?: number;
+  milestone?: boolean;
+  /** Unités planifiables couvertes / planifiées (lignes de synthèse). */
+  leaves?: number;
+  plannedLeaves?: number;
+
   // Métadonnées
   parentId?: string;
   planning?: Planning;
@@ -188,6 +201,24 @@ const convertDate = (d: string | Date | undefined): string | undefined => {
   if (d instanceof Date) return d.toISOString().split('T')[0];
   return d;
 };
+
+/** Avancement : pourcentage et jauge ; sur une synthèse, unités planifiées / unités. */
+function ProgressCell({ value, summary, planned, total }: { value?: number; summary: boolean; planned?: number; total?: number }) {
+  const pct = Math.max(0, Math.min(100, value ?? 0));
+  return (
+    <div
+      title={summary && total ? `${planned ?? 0} unité(s) planifiée(s) sur ${total}` : undefined}
+      style={{ display: "flex", alignItems: "center", gap: 5, height: ROW_HEIGHT, padding: "0 6px" }}
+    >
+      <div style={{ flex: 1, height: 5, borderRadius: 3, background: "var(--msp-border)", overflow: "hidden" }}>
+        {value !== undefined && <div style={{ width: `${pct}%`, height: "100%", background: pct >= 100 ? MSP_TODAY_COLOR : MSP_BAR_BLUE }} />}
+      </div>
+      <span style={{ fontSize: 10, minWidth: 30, textAlign: "right", color: value === undefined ? "var(--msp-text-muted)" : "inherit" }}>
+        {value === undefined ? "—" : `${Math.round(value)} %`}
+      </span>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
@@ -352,60 +383,31 @@ export function MSProjectViewV2({
   // CONSTRUCTION DE L'ARBRE
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /** Mesures de chaque unité, livrables en cours de modification compris. */
+  const metrics = useMemo(() => {
+    const current = plannings.map((p) =>
+      modifiedLivrables.has(p.activityPath) ? { ...p, livrables: modifiedLivrables.get(p.activityPath)! } : p,
+    );
+    return rollupStructure(structure, current);
+  }, [structure, plannings, modifiedLivrables]);
+
   const buildTaskTree = useCallback(() => {
     const rows: TaskRow[] = [];
 
     const findPlanning = (path: string) => plannings.find((p) => p.activityPath === path);
 
-    const aggregateDates = (paths: string[]) => {
-      let minDate: Date | undefined;
-      let maxDate: Date | undefined;
-      let totalDuree = 0;
-
-      const trackD = (d: string | Date | undefined, type: 'min' | 'max') => {
-        if (!d) return;
-        const date = new Date(d);
-        if (isNaN(date.getTime())) return;
-        if (type === 'min') {
-          if (!minDate || date < minDate) minDate = date;
-        } else {
-          if (!maxDate || date > maxDate) maxDate = date;
-        }
-      };
-
-      paths.forEach((path) => {
-        const planning = findPlanning(path);
-        if (planning) {
-          // Activity-level dates
-          trackD(planning.dateDebutActualisee || planning.dateDebutInitiale, 'min');
-          trackD(planning.dateFinActualisee || planning.dateFinInitiale, 'max');
-          totalDuree += planning.delaiActualiseMois || planning.delaiInitialMois || 0;
-
-          // Also aggregate from livrables
-          if (planning.livrables) {
-            planning.livrables.forEach((liv) => {
-              trackD(liv.dateDebut, 'min');
-              trackD(liv.dateFin || liv.dateEcheance, 'max');
-            });
-          }
-
-          // Also aggregate from taches
-          if (planning.tachesExecution) {
-            planning.tachesExecution.forEach((tache) => {
-              trackD(tache.dateDebut, 'min');
-              trackD(tache.dateFin, 'max');
-            });
-          }
-        }
-      });
-
-      return {
-        dateDebut: minDate ? minDate.toISOString().split("T")[0] : undefined,
-        dateFin: maxDate ? maxDate.toISOString().split("T")[0] : undefined,
-        duree: totalDuree,
-        ponderation: 100,
-      };
-    };
+    const isoDay = (d?: Date) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : undefined);
+    const fromMetrics = (m: Metrics | undefined) => ({
+      dateDebut: isoDay(m?.start),
+      dateFin: isoDay(m?.finish),
+      dureeLabel: formatDuration(m?.days),
+      ponderation: m?.weight,
+      progress: m?.progress,
+      budget: m?.budget,
+      milestone: m?.milestone,
+      leaves: m?.leaves,
+      plannedLeaves: m?.plannedLeaves,
+    });
 
     // Arbre uniforme des unités : composant › sous-composant › activité.
     // Une unité sans enfant est planifiable, quel que soit son niveau.
@@ -421,7 +423,6 @@ export function MSProjectViewV2({
         children: (sc.activities ?? []).map((a) => ({ id: a.id, name: a.name, typeActivite: a.typeActivite, children: [] })),
       })),
     }));
-    const leafIds = (node: Node): string[] => (node.children.length ? node.children.flatMap(leafIds) : [node.id]);
 
     rows.push({
       id: "project-root",
@@ -431,7 +432,7 @@ export function MSProjectViewV2({
       type: "project",
       hasChildren: nodes.length > 0,
       isExpanded: expandedIds.has("project-root"),
-      ...aggregateDates(nodes.flatMap(leafIds)),
+      ...fromMetrics(metrics.get(PROJECT_ROOT_ID)),
     });
 
     const pushLivrables = (activityPath: string, livrables: Livrable[], level: number) => {
@@ -448,8 +449,10 @@ export function MSProjectViewV2({
           parentId: activityPath,
           livrableData: liv,
           ponderation: liv.ponderation,
-          dateDebut: convertDate(liv.dateDebut),
-          dateFin: convertDate(liv.dateFin),
+          progress: liv.statut === "valide" ? 100 : 0,
+          milestone: !liv.dateDebut && !liv.dateFin && !!liv.dateEcheance,
+          dateDebut: convertDate(liv.dateDebut ?? (liv.dateFin ? undefined : liv.dateEcheance)),
+          dateFin: convertDate(liv.dateFin ?? liv.dateEcheance),
           duree: liv.duree,
           dureeUnite: liv.dureeUnite,
           delai: liv.delai,
@@ -483,7 +486,7 @@ export function MSProjectViewV2({
             activityType: node.typeActivite || "travaux",
             hasChildren: livrables.length > 0,
             planning,
-            ...aggregateDates([node.id]),
+            ...fromMetrics(metrics.get(node.id)),
           });
           if (expandedIds.has(node.id)) pushLivrables(node.id, livrables, level + 1);
           return;
@@ -493,7 +496,7 @@ export function MSProjectViewV2({
           ...common,
           type: level === 1 ? "component" : "subcomponent",
           hasChildren: true,
-          ...aggregateDates(leafIds(node)),
+          ...fromMetrics(metrics.get(node.id)),
         });
         if (expandedIds.has(node.id)) walk(node.children, level + 1, node.id);
       });
@@ -502,7 +505,7 @@ export function MSProjectViewV2({
     if (expandedIds.has("project-root")) walk(nodes, 1, "project-root");
 
     setTasks(rows);
-  }, [project.name, structure, wbs, plannings, expandedIds, modifiedLivrables]);
+  }, [project.name, structure, wbs, plannings, expandedIds, modifiedLivrables, metrics]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TIMELINE CALCULATION
@@ -1178,10 +1181,17 @@ export function MSProjectViewV2({
     }
 
     let displayValue = value?.toString() || '—';
-    if (field === 'dateDebut' || field === 'dateFin' || field === 'dateEcheance') {
+    if (field === 'progress') {
+      return <ProgressCell value={task.progress} summary={task.type !== "activity" && task.type !== "livrable"} planned={task.plannedLeaves} total={task.leaves} />;
+    }
+    if (field === 'budget') {
+      displayValue = formatBudget(task.budget);
+    } else if (field === 'duree' && task.dureeLabel !== undefined) {
+      displayValue = task.dureeLabel;
+    } else if (field === 'dateDebut' || field === 'dateFin' || field === 'dateEcheance') {
       displayValue = formatDate(value);
     } else if (field === 'ponderation') {
-      displayValue = value ? `${value}%` : '—';
+      displayValue = value !== undefined && value !== null ? `${Number(value).toLocaleString("fr-FR")} %` : '—';
     } else if (field === 'duree' || field === 'delai') {
       const unitValue = field === 'duree' ? task.dureeUnite : task.delaiUnite;
       let suffix = getDurationSuffix(task.type);
@@ -2048,6 +2058,29 @@ export function MSProjectViewV2({
                 const isProject = task.type === "project";
                 const isSummary = isProject || task.type === "component" || task.type === "subcomponent";
                 const color = isProject ? MSP_PROJECT_COLOR : task.activityType ? ACTIVITY_COLORS[task.activityType] : MSP_BAR_BLUE;
+                const progress = Math.max(0, Math.min(100, task.progress ?? 0));
+                const tooltip = [
+                  task.nom,
+                  `${formatDate(task.dateDebut)} → ${formatDate(task.dateFin)}`,
+                  task.progress !== undefined ? `Avancement : ${task.progress.toLocaleString("fr-FR")} %` : undefined,
+                ].filter(Boolean).join("\n");
+
+                if (task.milestone && !isSummary) {
+                  return (
+                    <div key={task.id} className="msp-gantt-row" style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid var(--msp-border)" }}>
+                      <div
+                        title={`${task.nom}\nJalon : ${formatDate(task.dateFin)}`}
+                        style={{
+                          position: "absolute", left: barPos.left - 6, top: ROW_HEIGHT / 2 - 6, width: 12, height: 12,
+                          background: task.type === "livrable" ? "var(--msp-text)" : color, transform: "rotate(45deg)", borderRadius: 1,
+                        }}
+                      />
+                      <span style={{ position: "absolute", left: barPos.left + 12, top: 0, lineHeight: `${ROW_HEIGHT}px`, fontSize: 10, color: "var(--msp-text-muted)", whiteSpace: "nowrap" }}>
+                        {formatDate(task.dateFin)}
+                      </span>
+                    </div>
+                  );
+                }
 
                 return (
                   <div
@@ -2061,17 +2094,36 @@ export function MSProjectViewV2({
                   >
                     <div
                       className={isSummary ? "msp-summary-bar" : ""}
+                      title={tooltip}
                       style={{
                         position: "absolute",
                         left: barPos.left,
                         top: isSummary ? ROW_HEIGHT / 2 - (isProject ? 3 : 2) : ROW_HEIGHT / 2 - 6,
                         width: barPos.width,
                         height: isSummary ? (isProject ? 6 : 4) : 12,
-                        background: isSummary ? (isProject ? MSP_PROJECT_COLOR : MSP_SUMMARY_COLOR) : color,
+                        // Barre d'unité : couleur atténuée, la part réalisée en plein
+                        background: isSummary
+                          ? (isProject ? MSP_PROJECT_COLOR : MSP_SUMMARY_COLOR)
+                          : `linear-gradient(to right, ${color} ${progress}%, color-mix(in srgb, ${color} 40%, transparent) ${progress}%)`,
                         borderRadius: isSummary ? 0 : 2,
                         boxShadow: isSummary ? "none" : "0 1px 2px rgba(0,0,0,0.1)",
                       }}
-                    />
+                    >
+                      {/* Synthèse : trait d'avancement sous la barre */}
+                      {isSummary && task.progress !== undefined && (
+                        <div style={{ position: "absolute", left: 0, top: "100%", marginTop: 1, height: 2, width: `${progress}%`, background: MSP_TODAY_COLOR }} />
+                      )}
+                    </div>
+                    {task.progress !== undefined && (
+                      <span
+                        style={{
+                          position: "absolute", left: barPos.left + barPos.width + 6, top: 0, lineHeight: `${ROW_HEIGHT}px`,
+                          fontSize: 10, fontWeight: isSummary ? 600 : 400, color: "var(--msp-text-muted)", whiteSpace: "nowrap", pointerEvents: "none",
+                        }}
+                      >
+                        {Math.round(task.progress)} %
+                      </span>
+                    )}
                   </div>
                 );
               })}
