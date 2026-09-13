@@ -95,6 +95,11 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
 
   // Budget enregistré incohérent avec son financement (saisie antérieure au calcul serveur).
   const storedBudget = project.budget ?? 0;
+  // Règle métier : quand le budget change, les composants gardent leur part et
+  // le serveur réajuste leurs montants. On l'annonce avant d'enregistrer.
+  const budgetedComponents = (project.components ?? []).filter((c) => (c.budget ?? 0) > 0).length;
+  const componentsWillFollow =
+    financementChanged && storedBudget > 0 && preview.total > 0 && Math.abs(preview.total - storedBudget) >= 1 && budgetedComponents > 0;
   const budgetMismatch = Math.abs(storedBudget - preview.total) >= 1;
 
   const departements = useMemo(
@@ -171,9 +176,11 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
     try {
       const saved = await updateProject(project.code, updates);
       toast.success(
-        financementChanged
-          ? `Projet mis à jour — budget recalculé : ${formatCurrency(saved.budget ?? 0, "FCFA")}`
-          : "Informations du projet mises à jour",
+        componentsWillFollow
+          ? `Budget recalculé : ${formatCurrency(saved.budget ?? 0, "FCFA")} — montants des composants réajustés`
+          : financementChanged
+            ? `Projet mis à jour — budget recalculé : ${formatCurrency(saved.budget ?? 0, "FCFA")}`
+            : "Informations du projet mises à jour",
       );
       onSaved(saved);
     } catch (error) {
@@ -346,6 +353,11 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
               {financementChanged
                 ? `Budget après enregistrement : ${preview.total > 0 ? formatCurrency(preview.total, "FCFA") : "à définir"}`
                 : ""}
+              {componentsWillFollow && (
+                <span className="block text-amber-600">
+                  Les montants de {budgetedComponents > 1 ? `ses ${budgetedComponents} composants` : "son composant"} seront réajustés : chaque composant garde sa part.
+                </span>
+              )}
             </p>
             <div className="flex items-center gap-3">
               <button

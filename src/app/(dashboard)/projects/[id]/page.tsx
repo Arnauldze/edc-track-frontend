@@ -1333,6 +1333,9 @@ export default function ProjectConfigPage() {
         onClose={() => setShowEditInfoModal(false)}
         onSaved={(saved) => {
           setProject(saved);
+          // Le serveur a pu réajuster les montants des composants. Une édition
+          // de structure en cours reste prioritaire : elle sera enregistrée telle quelle.
+          if (!isEditingStructure) setComponents(saved.components || []);
           setShowEditInfoModal(false);
         }}
       />
