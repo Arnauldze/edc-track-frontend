@@ -65,6 +65,7 @@ import {
 // TYPES & DATA
 // ══════════════════════════════════════
 type ActivityData = {
+  id: string;
   name: string;
   pct: number;
   budget?: string;
@@ -317,7 +318,8 @@ export default function ProjectConfigPage() {
             id: sc.id,
             name: sc.name,
             activities: (sc.activities || []).map((a) => ({
-              name: typeof a === "string" ? a : a.name,
+              id: a.id,
+              name: a.name,
               pct: 0,
               budget: "—",
               delai: "—",
@@ -372,9 +374,8 @@ export default function ProjectConfigPage() {
   // Calculer le contexte actuel basé sur la navigation
   const context = useMemo(() => {
     if (selectedActivity) {
-      // Niveau activité: composante/sous-composante/activite
-      const activityName = selectedActivity.name.toLowerCase().replace(/\s+/g, '-');
-      return `${currentComp}/${currentSComp}/${activityName}`;
+      // Niveau activité : identifiants composante/sous-composante/activité
+      return `${currentComp}/${currentSComp}/${selectedActivity.id}`;
     }
     if (currentSComp) {
       // Niveau sous-composante: composante/sous-composante
@@ -1749,7 +1750,7 @@ export default function ProjectConfigPage() {
                         : a.pct > 0
                           ? "bg-blue-500"
                           : "bg-[var(--text-tertiary)]";
-                    const isSelected = selectedActivity?.name === a.name;
+                    const isSelected = selectedActivity?.id === a.id;
                     return (
                       <div
                         key={idx}

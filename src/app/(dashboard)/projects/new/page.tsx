@@ -12,6 +12,8 @@ import { FinancementEditor } from "@/components/financing/FinancementEditor";
 import { computeFinancementPreview, emptyFinancement, financementToPayload, validateFinancement, type FinancementFormValue } from "@/lib/financement";
 import { CAMEROON_DATA, CITY_COORDS, REGIONS } from "@/lib/cameroonGeo";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { newUnitId } from "@/lib/structureUnits";
+import { canIndent, indentUnit, outdentUnit } from "@/lib/structureOps";
 import { ComponentBudgetInput } from "@/components/projects/ComponentBudgetInput";
 import { allocationStatus, formatShare, round2, shareOf, toFCFA } from "@/lib/componentBudget";
 
@@ -297,7 +299,7 @@ export default function NewProjectPage() {
 
     // Step 4 state (structure)
     const [components, setComponents] = useState<ComponentData[]>([
-        { id: "c1", name: "Barrage", budget: 0, devise: "FCFA", ponderation: 0, sousComposants: [{ id: "sc1", name: "Fondations", activities: [{ name: "Fouilles", typeActivite: "travaux" }, { name: "Béton de propreté", typeActivite: "travaux" }] }] },
+        { id: newUnitId("component"), name: "Barrage", budget: 0, devise: "FCFA", ponderation: 0, sousComposants: [{ id: newUnitId("subcomponent"), name: "Fondations", activities: [{ id: newUnitId("activity"), name: "Fouilles", typeActivite: "travaux" }, { id: newUnitId("activity"), name: "Béton de propreté", typeActivite: "travaux" }] }] },
     ]);
 
     // États pour gérer le pliage/dépliage dans l'arborescence (Step 5)
@@ -338,7 +340,7 @@ export default function NewProjectPage() {
 
     const addComponent = () => {
         // Nouvelle composante sans sous-composantes = niveau le plus bas, donc ajouter typeActivite
-        setComponents(prev => [...prev, { id: `c${Date.now()}`, name: "", budget: 0, devise: "FCFA", ponderation: 0, sousComposants: [], typeActivite: "travaux" }]);
+        setComponents(prev => [...prev, { id: newUnitId("component"), name: "", budget: 0, devise: "FCFA", ponderation: 0, sousComposants: [], typeActivite: "travaux" }]);
     };
     const removeComponent = (idx: number) => {
         setConfirmState({
@@ -360,7 +362,7 @@ export default function NewProjectPage() {
             const { typeActivite, ...compWithoutType } = c;
             return {
                 ...compWithoutType,
-                sousComposants: [...c.sousComposants, { id: `sc${Date.now()}`, name: "", activities: [] }]
+                sousComposants: [...c.sousComposants, { id: newUnitId("subcomponent"), name: "", activities: [] }]
             };
         }));
     };
@@ -386,7 +388,7 @@ export default function NewProjectPage() {
         setComponents(prev => prev.map((c, ci) => ci === compIdx ? { ...c, sousComposants: c.sousComposants.map((sc, si) => si === scIdx ? { ...sc, name } : sc) } : c));
     };
     const addActivity = (compIdx: number, scIdx: number, typeActivite: string = "travaux") => {
-        const newAct: ActivityDef = { name: "", typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' };
+        const newAct: ActivityDef = { id: newUnitId("activity"), name: "", typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' };
         setComponents(prev => prev.map((c, ci) => {
             if (ci !== compIdx) return c;
             return {
@@ -490,70 +492,19 @@ export default function NewProjectPage() {
         setComponents(prev => prev.map((c, i) => i === ci ? { ...c, sousComposants: c.sousComposants.map((sc, j) => { if (j !== si) return sc; if (ai >= sc.activities.length - 1) return sc; const a = [...sc.activities]; [a[ai], a[ai + 1]] = [a[ai + 1], a[ai]]; return { ...sc, activities: a }; }) } : c));
     };
 
-    // ═══ Promotion hiérarchique (monter d'un cran) ═══
-
-    // Activité → Sous-composant (dans le même composant)
+    // ═══ Changement de niveau ═══
+    // Une unité garde son identifiant en changeant de niveau (voir lib/structureOps.ts).
     const promoteActivity = (ci: number, si: number, ai: number) => {
-        setComponents(prev => prev.map((c, i) => {
-            if (i !== ci) return c;
-            const actName = getActivityName(c.sousComposants[si].activities[ai]);
-            const newSC: SousComposantData = { id: `sc${Date.now()}`, name: actName, activities: [] };
-            const updatedSC = c.sousComposants.map((sc, j) => j === si ? { ...sc, activities: sc.activities.filter((_, k) => k !== ai) } : sc);
-            // Insérer la nouvelle SC juste après la SC actuelle
-            updatedSC.splice(si + 1, 0, newSC);
-            return { ...c, sousComposants: updatedSC };
-        }));
+        setComponents(prev => outdentUnit(prev, prev[ci].sousComposants[si].activities[ai].id));
     };
-
-    // Sous-composant → Composant
     const promoteSC = (ci: number, si: number) => {
-        setComponents(prev => {
-            const comp = prev[ci];
-            const sc = comp.sousComposants[si];
-            const newComp: ComponentData = { id: `c${Date.now()}`, name: sc.name, sousComposants: [] };
-            // Si la SC a des activités, on les met comme SCs enfants du nouveau composant
-            if (sc.activities.length > 0) {
-                newComp.sousComposants = sc.activities.map((a, idx) => ({ id: `sc${Date.now() + idx + 1}`, name: getActivityName(a), activities: [] }));
-            }
-            // Retirer la SC du composant parent
-            const updatedComp = { ...comp, sousComposants: comp.sousComposants.filter((_, j) => j !== si) };
-            const result = [...prev];
-            result[ci] = updatedComp;
-            // Insérer le nouveau composant juste après
-            result.splice(ci + 1, 0, newComp);
-            return result;
-        });
+        setComponents(prev => outdentUnit(prev, prev[ci].sousComposants[si].id));
     };
-
-    // ═══ Rétrogradation hiérarchique (descendre d'un cran) ═══
-
-    // Composant → Sous-composant (du composant précédent)
     const demoteComponent = (ci: number) => {
-        if (ci <= 0) return; // Pas de composant avant pour l'accueillir
-        setComponents(prev => {
-            const comp = prev[ci];
-            const newSC: SousComposantData = { id: `sc${Date.now()}`, name: comp.name, activities: comp.sousComposants.flatMap(sc => sc.activities.length > 0 ? sc.activities : [{ name: sc.name, typeActivite: "travaux" } as const]) };
-            const result = prev.filter((_, i) => i !== ci);
-            result[ci - 1] = { ...result[ci - 1], sousComposants: [...result[ci - 1].sousComposants, newSC] };
-            return result;
-        });
+        setComponents(prev => indentUnit(prev, prev[ci].id, financement.tauxChange));
     };
-
-    // Sous-composant → Activité (de la sous-composant précédente)
     const demoteSC = (ci: number, si: number) => {
-        if (si <= 0) return; // Pas de SC avant pour l'accueillir
-        setComponents(prev => prev.map((c, i) => {
-            if (i !== ci) return c;
-            const sc = c.sousComposants[si];
-            const updatedSCs = c.sousComposants.filter((_, j) => j !== si);
-            // Ajouter le nom de la SC comme activité à la SC précédente, + ses activités
-            const prevSCIdx = si - 1;
-            updatedSCs[prevSCIdx] = {
-                ...updatedSCs[prevSCIdx],
-                activities: [...updatedSCs[prevSCIdx].activities, { name: sc.name, typeActivite: "travaux" }, ...sc.activities],
-            };
-            return { ...c, sousComposants: updatedSCs };
-        }));
+        setComponents(prev => indentUnit(prev, prev[ci].sousComposants[si].id));
     };
 
     const totalActivities = components.reduce((sum, c) => sum + c.sousComposants.reduce((s, sc) => s + sc.activities.length, 0), 0);
@@ -595,6 +546,7 @@ export default function NewProjectPage() {
                         name: sc.name,
                         typeActivite: sc.typeActivite,
                         activities: sc.activities.map(act => ({
+                            id: act.id,
                             name: act.name,
                             typeActivite: act.typeActivite
                         }))
@@ -826,7 +778,7 @@ export default function NewProjectPage() {
                                         )}
                                         {/* Actions à droite */}
                                         <div className="flex items-center gap-1 flex-shrink-0 ml-1 border-l border-[var(--border-subtle)] pl-2">
-                                            <button type="button" onClick={() => demoteComponent(ci)} disabled={ci === 0} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
+                                            <button type="button" onClick={() => demoteComponent(ci)} disabled={!canIndent(components, comp.id)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
                                             <button type="button" onClick={() => removeComponent(ci)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={14} /></button>
                                         </div>
 
@@ -858,7 +810,7 @@ export default function NewProjectPage() {
                                                     {/* Actions à droite */}
                                                     <div className="flex items-center gap-1 flex-shrink-0 border-l border-[var(--border-subtle)] pl-1.5">
                                                         <button type="button" onClick={() => promoteSC(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-green-500/10 text-green-500 transition-all" title="Transformer en Composant"><ChevronUp size={15} /></button>
-                                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={si === 0} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={15} /></button>
+                                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={!canIndent(components, sc.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={15} /></button>
                                                         <button type="button" onClick={() => removeSousComposant(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={12} /></button>
                                                     </div>
                                                 </div>

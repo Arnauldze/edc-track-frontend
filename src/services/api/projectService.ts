@@ -5,6 +5,8 @@
 import apiClient, { ApiResponse } from './client';
 
 export interface Activity {
+  /** Identifiant stable, attribué une fois pour toutes (voir lib/structureUnits.ts). */
+  id: string;
   name: string;
   typeActivite: 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi';
 }
