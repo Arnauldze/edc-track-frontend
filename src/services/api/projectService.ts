@@ -98,6 +98,8 @@ export interface ProjectPermissions {
   roles: string[];
   permissions: string[];
   canAccessInitialisation: boolean;
+  /** Où déposer des documents : `paths` null = tout le projet, [] = nulle part. */
+  uploadScope: { paths: string[] | null; labels: string[] };
 }
 
 /** Membre d'équipe renvoyé par la jointure serveur de GET /projects. */
