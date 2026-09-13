@@ -43,6 +43,7 @@ export interface EtapePassation {
 export interface TacheExecution {
   numero: string;
   designation: string;
+  ponderation?: number;
   unite?: string;
   quantite?: number;
   prixUnitaire?: number;
