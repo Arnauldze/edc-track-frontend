@@ -12,6 +12,7 @@ import {
   trashDocument,
   restoreDocument,
   deleteDocument,
+  reopenDocument,
   type UploadDocumentParams,
 } from "@/services/api/documentService";
 
@@ -166,12 +167,13 @@ export async function restoreTrackedDocumentFromTrash(docId: string): Promise<Tr
   return enhanceDocument(doc);
 }
 
-export async function permanentlyDeleteFromTrash(
-  docId: string,
-  reason: string,
-): Promise<void> {
-  // Note: Backend doesn't require reason for permanent delete
+export async function permanentlyDeleteFromTrash(docId: string): Promise<void> {
   await deleteDocument(docId);
+}
+
+export async function reopenTrackedDocument(docId: string): Promise<TrackedDocument> {
+  const doc = await reopenDocument(docId);
+  return enhanceDocument(doc);
 }
 
 export async function removeTrackedDocument(docId: string): Promise<void> {

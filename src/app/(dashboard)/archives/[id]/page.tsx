@@ -14,6 +14,7 @@ import {
   getTrackedDocumentsLatest,
   getTrashedDocuments,
   markTrackedDocumentApproved,
+  reopenTrackedDocument,
   moveTrackedDocumentToTrash,
   permanentlyDeleteFromTrash,
   rejectTrackedDocumentWithReason,
@@ -23,6 +24,10 @@ import {
 import { toast } from "@/lib/toastStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getErrorMessage } from "@/services/api/client";
+import { downloadDocument, getDocumentObjectUrl } from "@/services/api/documentService";
+import { createFolder, deleteFolder, listFolders, type DocumentPhase, type Folder } from "@/services/api/folderService";
+import { getUserDirectory } from "@/lib/userStore";
+import { getCurrentUserId } from "@/lib/authStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import {
@@ -73,7 +78,7 @@ type Composant = {
   desc: string;
   sousComposants: SousComposant[];
 };
-type FileStatus = "valide" | "encours" | "manquant";
+type FileStatus = "valide" | "encours" | "rejete" | "manquant";
 type FileData = {
   name: string;
   size: string;
@@ -88,7 +93,7 @@ type FileData = {
   version?: number;
   rejectionReason?: string;
 };
-type DocStatus = "valide" | "encours" | "manquant";
+type DocStatus = "valide" | "encours" | "rejete" | "manquant";
 type DocData = {
   name: string;
   desc: string;
@@ -98,12 +103,15 @@ type DocData = {
   files: FileData[];
   lastModif?: string;
   lastModifBy?: string;
+  /** Dossier enregistré sur le serveur ; absent pour un dossier seulement déduit de ses documents. */
+  folderId?: string;
 };
 
 // Helper to derive folder status from its files
 const deriveFolderStatus = (files: FileData[]): DocStatus => {
   if (files.length === 0) return "manquant";
   if (files.every((f) => f.status === "valide")) return "valide";
+  if (files.some((f) => f.status === "rejete")) return "rejete";
   return "encours";
 };
 const formatFileSize = (bytes: number): string => {
@@ -126,7 +134,61 @@ const todayStr = () =>
     month: "short",
     year: "numeric",
   });
-const formatUploadDate = (iso: string) => {
+/**
+ * Ajoute aux dossiers déduits des documents ceux enregistrés sur le serveur :
+ * un dossier encore vide reste ainsi visible après rechargement.
+ */
+const mergeFolders = (groups: DocData[], folders: Folder[]): DocData[] => {
+  const merged = groups.map((group) => ({
+    ...group,
+    folderId: folders.find((f) => f.name === group.name)?._id,
+  }));
+  for (const folder of folders) {
+    if (merged.some((group) => group.name === folder.name)) continue;
+    merged.push({
+      name: folder.name,
+      type: "folder",
+      date: formatUploadDate(folder.createdAt),
+      status: "manquant",
+      files: [],
+      desc: "Aucun fichier",
+      folderId: folder._id,
+    });
+  }
+  return merged;
+};
+
+/** Documents du serveur regroupés par dossier, dans l'ordre de dépôt. */
+const groupTrackedByFolder = (docs: TrackedDocument[]): DocData[] => {
+  const folderMap = new Map<string, FileData[]>();
+  docs.forEach((doc) => {
+    const files = folderMap.get(doc.folderName) || [];
+    files.push({
+      name: doc.fileName,
+      size: doc.fileSize || "0 KB",
+      type: (["pdf", "dwg", "zip", "xls", "doc"].includes(doc.fileType || "") ? doc.fileType : "pdf") as FileData["type"],
+      status: (doc.status === "valide" || doc.status === "rejete" ? doc.status : "encours") as FileStatus,
+      lastModif: formatUploadDate(doc.createdAt || new Date().toISOString()),
+      lastModifBy: doc.uploadedBy,
+      trackingId: doc._id,
+      version: doc.version || 1,
+      rejectionReason: doc.tracking?.rejectionReason,
+    });
+    folderMap.set(doc.folderName, files);
+  });
+  return Array.from(folderMap.entries()).map(([folderName, files]) => ({
+    name: folderName,
+    desc: `${files.length} fichier${files.length > 1 ? "s" : ""}`,
+    type: "folder" as const,
+    date: files[0]?.lastModif || todayStr(),
+    status: deriveFolderStatus(files),
+    files,
+    lastModif: files.length > 0 ? files[files.length - 1]?.lastModif : undefined,
+    lastModifBy: files.length > 0 ? files[files.length - 1]?.lastModifBy : undefined,
+  }));
+};
+
+function formatUploadDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("fr-FR", {
       day: "2-digit",
@@ -136,238 +198,77 @@ const formatUploadDate = (iso: string) => {
   } catch {
     return iso;
   }
+}
+
+type ArchiveProject = {
+  id: string;
+  name: string;
+  budget: string;
+  progress: number;
+  description: string;
+  components: Composant[];
 };
 
-const DEFAULT_PROJECT = {
-  id: "PRJ-2008-001",
-  name: "Lom Pangar",
-  budget: "420 Mrd FCFA",
-  progress: 72,
-  description: "Infrastructure Hydroélectrique",
-  components: [
-    {
-      id: "barrage",
-      name: "Barrage",
-      status: "progress" as const,
-      desc: "Infrastructure principale",
-      sousComposants: [
-        {
-          id: "fond",
-          name: "Fondations",
-          activities: [
-            {
-              name: "Fouilles",
-              pct: 100,
-              budget: "2.5 Mrd FCFA",
-              delai: "Jan 2024 → Mar 2024",
-              status: "done",
-            },
-            {
-              name: "Béton de propreté",
-              pct: 80,
-              budget: "800 M FCFA",
-              delai: "Avr 2024 → Jun 2024",
-              status: "exec",
-            },
-          ],
-        },
-        {
-          id: "corps",
-          name: "Corps barrage",
-          activities: [
-            {
-              name: "Montage des murs",
-              pct: 60,
-              budget: "12 Mrd FCFA",
-              delai: "Mar 2024 → Dec 2024",
-              status: "exec",
-            },
-            {
-              name: "Passage graviers",
-              pct: 30,
-              budget: "3 Mrd FCFA",
-              delai: "Jun 2024 → Sep 2024",
-              status: "exec",
-            },
-            {
-              name: "Fondations profondes",
-              pct: 100,
-              budget: "8 Mrd FCFA",
-              delai: "Jan 2024 → Avr 2024",
-              status: "done",
-            },
-            {
-              name: "Toiture & finitions",
-              pct: 0,
-              budget: "5 Mrd FCFA",
-              delai: "Jan 2025 → Jun 2025",
-              status: "idle",
-            },
-          ],
-        },
-        {
-          id: "evac",
-          name: "Évacuateur de crues",
-          activities: [
-            {
-              name: "Terrassement",
-              pct: 45,
-              budget: "4 Mrd FCFA",
-              delai: "Fév 2024 → Aoû 2024",
-              status: "exec",
-            },
-          ],
-        },
-        {
-          id: "prise",
-          name: "Ouvrage de prise",
-          activities: [
-            {
-              name: "Coffrage",
-              pct: 10,
-              budget: "2 Mrd FCFA",
-              delai: "Mai 2024 → Oct 2024",
-              status: "exec",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "usine",
-      name: "Usine",
-      status: "progress" as const,
-      desc: "Production électrique",
-      sousComposants: [
-        {
-          id: "turb",
-          name: "Turbines",
-          activities: [
-            {
-              name: "Montage turbine Francis",
-              pct: 15,
-              budget: "25 Mrd FCFA",
-              delai: "Jun 2024 → Jun 2025",
-              status: "exec",
-            },
-          ],
-        },
-        {
-          id: "gen",
-          name: "Générateurs",
-          activities: [
-            {
-              name: "Installation alternateurs",
-              pct: 0,
-              budget: "18 Mrd FCFA",
-              delai: "2025",
-              status: "idle",
-            },
-          ],
-        },
-        {
-          id: "ctrl",
-          name: "Contrôle-commande",
-          activities: [
-            {
-              name: "Système SCADA",
-              pct: 0,
-              budget: "6 Mrd FCFA",
-              delai: "2025",
-              status: "idle",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "route",
-      name: "Route d'accès",
-      status: "progress" as const,
-      desc: "Voirie & accès chantier",
-      sousComposants: [
-        {
-          id: "terr",
-          name: "Terrassement",
-          activities: [
-            {
-              name: "Déblais",
-              pct: 70,
-              budget: "1.5 Mrd FCFA",
-              delai: "Jan 2024 → Mai 2024",
-              status: "exec",
-            },
-          ],
-        },
-        {
-          id: "chau",
-          name: "Chaussée",
-          activities: [
-            {
-              name: "Enrobé",
-              pct: 0,
-              budget: "3 Mrd FCFA",
-              delai: "Jun 2024 → Dec 2024",
-              status: "idle",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "cite",
-      name: "Cité",
-      status: "ok" as const,
-      desc: "Logements & services",
-      sousComposants: [
-        {
-          id: "log",
-          name: "Logements",
-          activities: [
-            {
-              name: "Construction",
-              pct: 100,
-              budget: "10 Mrd FCFA",
-              delai: "2023 → 2024",
-              status: "done",
-            },
-            {
-              name: "Aménagement",
-              pct: 90,
-              budget: "2 Mrd FCFA",
-              delai: "2024",
-              status: "exec",
-            },
-          ],
-        },
-        {
-          id: "vrd",
-          name: "VRD",
-          activities: [
-            {
-              name: "Voirie",
-              pct: 100,
-              budget: "4 Mrd FCFA",
-              delai: "2023 → 2024",
-              status: "done",
-            },
-            {
-              name: "Réseaux",
-              pct: 85,
-              budget: "3 Mrd FCFA",
-              delai: "2024",
-              status: "exec",
-            },
-          ],
-        },
-      ],
-    },
-  ] as Composant[],
+// Avant chargement. Un projet introuvable ou inaccessible affichait jusqu'ici
+// les données fictives du projet Lom Pangar à la place d'un message.
+const EMPTY_PROJECT: ArchiveProject = {
+  id: "",
+  name: "",
+  budget: "—",
+  progress: 0,
+  description: "",
+  components: [],
 };
 
 // ══════════════════════════════════════
 // PAGE
 // ══════════════════════════════════════
+// Déclarée hors de la page : définie à l'intérieur, elle était recréée à chaque
+// rendu et la zone de texte perdait le focus à chaque caractère tapé.
+function ReasonModal({
+  title,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  confirmLabel: string;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div
+        className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)] w-full max-w-md p-6 border border-[var(--border-default)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3">{title}</h4>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Saisissez le motif..."
+          rows={4}
+          autoFocus
+          className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+        />
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onCancel} className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)]">
+            Annuler
+          </button>
+          <button
+            onClick={() => onConfirm(reason.trim())}
+            disabled={!reason.trim()}
+            className="px-4 py-2 bg-[var(--accent)] text-white text-xs font-bold rounded-[var(--radius-md)] disabled:opacity-50"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectConfigPage() {
   const params = useParams();
   const projectId =
@@ -376,23 +277,28 @@ export default function ProjectConfigPage() {
       : Array.isArray(params.id)
         ? params.id[0]
         : "";
-  
-  const [PROJECT, setPROJECT] = useState<typeof DEFAULT_PROJECT>(DEFAULT_PROJECT);
-  const { canUploadIn, uploadScope } = usePermissions(projectId);
-  
+
+  const [PROJECT, setPROJECT] = useState<ArchiveProject>(EMPTY_PROJECT);
+  const [projectMissing, setProjectMissing] = useState(false);
+  const { can, canUploadIn, uploadScope } = usePermissions(projectId);
+  const currentUserId = getCurrentUserId();
+
+  // Noms des auteurs : les documents ne portent que l'identifiant (u3…).
+  const [authors, setAuthors] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    getUserDirectory()
+      .then((users) => setAuthors(new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`]))))
+      .catch(() => setAuthors(new Map()));
+  }, []);
+  const authorName = (userId?: string) => (userId ? authors.get(userId) ?? "Utilisateur inconnu" : "—");
+
   useEffect(() => {
     async function loadProject() {
       const stored = await getProjectById(projectId);
       if (!stored) {
-        setPROJECT(DEFAULT_PROJECT);
+        setProjectMissing(true);
         return;
       }
-      // For the default Lom Pangar, use the rich hardcoded data
-      if (stored.code === "PRJ-2008-001") {
-        setPROJECT(DEFAULT_PROJECT);
-        return;
-      }
-      // For other projects, build from store data
       setPROJECT({
         id: stored.code,
         name: stored.name,
@@ -420,7 +326,7 @@ export default function ProjectConfigPage() {
     }
     loadProject();
   }, [projectId]);
-  
+
   const [currentComp, setCurrentComp] = useState<string | null>(null);
   const [currentSComp, setCurrentSComp] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<
@@ -434,17 +340,17 @@ export default function ProjectConfigPage() {
   // Déterminer le niveau le plus bas (où afficher les 3 phases)
   const lowestLevel = useMemo(() => {
     if (!currentComp) return "global"; // Étude globale
-    
+
     const comp = PROJECT.components.find((c) => c.id === currentComp);
     if (!comp) return "component";
-    
+
     // Si la composante a des sous-composantes
     if (comp.sousComposants && comp.sousComposants.length > 0) {
       if (!currentSComp) return "not-lowest"; // On est au niveau composante (pas le plus bas)
-      
+
       const sc = comp.sousComposants.find((s) => s.id === currentSComp);
       if (!sc) return "subcomponent";
-      
+
       // Si le sous-composant a des activités
       if (sc.activities && sc.activities.length > 0) {
         // Le niveau le plus bas est "activity", pas "subcomponent"
@@ -455,7 +361,7 @@ export default function ProjectConfigPage() {
       // Pas d'activités → le niveau le plus bas est "subcomponent"
       return "subcomponent";
     }
-    
+
     // Pas de sous-composantes → le niveau le plus bas est "component"
     return "component";
   }, [currentComp, currentSComp, selectedActivity, PROJECT.components]);
@@ -516,16 +422,12 @@ export default function ProjectConfigPage() {
     fileIdx: number;
     fileName: string;
   } | null>(null);
-  const [showTrashModal, setShowTrashModal] = useState<{ phase: string } | null>(
-    null,
-  );
   const [showTrashBin, setShowTrashBin] = useState(false);
   const [trashedDocs, setTrashedDocs] = useState<TrackedDocument[]>([]);
   const [showPermanentDeleteModal, setShowPermanentDeleteModal] = useState<{
     docId: string;
     fileName: string;
   } | null>(null);
-  const [reasonInput, setReasonInput] = useState("");
   const [confirmDeleteFolderState, setConfirmDeleteFolder] = useState<{
     phase: string;
     docIdx: number;
@@ -539,73 +441,33 @@ export default function ProjectConfigPage() {
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
 
   // Charger les documents depuis le backend
-  useEffect(() => {
-    if (!PROJECT.id || typeof window === "undefined") return;
-    
-    async function loadDocsFromBackend() {
-      setIsLoadingDocs(true);
-      try {
-        const [etudeTracked, passationTracked, executionTracked, trashed] = await Promise.all([
-          getTrackedDocumentsLatest(PROJECT.id, "etude", undefined, context),
-          getTrackedDocumentsLatest(PROJECT.id, "passation", undefined, context),
-          getTrackedDocumentsLatest(PROJECT.id, "execution", undefined, context),
-          getTrashedDocuments(PROJECT.id),
-        ]);
-
-        // Charger les documents de la corbeille
-        setTrashedDocs(trashed);
-
-        // Grouper les documents par dossier
-        const groupByFolder = (docs: TrackedDocument[]): DocData[] => {
-          const folderMap = new Map<string, FileData[]>();
-          
-          docs.forEach((doc) => {
-            const files = folderMap.get(doc.folderName) || [];
-            files.push({
-              name: doc.fileName,
-              size: doc.fileSize || "0 KB",
-              type: (["pdf", "dwg", "zip", "xls", "doc"].includes(doc.fileType || "")
-                ? doc.fileType
-                : "pdf") as FileData["type"],
-              status: (doc.status === "valide"
-                ? "valide"
-                : doc.status === "rejete"
-                  ? "manquant"
-                  : "encours") as FileStatus,
-              lastModif: formatUploadDate(doc.createdAt || new Date().toISOString()),
-              lastModifBy: doc.uploadedBy,
-              trackingId: doc._id,
-              version: doc.version || 1,
-              rejectionReason: doc.tracking?.rejectionReason,
-            });
-            folderMap.set(doc.folderName, files);
-          });
-
-          return Array.from(folderMap.entries()).map(([folderName, files]) => ({
-            name: folderName,
-            desc: `${files.length} fichier${files.length > 1 ? "s" : ""}`,
-            type: "folder" as const,
-            date: files[0]?.lastModif || todayStr(),
-            status: deriveFolderStatus(files),
-            files,
-            lastModif: files.length > 0 ? files[files.length - 1]?.lastModif : undefined,
-            lastModifBy: files.length > 0 ? files[files.length - 1]?.lastModifBy : undefined,
-          }));
-        };
-
-        setEtudeDocs(groupByFolder(etudeTracked));
-        setPassationDocs(groupByFolder(passationTracked));
-        setExecutionDocs(groupByFolder(executionTracked));
-      } catch (error) {
-        console.error("Erreur lors du chargement des documents:", error);
-        toast.error("Erreur lors du chargement des documents");
-      } finally {
-        setIsLoadingDocs(false);
-      }
+  const loadDocuments = useCallback(async () => {
+    if (!PROJECT.id) return;
+    setIsLoadingDocs(true);
+    try {
+      const [etudeTracked, passationTracked, executionTracked, trashed, folders] = await Promise.all([
+        getTrackedDocumentsLatest(PROJECT.id, "etude", undefined, context),
+        getTrackedDocumentsLatest(PROJECT.id, "passation", undefined, context),
+        getTrackedDocumentsLatest(PROJECT.id, "execution", undefined, context),
+        getTrashedDocuments(PROJECT.id),
+        listFolders(PROJECT.id, context),
+      ]);
+      const foldersOf = (phase: DocumentPhase) => folders.filter((f) => f.phase === phase);
+      setTrashedDocs(trashed);
+      setEtudeDocs(mergeFolders(groupTrackedByFolder(etudeTracked), foldersOf("etude")));
+      setPassationDocs(mergeFolders(groupTrackedByFolder(passationTracked), foldersOf("passation")));
+      setExecutionDocs(mergeFolders(groupTrackedByFolder(executionTracked), foldersOf("execution")));
+    } catch (error) {
+      console.error("Erreur lors du chargement des documents:", error);
+      toast.error("Erreur lors du chargement des documents");
+    } finally {
+      setIsLoadingDocs(false);
     }
-    
-    loadDocsFromBackend();
   }, [PROJECT.id, context]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
 
   const getPhaseDocsAndSetter = (
     phase: string,
@@ -685,6 +547,11 @@ export default function ProjectConfigPage() {
         label: "En cours",
         style: "bg-orange-500/10 text-orange-600 border-orange-500/20",
       },
+      rejete: {
+        icon: <XCircle size={10} />,
+        label: "Rejeté",
+        style: "bg-red-500/10 text-red-600 border-red-500/20",
+      },
       manquant: {
         icon: <AlertCircle size={10} />,
         label: "Manquant",
@@ -706,20 +573,35 @@ export default function ProjectConfigPage() {
   // ── FILE UPLOAD & FOLDER HANDLER ──
   const handleCreateFolder = async () => {
     if (!createFolderModal || !newFolderName.trim()) return;
-    const [docs, setter] = getPhaseDocsAndSetter(createFolderModal.phase);
+    const [, setter] = getPhaseDocsAndSetter(createFolderModal.phase);
 
-    const newDoc: DocData = {
-      name: newFolderName.trim(),
-      type: "folder",
-      date: todayStr(),
-      status: "manquant",
-      files: [],
-      desc: "Aucun fichier",
-    };
-    setter([...docs, newDoc]);
-    setCreateFolderModal(null);
-    setNewFolderName("");
-    toast.success("Dossier créé");
+    try {
+      // Enregistré sur le serveur : un dossier vide n'existait jusqu'ici que
+      // dans le navigateur et disparaissait au rechargement.
+      const folder = await createFolder({
+        projectId: PROJECT.id,
+        phase: createFolderModal.phase as DocumentPhase,
+        context,
+        name: newFolderName.trim(),
+      });
+      setter((prev) => [
+        ...prev,
+        {
+          name: folder.name,
+          type: "folder",
+          date: todayStr(),
+          status: "manquant",
+          files: [],
+          desc: "Aucun fichier",
+          folderId: folder._id,
+        },
+      ]);
+      setCreateFolderModal(null);
+      setNewFolderName("");
+      toast.success("Dossier créé");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   };
 
   const handleUploadClick = (phase: string, docIdx: number) => {
@@ -759,7 +641,7 @@ export default function ProjectConfigPage() {
             type: ext,
             status: "encours" as FileStatus,
             lastModif: todayStr(),
-            lastModifBy: "Chef de Projet",
+            lastModifBy: currentUserId ?? undefined,
             file: f,
             blobUrl: URL.createObjectURL(f),
             trackingId: tracked._id,
@@ -784,7 +666,7 @@ export default function ProjectConfigPage() {
           desc: `${updatedFiles.length} fichier${updatedFiles.length > 1 ? "s" : ""}`,
           status: deriveFolderStatus(updatedFiles),
           lastModif: todayStr(),
-          lastModifBy: "Chef de Projet",
+          lastModifBy: currentUserId ?? undefined,
         };
       }),
     );
@@ -803,7 +685,7 @@ export default function ProjectConfigPage() {
   ) => {
     const [docs, setter] = getPhaseDocsAndSetter(phase);
     const file = docs[docIdx]?.files[fileIdx];
-    
+
     if (!file?.trackingId) {
       toast.error("Impossible de valider ce fichier");
       return;
@@ -812,7 +694,7 @@ export default function ProjectConfigPage() {
     try {
       await markTrackedDocumentApproved(file.trackingId);
       if (file?.name) toast.success(`Fichier validé : ${file.name}`);
-      
+
       setter((prev) =>
         prev.map((doc, di) => {
           if (di !== docIdx) return doc;
@@ -828,7 +710,7 @@ export default function ProjectConfigPage() {
       );
     } catch (error) {
       console.error("Erreur lors de la validation:", error);
-      toast.error("Erreur lors de la validation du fichier");
+      toast.error(getErrorMessage(error));
     }
   };
 
@@ -840,7 +722,7 @@ export default function ProjectConfigPage() {
   ) => {
     const [docs, setter] = getPhaseDocsAndSetter(phase);
     const file = docs[docIdx]?.files[fileIdx];
-    
+
     if (!file?.trackingId) {
       toast.error("Impossible de rejeter ce fichier");
       return;
@@ -849,13 +731,13 @@ export default function ProjectConfigPage() {
     try {
       await rejectTrackedDocumentWithReason(file.trackingId, reason);
       if (file?.name) toast.info(`Fichier rejeté : ${file.name}`);
-      
+
       setter((prev) =>
         prev.map((doc, di) => {
           if (di !== docIdx) return doc;
           const updatedFiles = doc.files.map((f, fi) =>
             fi === fileIdx
-              ? { ...f, status: "manquant" as FileStatus, rejectionReason: reason }
+              ? { ...f, status: "rejete" as FileStatus, rejectionReason: reason }
               : f,
           );
           return {
@@ -867,27 +749,34 @@ export default function ProjectConfigPage() {
       );
     } catch (error) {
       console.error("Erreur lors du rejet:", error);
-      toast.error("Erreur lors du rejet du fichier");
+      toast.error(getErrorMessage(error));
     }
   };
   const handleDeleteDocFolder = async (phase: string, docIdx: number) => {
     const [docs, setter] = getPhaseDocsAndSetter(phase);
     const docToDelete = docs[docIdx];
-    
+
     // Check if it has files
     if (docToDelete.files && docToDelete.files.length > 0) {
       toast.error(`Impossible de supprimer le dossier "${docToDelete.name}" car il contient des fichiers. Videz-le d'abord.`);
       return;
     }
-    
+
     setConfirmDeleteFolder({ phase, docIdx, name: docToDelete.name });
   };
 
-  const confirmDeleteFolder = () => {
-    if (confirmDeleteFolderState) {
-      const [docs, setter] = getPhaseDocsAndSetter(confirmDeleteFolderState.phase);
-      setter((prev) => prev.filter((_, idx) => idx !== confirmDeleteFolderState.docIdx));
-      toast.info(`Dossier supprimé : ${confirmDeleteFolderState.name}`);
+  const confirmDeleteFolder = async () => {
+    if (!confirmDeleteFolderState) return;
+    const { phase, docIdx, name } = confirmDeleteFolderState;
+    const [docs, setter] = getPhaseDocsAndSetter(phase);
+    const folderId = docs[docIdx]?.folderId;
+
+    try {
+      if (folderId) await deleteFolder(folderId);
+      setter((prev) => prev.filter((_, idx) => idx !== docIdx));
+      toast.info(`Dossier supprimé : ${name}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
     }
   };
 
@@ -900,7 +789,7 @@ export default function ProjectConfigPage() {
     const [docs, setter] = getPhaseDocsAndSetter(phase);
     const doc = docs[docIdx];
     const file = doc?.files[fileIdx];
-    
+
     if (!file?.trackingId) {
       toast.error("Impossible de déplacer ce fichier en corbeille");
       return;
@@ -909,11 +798,11 @@ export default function ProjectConfigPage() {
     try {
       await moveTrackedDocumentToTrash(file.trackingId, reason);
       if (file?.name) toast.info(`Fichier déplacé en corbeille : ${file.name}`);
-      
+
       // Rafraîchir la liste de la corbeille
       const trashed = await getTrashedDocuments(PROJECT.id);
       setTrashedDocs(trashed);
-      
+
       setter((prev) =>
         prev.map((docRow, di) => {
           if (di !== docIdx) return docRow;
@@ -931,7 +820,7 @@ export default function ProjectConfigPage() {
       );
     } catch (error) {
       console.error("Erreur lors du déplacement en corbeille:", error);
-      toast.error("Erreur lors du déplacement en corbeille");
+      toast.error(getErrorMessage(error));
     }
   };
   const handleRollbackValidation = async (
@@ -942,44 +831,34 @@ export default function ProjectConfigPage() {
     const [docs, setter] = getPhaseDocsAndSetter(phase);
     const file = docs[docIdx]?.files[fileIdx];
     if (!file?.trackingId) return;
-    
-    // Pour annuler une validation, on rejette puis on remet en cours
-    // Note: Le backend ne supporte pas directement le rollback, 
-    // donc on change juste le statut côté frontend
-    setter((prev) =>
-      prev.map((doc, di) => {
-        if (di !== docIdx) return doc;
-        const updatedFiles = doc.files.map((f, fi) =>
-          fi === fileIdx
-            ? {
-                ...f,
-                status: "encours" as FileStatus,
-                lastModif: todayStr(),
-              }
-            : f,
-        );
-        return {
-          ...doc,
-          files: updatedFiles,
-          status: deriveFolderStatus(updatedFiles),
-        };
-      }),
-    );
-    toast.success(`Validation annulée pour ${file.name}`);
+
+    // Persisté côté serveur : l'ancienne version ne changeait que l'affichage,
+    // et le document redevenait validé au rechargement.
+    try {
+      await reopenTrackedDocument(file.trackingId);
+      setter((prev) =>
+        prev.map((doc, di) => {
+          if (di !== docIdx) return doc;
+          const updatedFiles = doc.files.map((f, fi) =>
+            fi === fileIdx ? { ...f, status: "encours" as FileStatus, rejectionReason: undefined } : f,
+          );
+          return { ...doc, files: updatedFiles, status: deriveFolderStatus(updatedFiles) };
+        }),
+      );
+      toast.success(`Décision levée : ${file.name} repasse en revue`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   };
   const handlePreviewFile = async (file: FileData) => {
     if (file.blobUrl) {
       setPreviewFile({ url: file.blobUrl, name: file.name, type: file.type });
     } else if (file.trackingId) {
-      // Télécharger le fichier depuis le backend pour prévisualisation
       try {
-        toast.info("Chargement du fichier...");
-        // Note: Pour l'instant, on affiche juste un message
-        // TODO: Implémenter la prévisualisation depuis le backend
-        toast.info(`Prévisualisation de "${file.name}" (fonctionnalité à venir)`);
+        const url = await getDocumentObjectUrl(file.trackingId);
+        setPreviewFile({ url, name: file.name, type: file.type });
       } catch (error) {
-        console.error("Erreur lors du chargement du fichier:", error);
-        toast.error("Erreur lors du chargement du fichier");
+        toast.error(getErrorMessage(error));
       }
     } else {
       toast.info(`Aucun fichier réel pour "${file.name}".`);
@@ -993,15 +872,10 @@ export default function ProjectConfigPage() {
       a.download = file.name;
       a.click();
     } else if (file.trackingId) {
-      // Télécharger depuis le backend
       try {
-        toast.info("Téléchargement en cours...");
-        // Note: Pour l'instant, on affiche juste un message
-        // TODO: Implémenter le téléchargement depuis le backend
-        toast.info(`Téléchargement de "${file.name}" (fonctionnalité à venir)`);
+        await downloadDocument(file.trackingId, file.name);
       } catch (error) {
-        console.error("Erreur lors du téléchargement:", error);
-        toast.error("Erreur lors du téléchargement");
+        toast.error(getErrorMessage(error));
       }
     } else {
       toast.info(`Aucun fichier réel pour "${file.name}".`);
@@ -1023,6 +897,15 @@ export default function ProjectConfigPage() {
     fileIdx: number;
   }) => {
     const isOpen = openActionMenu === fileKey;
+    const [phaseDocs] = getPhaseDocsAndSetter(phase);
+    const status = phaseDocs[docIdx]?.files[fileIdx]?.status;
+    const undecided = status !== "valide" && status !== "rejete";
+    const canValidate = undecided && can("doc:validate");
+    const canReject = undecided && can("doc:reject");
+    const canUnlock = !undecided && can("doc:unlock");
+    // Un document validé ne part en corbeille qu'avec le droit de le débloquer.
+    const canTrash = can("doc:delete") && (status !== "valide" || can("doc:unlock"));
+    if (!canValidate && !canReject && !canUnlock && !canTrash) return null;
     return (
       <div className="relative" onClick={(e) => e.stopPropagation()}>
         <button
@@ -1033,6 +916,7 @@ export default function ProjectConfigPage() {
         </button>
         {isOpen && (
           <div className="absolute right-0 top-full mt-1 w-52 bg-[var(--bg-surface)] rounded-[var(--radius-md)] border border-[var(--border-default)] shadow-[var(--shadow-lg)] z-50 py-1 overflow-hidden">
+            {canValidate && (
             <button
               onClick={() => {
                 setShowValidateModal({ docIdx, fileIdx, fileName });
@@ -1042,6 +926,8 @@ export default function ProjectConfigPage() {
             >
               <CheckCircle2 size={14} /> Valider
             </button>
+            )}
+            {canReject && (
             <button
               onClick={() => {
                 setShowRejectModal({
@@ -1050,30 +936,28 @@ export default function ProjectConfigPage() {
                   fileIdx,
                   fileName,
                 });
-                setReasonInput("");
                 setOpenActionMenu(null);
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-orange-600 hover:bg-orange-500/10 transition-colors"
             >
               <XCircle size={14} /> Rejeter
             </button>
-            {(() => {
-              const [docs] = getPhaseDocsAndSetter(phase);
-              const row = docs[docIdx]?.files[fileIdx];
-              if (row?.status !== "valide") return null;
-              return (
-                <button
-                  onClick={() => {
-                    handleRollbackValidation(phase, docIdx, fileIdx);
-                    setOpenActionMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-blue-600 hover:bg-blue-500/10 transition-colors"
-                >
-                  <Edit2 size={14} /> Annuler validation
-                </button>
-              );
-            })()}
+            )}
+            {canUnlock && (
+              <button
+                onClick={() => {
+                  handleRollbackValidation(phase, docIdx, fileIdx);
+                  setOpenActionMenu(null);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-blue-600 hover:bg-blue-500/10 transition-colors"
+              >
+                <Edit2 size={14} /> Débloquer (remettre en revue)
+              </button>
+            )}
+            {canTrash && (canValidate || canReject || canUnlock) && (
             <div className="h-px bg-[var(--border-subtle)] my-1" />
+            )}
+            {canTrash && (
             <button
               onClick={() => {
                 setShowTrashMoveModal({
@@ -1082,13 +966,13 @@ export default function ProjectConfigPage() {
                   fileIdx,
                   fileName,
                 });
-                setReasonInput("");
                 setOpenActionMenu(null);
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-red-500 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 size={14} /> Envoyer corbeille
             </button>
+            )}
           </div>
         )}
       </div>
@@ -1109,7 +993,7 @@ export default function ProjectConfigPage() {
       gridTemplateColumns:
         "minmax(250px,2.5fr) 100px minmax(120px,1.5fr) 130px",
     };
-    
+
     if (isLoadingDocs) {
       return (
         <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden shadow-[var(--shadow-sm)] p-8">
@@ -1120,7 +1004,7 @@ export default function ProjectConfigPage() {
         </div>
       );
     }
-    
+
     return (
       <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden shadow-[var(--shadow-sm)]">
         {/* Header */}
@@ -1134,12 +1018,14 @@ export default function ProjectConfigPage() {
             </h3>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCreateFolderModal({ phase })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-bold text-[var(--accent)] hover:bg-[var(--accent-subtle)] transition-colors border border-[var(--accent-subtle)] hover:border-[var(--accent)] shadow-sm"
-            >
-              <Plus size={13} /> Nouveau dossier
-            </button>
+            {canUploadIn(context) && (
+              <button
+                onClick={() => setCreateFolderModal({ phase })}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-bold text-[var(--accent)] hover:bg-[var(--accent-subtle)] transition-colors border border-[var(--accent-subtle)] hover:border-[var(--accent)] shadow-sm"
+              >
+                <Plus size={13} /> Nouveau dossier
+              </button>
+            )}
           </div>
         </div>
         {/* Column headers */}
@@ -1206,7 +1092,7 @@ export default function ProjectConfigPage() {
                         {doc.lastModif}
                       </div>
                       <div className="text-[var(--text-tertiary)] mt-0.5 truncate">
-                        par {doc.lastModifBy}
+                        par {authorName(doc.lastModifBy)}
                       </div>
                     </>
                   ) : (
@@ -1220,19 +1106,23 @@ export default function ProjectConfigPage() {
                   className="flex justify-end items-center gap-1.5 pr-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button
-                    onClick={() => handleUploadClick(phase, idx)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white shadow-[var(--shadow-sm)] transition-all"
-                  >
-                    <Upload size={12} /> Déposer
-                  </button>
-                  <button
-                    onClick={() => handleDeleteDocFolder(phase, idx)}
-                    className="flex items-center justify-center w-7 h-7 rounded-[var(--radius-md)] text-red-500 hover:bg-red-500/10 transition-colors"
-                    title="Supprimer le dossier"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  {canUploadIn(context) && (
+                    <>
+                      <button
+                        onClick={() => handleUploadClick(phase, idx)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white shadow-[var(--shadow-sm)] transition-all"
+                      >
+                        <Upload size={12} /> Déposer
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocFolder(phase, idx)}
+                        className="flex items-center justify-center w-7 h-7 rounded-[var(--radius-md)] text-red-500 hover:bg-red-500/10 transition-colors"
+                        title="Supprimer le dossier"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               {/* ── EXPANDED FILES ── */}
@@ -1274,7 +1164,7 @@ export default function ProjectConfigPage() {
                                 {file.lastModif}
                               </div>
                               <div className="text-[var(--text-tertiary)] mt-0.5 truncate">
-                                par {file.lastModifBy}
+                                par {authorName(file.lastModifBy)}
                               </div>
                             </>
                           ) : (
@@ -1295,13 +1185,15 @@ export default function ProjectConfigPage() {
                           >
                             <Eye size={14} />
                           </button>
-                          <button
-                            onClick={() => handleDownloadFile(file)}
-                            className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-tertiary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--accent)] transition-colors"
-                            title="Télécharger"
-                          >
-                            <Download size={14} />
-                          </button>
+                          {can("doc:download") && (
+                            <button
+                              onClick={() => handleDownloadFile(file)}
+                              className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-tertiary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--accent)] transition-colors"
+                              title="Télécharger"
+                            >
+                              <Download size={14} />
+                            </button>
+                          )}
                           <FileActionDropdown
                             fileKey={fileKey}
                             fileName={file.name}
@@ -1314,14 +1206,16 @@ export default function ProjectConfigPage() {
                     );
                   })}
                   {/* Add file button */}
-                  <div className="px-5 py-2.5 pl-[70px]">
-                    <button
-                      onClick={() => handleUploadClick(phase, idx)}
-                      className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--accent)] hover:underline"
-                    >
-                      <Plus size={12} /> Ajouter un fichier
-                    </button>
-                  </div>
+                  {canUploadIn(context) && (
+                    <div className="px-5 py-2.5 pl-[70px]">
+                      <button
+                        onClick={() => handleUploadClick(phase, idx)}
+                        className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--accent)] hover:underline"
+                      >
+                        <Plus size={12} /> Ajouter un fichier
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1502,139 +1396,6 @@ export default function ProjectConfigPage() {
     );
   };
 
-  const ReasonModal = ({
-    title,
-    confirmLabel,
-    onCancel,
-    onConfirm,
-  }: {
-    title: string;
-    confirmLabel: string;
-    onCancel: () => void;
-    onConfirm: (reason: string) => void;
-  }) => (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)] w-full max-w-md p-6 border border-[var(--border-default)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3">
-          {title}
-        </h4>
-        <textarea
-          value={reasonInput}
-          onChange={(e) => setReasonInput(e.target.value)}
-          placeholder="Saisissez le motif..."
-          rows={4}
-          className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-        />
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)]"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={() => onConfirm(reasonInput)}
-            disabled={!reasonInput.trim()}
-            className="px-4 py-2 bg-[var(--accent)] text-white text-xs font-bold rounded-[var(--radius-md)] disabled:opacity-50"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const TrashModal = () => {
-    if (!showTrashModal) return null;
-    const [items, setItems] = React.useState<any[]>([]);
-    
-    React.useEffect(() => {
-      if (showTrashModal) {
-        getTrashedDocuments(PROJECT.id, showTrashModal.phase, context).then(setItems);
-      }
-    }, [showTrashModal]);
-    
-    return (
-      <div
-        className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-        onClick={() => setShowTrashModal(null)}
-      >
-        <div
-          className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)] w-full max-w-3xl p-6 border border-[var(--border-default)] max-h-[85vh] overflow-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4">
-            Corbeille ({items.length})
-          </h4>
-          <div className="space-y-2">
-            {items.map((d) => (
-              <div
-                key={d._id}
-                className="flex items-center justify-between border border-[var(--border-default)] rounded-[var(--radius-md)] px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-[var(--text-primary)] truncate">
-                    {d.fileName} • v{d.currentVersion || 1}
-                  </div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] truncate">
-                    Motif corbeille : {d.trashReason || "—"}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await restoreTrackedDocumentFromTrash(d._id);
-                      const updated = await getTrashedDocuments(PROJECT.id, showTrashModal.phase, context);
-                      setItems(updated);
-                      toast.success("Document restauré");
-                    }}
-                    className="px-2.5 py-1 text-[11px] font-semibold border border-[var(--border-default)] rounded-[var(--radius-sm)]"
-                  >
-                    Restaurer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPermanentDeleteModal({
-                        docId: d._id,
-                        fileName: d.fileName,
-                      });
-                      setReasonInput("");
-                    }}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-red-600 border border-red-300 rounded-[var(--radius-sm)]"
-                  >
-                    Suppr. définitive
-                  </button>
-                </div>
-              </div>
-            ))}
-            {items.length === 0 && (
-              <p className="text-xs text-[var(--text-tertiary)] italic">
-                La corbeille est vide.
-              </p>
-            )}
-          </div>
-          <div className="flex justify-end mt-4">
-            <button
-              type="button"
-              onClick={() => setShowTrashModal(null)}
-              className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)]"
-            >
-              Fermer
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // ── ACTIVITY DETAIL ──
   const ActivityDetail = ({ activity }: { activity: ActivityData }) => {
     const statusText =
@@ -1766,6 +1527,22 @@ export default function ProjectConfigPage() {
     }
   }, [selectedActivity, currentSComp, currentComp]);
 
+
+  if (projectMissing) {
+    return (
+      <div className="px-[var(--page-px)] py-[var(--page-py)] text-center">
+        <FolderOpen size={48} className="mx-auto mb-3 text-[var(--text-tertiary)] opacity-40" />
+        <p className="text-sm font-semibold text-[var(--text-primary)]">Projet introuvable ou inaccessible</p>
+        <p className="text-xs text-[var(--text-tertiary)] mt-1">
+          Il n&apos;existe pas, ou vous n&apos;êtes pas membre de ce projet.
+        </p>
+        <Link href="/archives" className="inline-block mt-4 text-sm font-semibold text-[var(--accent)] hover:underline">
+          Retour aux archives
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* HEADER */}
@@ -1779,7 +1556,7 @@ export default function ProjectConfigPage() {
             <ChevronLeft size={14} /> Tous les projets
           </Link>
         </div>
-        
+
         {/* Titre et bouton */}
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3.5">
@@ -1939,7 +1716,7 @@ export default function ProjectConfigPage() {
                 <div className="h-px bg-[var(--border-subtle)] mx-5 mb-4" />
               </>
             )}
-            
+
             {/* Afficher les activités seulement si on a un sous-composant sélectionné ET qu'il a des activités */}
             {currentSComp && sc && sc.activities && sc.activities.length > 0 && (
               <>
@@ -1974,7 +1751,7 @@ export default function ProjectConfigPage() {
                 </div>
               </>
             )}
-            
+
             {/* Message si pas de sous-composants */}
             {(!comp.sousComposants || comp.sousComposants.length === 0) && (
               <div className="px-5 text-[11px] text-[var(--text-tertiary)] italic">
@@ -2048,79 +1825,32 @@ export default function ProjectConfigPage() {
                         {doc.trashedAt ? formatUploadDate(doc.trashedAt) : "—"}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={async () => {
-                            try {
-                              await restoreTrackedDocumentFromTrash(doc._id);
-                              toast.success("Document restauré");
-                              // Recharger les documents de la corbeille
-                              const trashed = await getTrashedDocuments(PROJECT.id);
-                              setTrashedDocs(trashed);
-                              // Recharger les documents actifs
-                              const [etudeTracked, passationTracked, executionTracked] = await Promise.all([
-                                getTrackedDocumentsLatest(PROJECT.id, "etude", undefined, context),
-                                getTrackedDocumentsLatest(PROJECT.id, "passation", undefined, context),
-                                getTrackedDocumentsLatest(PROJECT.id, "execution", undefined, context),
-                              ]);
-                              // Regrouper et mettre à jour
-                              const groupByFolder = (docs: TrackedDocument[]): DocData[] => {
-                                const folderMap = new Map<string, FileData[]>();
-                                docs.forEach((doc) => {
-                                  const files = folderMap.get(doc.folderName) || [];
-                                  files.push({
-                                    name: doc.fileName,
-                                    size: doc.fileSize || "0 KB",
-                                    type: (["pdf", "dwg", "zip", "xls", "doc"].includes(doc.fileType || "")
-                                      ? doc.fileType
-                                      : "pdf") as FileData["type"],
-                                    status: (doc.status === "valide"
-                                      ? "valide"
-                                      : doc.status === "rejete"
-                                        ? "manquant"
-                                        : "encours") as FileStatus,
-                                    lastModif: formatUploadDate(doc.createdAt || new Date().toISOString()),
-                                    lastModifBy: doc.uploadedBy,
-                                    trackingId: doc._id,
-                                    version: doc.version || 1,
-                                    rejectionReason: doc.tracking?.rejectionReason,
-                                  });
-                                  folderMap.set(doc.folderName, files);
-                                });
-                                return Array.from(folderMap.entries()).map(([folderName, files]) => ({
-                                  name: folderName,
-                                  desc: `${files.length} fichier${files.length > 1 ? "s" : ""}`,
-                                  type: "folder" as const,
-                                  date: files[0]?.lastModif || todayStr(),
-                                  status: deriveFolderStatus(files),
-                                  files,
-                                  lastModif: files.length > 0 ? files[files.length - 1]?.lastModif : undefined,
-                                  lastModifBy: files.length > 0 ? files[files.length - 1]?.lastModifBy : undefined,
-                                }));
-                              };
-                              setEtudeDocs(groupByFolder(etudeTracked));
-                              setPassationDocs(groupByFolder(passationTracked));
-                              setExecutionDocs(groupByFolder(executionTracked));
-                            } catch (error) {
-                              toast.error("Erreur lors de la restauration");
-                            }
-                          }}
-                          className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-[var(--radius-sm)] transition-colors"
-                          title="Restaurer"
-                        >
-                          <CheckCircle2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowPermanentDeleteModal({
-                              docId: doc._id,
-                              fileName: doc.fileName,
-                            });
-                          }}
-                          className="p-1.5 text-red-600 hover:bg-red-500/10 rounded-[var(--radius-sm)] transition-colors"
-                          title="Supprimer définitivement"
-                        >
-                          <XCircle size={14} />
-                        </button>
+                        {can("doc:delete") && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await restoreTrackedDocumentFromTrash(doc._id);
+                                toast.success("Document restauré");
+                                await loadDocuments();
+                              } catch (error) {
+                                toast.error(getErrorMessage(error));
+                              }
+                            }}
+                            className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-[var(--radius-sm)] transition-colors"
+                            title="Restaurer"
+                          >
+                            <CheckCircle2 size={14} />
+                          </button>
+                        )}
+                        {can("doc:unlock") && (
+                          <button
+                            onClick={() => setShowPermanentDeleteModal({ docId: doc._id, fileName: doc.fileName })}
+                            className="p-1.5 text-red-600 hover:bg-red-500/10 rounded-[var(--radius-sm)] transition-colors"
+                            title="Supprimer définitivement"
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2167,10 +1897,10 @@ export default function ProjectConfigPage() {
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents de {currentPhase} du composant.</p>
                   </div>
-                  <LivrablesTable 
-                    docs={currentPhase === "etude" ? etudeDocs : currentPhase === "passation" ? passationDocs : executionDocs} 
-                    contextTitle={comp.name} 
-                    phase={currentPhase} 
+                  <LivrablesTable
+                    docs={currentPhase === "etude" ? etudeDocs : currentPhase === "passation" ? passationDocs : executionDocs}
+                    contextTitle={comp.name}
+                    phase={currentPhase}
                   />
                 </>
               ) : (
@@ -2213,10 +1943,10 @@ export default function ProjectConfigPage() {
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents de {currentPhase} du sous-composant.</p>
                   </div>
-                  <LivrablesTable 
-                    docs={currentPhase === "etude" ? etudeDocs : currentPhase === "passation" ? passationDocs : executionDocs} 
-                    contextTitle={sc.name} 
-                    phase={currentPhase} 
+                  <LivrablesTable
+                    docs={currentPhase === "etude" ? etudeDocs : currentPhase === "passation" ? passationDocs : executionDocs}
+                    contextTitle={sc.name}
+                    phase={currentPhase}
                   />
                 </>
               ) : (
@@ -2280,17 +2010,15 @@ export default function ProjectConfigPage() {
       />
 
       {/* Modals */}
-      <ValidateModal />
-      <PreviewModal />
-      <CreateFolderModal />
-      <TrashModal />
+      {ValidateModal()}
+      {PreviewModal()}
+      {CreateFolderModal()}
       {showRejectModal && (
         <ReasonModal
           title={`Motif du rejet : ${showRejectModal.fileName}`}
           confirmLabel="Confirmer le rejet"
           onCancel={() => {
             setShowRejectModal(null);
-            setReasonInput("");
           }}
           onConfirm={(reason) => {
             handleRejectFile(
@@ -2300,7 +2028,6 @@ export default function ProjectConfigPage() {
               reason,
             );
             setShowRejectModal(null);
-            setReasonInput("");
           }}
         />
       )}
@@ -2310,7 +2037,6 @@ export default function ProjectConfigPage() {
           confirmLabel="Envoyer en corbeille"
           onCancel={() => {
             setShowTrashMoveModal(null);
-            setReasonInput("");
           }}
           onConfirm={(reason) => {
             handleDeleteFileToTrash(
@@ -2320,26 +2046,29 @@ export default function ProjectConfigPage() {
               reason,
             );
             setShowTrashMoveModal(null);
-            setReasonInput("");
           }}
         />
       )}
-      {showPermanentDeleteModal && (
-        <ReasonModal
-          title={`Motif de suppression définitive : ${showPermanentDeleteModal.fileName}`}
-          confirmLabel="Supprimer définitivement"
-          onCancel={() => {
-            setShowPermanentDeleteModal(null);
-            setReasonInput("");
-          }}
-          onConfirm={(reason) => {
-            permanentlyDeleteFromTrash(showPermanentDeleteModal.docId, reason);
-            setShowPermanentDeleteModal(null);
-            setReasonInput("");
+      <ConfirmDialog
+        isOpen={showPermanentDeleteModal !== null}
+        title="Suppression définitive"
+        message={`Supprimer définitivement « ${showPermanentDeleteModal?.fileName ?? ""} » ? Le fichier sera effacé du serveur, sans retour possible.`}
+        confirmLabel="Supprimer définitivement"
+        variant="danger"
+        onConfirm={async () => {
+          const target = showPermanentDeleteModal;
+          setShowPermanentDeleteModal(null);
+          if (!target) return;
+          try {
+            await permanentlyDeleteFromTrash(target.docId);
             toast.info("Document supprimé définitivement");
-          }}
-        />
-      )}
+            await loadDocuments();
+          } catch (error) {
+            toast.error(getErrorMessage(error));
+          }
+        }}
+        onCancel={() => setShowPermanentDeleteModal(null)}
+      />
 
       {/* Dialog de confirmation pour suppression de dossier */}
       <ConfirmDialog

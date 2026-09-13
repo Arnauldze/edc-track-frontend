@@ -141,6 +141,27 @@ export async function downloadDocument(id: string, fileName: string): Promise<vo
 }
 
 /**
+ * Contenu d'un document sous forme d'URL locale (blob), pour l'aperçu.
+ * Le fichier est récupéré avec le jeton d'authentification : une URL directe
+ * vers l'API ne l'enverrait pas. Libérer l'URL avec URL.revokeObjectURL.
+ */
+export async function getDocumentObjectUrl(id: string): Promise<string> {
+  const response = await apiClient.get(`/documents/${id}/download`, {
+    params: { inline: true },
+    responseType: 'blob',
+  });
+  return window.URL.createObjectURL(response.data as Blob);
+}
+
+/**
+ * Lève une validation ou un rejet (administrateur) : le document repasse en revue.
+ */
+export async function reopenDocument(id: string): Promise<DocumentMetadata> {
+  const response = await apiClient.patch<{ data: DocumentMetadata }>(`/documents/${id}/reopen`);
+  return response.data.data;
+}
+
+/**
  * Approuve un document
  */
 export async function approveDocument(id: string): Promise<DocumentMetadata> {
