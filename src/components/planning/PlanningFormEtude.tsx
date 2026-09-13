@@ -41,7 +41,9 @@ interface Props {
 }
 
 export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) {
-  const { can, isView } = usePermissions(projectId);
+  const { can, loading: permissionsLoading } = usePermissions(projectId);
+  // Planifier est réservé au chef de projet : contributeurs et coordinateurs consultent.
+  const readOnly = !can("planning:edit");
   const [livrables, setLivrables] = useState<Livrable[]>(
     data?.livrables || [
       { numero: "R1", intitule: "", ponderation: 0, duree: 1, dureeUnite: "mois", delaiUnite: "mois", statut: "en_attente", predecesseur: "" },
@@ -273,11 +275,11 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
 
         <div className="p-5 space-y-5">
           {/* Message d'avertissement pour mode View */}
-          {isView && (
+          {!permissionsLoading && readOnly && (
             <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
               <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
               <div className="text-[11px] text-amber-600 dark:text-amber-400">
-                <strong>Mode lecture seule :</strong> Vous ne pouvez pas modifier la planification. Seul le chef de projet peut effectuer des modifications.
+                <strong>Mode lecture seule :</strong> Vous consultez cette planification. Seul le chef de projet peut la modifier.
               </div>
             </div>
           )}
@@ -335,7 +337,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       type="text"
                       value={livrable.numero}
                       onChange={(e) => updateLivrable(index, "numero", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[11px] font-bold text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="R1"
                     />
@@ -347,7 +349,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       type="text"
                       value={livrable.intitule}
                       onChange={(e) => updateLivrable(index, "intitule", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[12px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="Nom du livrable..."
                     />
@@ -361,7 +363,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       max="100"
                       value={livrable.ponderation || ""}
                       onChange={(e) => updateLivrable(index, "ponderation", parseFloat(e.target.value) || 0)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="20"
                     />
@@ -374,14 +376,14 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       min="0"
                       value={livrable.delai || ""}
                       onChange={(e) => updateLivrable(index, "delai", parseInt(e.target.value) || undefined)}
-                      disabled={isView || (!!livrable.dateEcheance && !livrable.delai)}
+                      disabled={readOnly || (!!livrable.dateEcheance && !livrable.delai)}
                       className="w-[45px] px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                       placeholder="1"
                     />
                     <select
                       value={livrable.delaiUnite || 'mois'}
                       onChange={(e) => updateLivrable(index, "delaiUnite", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-[65px] px-0.5 py-1 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border border-[var(--border-subtle)] disabled:opacity-50"
                     >
                       <option value="jours">jours</option>
@@ -397,14 +399,14 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       min="0"
                       value={livrable.duree || ""}
                       onChange={(e) => updateLivrable(index, "duree", parseInt(e.target.value) || undefined)}
-                      disabled={isView || (!!livrable.dateDebut && !!livrable.dateFin && !livrable.duree)}
+                      disabled={readOnly || (!!livrable.dateDebut && !!livrable.dateFin && !livrable.duree)}
                       className="w-[45px] px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                       placeholder="1"
                     />
                     <select
                       value={livrable.dureeUnite || 'mois'}
                       onChange={(e) => updateLivrable(index, "dureeUnite", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-[65px] px-0.5 py-1 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border border-[var(--border-subtle)] disabled:opacity-50"
                     >
                       <option value="jours">jours</option>
@@ -419,7 +421,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       type="date"
                       value={livrable.dateDebut || ""}
                       onChange={(e) => updateLivrable(index, "dateDebut", e.target.value)}
-                      disabled={isView || !!livrable.predecesseur}
+                      disabled={readOnly || !!livrable.predecesseur}
                       className="w-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                       title={livrable.predecesseur ? "Calculé depuis le prédécesseur" : ""}
                     />
@@ -431,7 +433,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       type="date"
                       value={livrable.dateFin || ""}
                       onChange={(e) => updateLivrable(index, "dateFin", e.target.value)}
-                      disabled={isView || (!!livrable.dateDebut && !!livrable.duree)}
+                      disabled={readOnly || (!!livrable.dateDebut && !!livrable.duree)}
                       className="w-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                       placeholder={formatDate(livrable.dateEcheance)}
                       title={(livrable.dateDebut && livrable.duree) ? "Calculé automatiquement (Date début + Durée)" : ""}
@@ -444,7 +446,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       type="text"
                       value={livrable.predecesseur || ""}
                       onChange={(e) => updateLivrable(index, "predecesseur", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="R1"
                       title="Numéro du livrable qui doit être terminé avant"
@@ -457,7 +459,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
                       type="text"
                       value={livrable.successeur || ""}
                       onChange={(e) => updateLivrable(index, "successeur", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="R3"
                       title="Numéro du livrable qui commence après"
@@ -466,7 +468,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
 
                   {/* Actions */}
                   <div className="px-2 py-2 flex items-center justify-center border-b border-[var(--border-default)]">
-                    {can("structure:edit") && (
+                    {can("planning:edit") && (
                       <button
                         onClick={() => removeLivrable(index)}
                         className="p-1 rounded hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all"
@@ -481,7 +483,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
 
               {/* Bouton ajouter ligne */}
               <div className="px-3 py-2 bg-[var(--bg-inset)]/30 border-t border-[var(--border-default)]">
-                {can("structure:edit") && (
+                {can("planning:edit") && (
                   <button
                     onClick={addLivrable}
                     className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)] transition-colors"
@@ -496,7 +498,7 @@ export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) 
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {can("structure:edit") && (
+            {can("planning:edit") && (
               <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center gap-2 px-4 py-2 text-[12px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-default)] rounded-[var(--radius-md)] transition-colors"

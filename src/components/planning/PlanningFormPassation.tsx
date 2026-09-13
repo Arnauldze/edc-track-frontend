@@ -162,7 +162,9 @@ interface Props {
 }
 
 export function PlanningFormPassation({ data, onChange, projectId }: Props) {
-  const { can, isView } = usePermissions(projectId);
+  const { can, loading: permissionsLoading } = usePermissions(projectId);
+  // Planifier est réservé au chef de projet : contributeurs et coordinateurs consultent.
+  const readOnly = !can("planning:edit");
   const [lignes, setLignes] = useState<LignePassation[]>(
     data?.lignesPassation || [{ ...EMPTY_LIGNE, numero: "1" }]
   );
@@ -239,7 +241,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
         <select
           value={value}
           onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-          disabled={isView}
+          disabled={readOnly}
           className="w-full h-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <option value="">—</option>
@@ -256,7 +258,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
           type="date"
           value={value}
           onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-          disabled={isView}
+          disabled={readOnly}
           className="w-full h-full px-1 py-0.5 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
         />
       );
@@ -269,7 +271,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
           min="0"
           value={value}
           onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-          disabled={isView || col.computed}
+          disabled={readOnly || col.computed}
           className="w-full h-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
           placeholder="0"
         />
@@ -282,7 +284,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
         type="text"
         value={value}
         onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-        disabled={isView}
+        disabled={readOnly}
         className={`w-full h-full px-1 py-1 bg-transparent focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed ${
           col.key === "designation" ? "text-[11px]" : "text-[10px] text-center"
         }`}
@@ -324,7 +326,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
         </div>
 
         <div className="p-3 space-y-3">
-          {isView && (
+          {!permissionsLoading && readOnly && (
             <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
               <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
               <div className="text-[11px] text-amber-600 dark:text-amber-400">
@@ -421,7 +423,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
                       className="flex items-center justify-center"
                       style={{ width: "50px", minWidth: "50px" }}
                     >
-                      {can("structure:edit") && (
+                      {can("planning:edit") && (
                         <button
                           onClick={() => removeLigne(rowIndex)}
                           className="p-1 rounded hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all"
@@ -435,7 +437,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
 
                 {/* Add row */}
                 <div className="px-3 py-2 bg-[var(--bg-inset)]/30 border-t border-[var(--border-default)]">
-                  {can("structure:edit") && (
+                  {can("planning:edit") && (
                     <button
                       onClick={addLigne}
                       className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)] transition-colors"
@@ -451,7 +453,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {can("structure:edit") && (
+            {can("planning:edit") && (
               <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center gap-2 px-4 py-2 text-[12px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-default)] rounded-[var(--radius-md)] transition-colors"

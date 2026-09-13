@@ -16,6 +16,19 @@ export interface LoginRequest {
 
 export type LoginResponse = FrontendLoginResponse;
 
+/** Profil et capacités de l'utilisateur, relus en base par le serveur. */
+export interface CurrentUserProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  platformRole: 'admin' | 'user';
+  position?: string;
+  department?: string;
+  canCreateProjects: boolean;
+  canAccessInitialisation: boolean;
+}
+
 export const authService = {
   /**
    * Login user
@@ -26,6 +39,11 @@ export const authService = {
       credentials
     );
     return transformLoginResponse(response.data.data!);
+  },
+
+  async me(): Promise<CurrentUserProfile> {
+    const response = await apiClient.get<ApiResponse<CurrentUserProfile>>('/auth/me');
+    return response.data.data!;
   },
 
   /**

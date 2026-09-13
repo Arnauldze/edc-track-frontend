@@ -1,121 +1,100 @@
 "use client";
 
 // ══════════════════════════════════════
-// usePermissions — Hook RBAC pour React
-// Vérifie les permissions de l'utilisateur connecté
+// usePermissions — permissions de l'utilisateur connecté
+//
+// Sur un projet, les permissions viennent du serveur
+// (GET /projects/:code/permissions) : il cumule tous les rôles détenus et
+// applique la même matrice qu'aux requêtes. Le front ne recalcule rien.
+// Tant que la réponse n'est pas arrivée, `can` renvoie false : une action
+// n'apparaît qu'une fois confirmée.
 // ══════════════════════════════════════
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getCurrentSession, type AuthSession } from "@/lib/authStore";
-import { getUserProjectRole, getUserById, type User } from "@/lib/userStore";
-import { hasPermission, getPermissions, type Permission, type PlatformRole, type ProjectRole } from "@/lib/rbacStore";
+import { projectService } from "@/services/api/projectService";
+import { SUPERVISION_ROLES, type Permission, type PlatformRole, type ProjectRole } from "@/lib/rbacStore";
 
 export type UsePermissionsReturn = {
-  /** L'utilisateur connecté */
-  user: User | null;
-  /** La session courante */
   session: AuthSession | null;
-  /** Le rôle plateforme */
   platformRole: PlatformRole | null;
-  /** Le rôle projet (null si pas affecté) */
-  projectRole: ProjectRole | null;
-  /** Vérifier une permission */
+  /** Rôles détenus sur le projet (vide hors projet ou si non membre). */
+  roles: ProjectRole[];
   can: (permission: Permission) => boolean;
-  /** Toutes les permissions de l'utilisateur */
   permissions: Permission[];
-  /** Est-ce un admin plateforme ? */
   isAdmin: boolean;
-  /** Est-ce un coordinateur général ? */
-  isCoordinateurGeneral: boolean;
-  /** Est-ce un coordinateur ? */
-  isCoordinateur: boolean;
-  /** Est-ce un chef de projet (ou rôle supérieur) ? */
+  /** Peut gérer le projet : chef de projet ou admin. */
   isChefProjet: boolean;
-  /** Est-ce un contributeur ? */
-  isContributeur: boolean;
-  /** Est-ce un view ? */
-  isView: boolean;
-  /** Est-ce que l'utilisateur est connecté ? */
+  /** Supervise le projet sans en être chef : consultation seule. */
+  isSupervisor: boolean;
+  /** Le projet fait partie de son espace Initialisation. */
+  canAccessInitialisation: boolean;
+  loading: boolean;
   isAuthenticated: boolean;
 };
 
-/**
- * Hook principal pour vérifier les permissions RBAC.
- * @param projectId - ID du projet (optionnel, pour vérifier les permissions projet)
- */
 export function usePermissions(projectId?: string): UsePermissionsReturn {
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [projectRole, setProjectRole] = useState<ProjectRole | null>(null);
+  const [roles, setRoles] = useState<ProjectRole[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [canAccessInitialisation, setCanAccessInitialisation] = useState(false);
+  const [loading, setLoading] = useState(Boolean(projectId));
 
   useEffect(() => {
-    // Charger la session initiale
     setSession(getCurrentSession());
-
-    // Écouter les changements de session
     const handleAuthChange = () => setSession(getCurrentSession());
     window.addEventListener("auth-changed", handleAuthChange);
     return () => window.removeEventListener("auth-changed", handleAuthChange);
   }, []);
 
   useEffect(() => {
-    async function loadUser() {
-      if (!session) {
-        setUser(null);
-        return;
-      }
-      const u = await getUserById(session.userId);
-      setUser(u ?? null);
-    }
-    loadUser();
-  }, [session]);
+    // Hors projet, rien à charger : `loading` est initialisé à false dans ce cas.
+    if (!projectId) return;
 
-  useEffect(() => {
-    async function loadProjectRole() {
-      if (!session || !projectId) {
-        setProjectRole(null);
-        return;
-      }
-      if (session.platformRole === "admin") {
-        setProjectRole("coordinateur_general" as ProjectRole);
-        return;
-      }
-      const role = await getUserProjectRole(session.userId, projectId);
-      setProjectRole(role);
-    }
-    loadProjectRole();
-  }, [session, projectId]);
+    let cancelled = false;
+    setLoading(true);
+    projectService
+      .getMyPermissions(projectId)
+      .then((result) => {
+        if (cancelled) return;
+        setRoles(result.roles as ProjectRole[]);
+        setPermissions(result.permissions as Permission[]);
+        setCanAccessInitialisation(result.canAccessInitialisation);
+      })
+      .catch((error) => {
+        console.error("Impossible de charger les permissions du projet:", error);
+        if (cancelled) return;
+        setRoles([]);
+        setPermissions([]);
+        setCanAccessInitialisation(false);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const platformRole = session?.platformRole ?? null;
+  const isAdmin = platformRole === "admin";
 
-  const can = useCallback(
-    (permission: Permission): boolean => {
-      if (!platformRole) return false;
-      return hasPermission(platformRole, projectRole, permission);
-    },
-    [platformRole, projectRole],
-  );
+  const can = useCallback((permission: Permission) => permissions.includes(permission), [permissions]);
 
-  const permissions = useMemo(
-    () => (platformRole ? getPermissions(platformRole, projectRole) : []),
-    [platformRole, projectRole],
-  );
-
-  const HIGHER_ROLES: ProjectRole[] = ["coordinateur_general", "coordinateur", "chef_projet"];
+  const isChefProjet = isAdmin || roles.includes("chef_projet");
 
   return {
-    user,
     session,
     platformRole,
-    projectRole,
+    roles,
     can,
     permissions,
-    isAdmin: platformRole === "admin",
-    isCoordinateurGeneral: projectRole === "coordinateur_general" || platformRole === "admin",
-    isCoordinateur: projectRole === "coordinateur" || projectRole === "coordinateur_general" || platformRole === "admin",
-    isChefProjet: (projectRole !== null && HIGHER_ROLES.includes(projectRole)) || platformRole === "admin",
-    isContributeur: projectRole === "contributeur",
-    isView: projectRole === "view",
+    isAdmin,
+    isChefProjet,
+    isSupervisor: !isChefProjet && roles.some((role) => SUPERVISION_ROLES.includes(role)),
+    canAccessInitialisation,
+    loading,
     isAuthenticated: session !== null,
   };
 }

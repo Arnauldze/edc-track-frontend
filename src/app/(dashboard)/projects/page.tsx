@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { Settings, Plus, Search, Filter, ArrowUpDown } from "lucide-react";
 import Link from "next/link";
-import { getProjects, type Project } from "@/lib/projectStore";
+import { useRouter } from "next/navigation";
+import { type Project } from "@/lib/projectStore";
+import { projectService } from "@/services/api/projectService";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorDisplay } from "@/components/ui/ErrorDisplay";
 import { getErrorMessage } from "@/services/api/client";
@@ -25,7 +28,25 @@ const ROLE_COLORS: Record<string, string> = {
     view: "bg-gray-500",
 };
 
+// Badge du rôle de l'utilisateur sur le projet. Rien pour l'admin, qui gère tout.
+function roleBadgeFor(myRoles: string[]): { label: string; className: string } | undefined {
+    if (myRoles.includes("chef_projet")) {
+        return { label: "Chef de projet", className: "bg-blue-500/10 text-blue-600 border-blue-500/20" };
+    }
+    if (myRoles.includes("coordinateur") || myRoles.includes("coordinateur_general")) {
+        return { label: "Supervision", className: "bg-purple-500/10 text-purple-600 border-purple-500/20" };
+    }
+    return undefined;
+}
+
 export default function ProjectsPage() {
+    const { data: currentUser } = useCurrentUser();
+    const router = useRouter();
+
+    // Espace réservé à ceux qui gèrent ou supervisent au moins un projet.
+    useEffect(() => {
+        if (currentUser && !currentUser.canAccessInitialisation) router.replace("/dashboard");
+    }, [currentUser, router]);
     const [projects, setProjects] = useState<ProjectWithTeam[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -42,7 +63,8 @@ export default function ProjectsPage() {
             // GET /projects renvoie déjà l'équipe de chaque projet. Cette page
             // appelait auparavant /team/project/:code puis /users/:id par
             // membre, soit 1 + N + (N x membres) allers-retours.
-            const data = await getProjects();
+            // Périmètre Initialisation : projets gérés ou supervisés (tous pour l'admin)
+            const data = await projectService.getInitialisationProjects();
 
             setProjects(
                 data.map((project) => ({
@@ -130,12 +152,14 @@ export default function ProjectsPage() {
                         Créez, configurez et paramétrez vos projets d&apos;infrastructure
                     </p>
                 </div>
-                <Link
-                    href="/projects/new"
-                    className="flex items-center gap-2 bg-[var(--text-primary)] text-[var(--text-inverted)] px-4 py-2.5 rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-[var(--shadow-sm)]"
-                >
-                    <Plus size={16} /> Nouveau projet
-                </Link>
+                {currentUser?.canCreateProjects && (
+                    <Link
+                        href="/projects/new"
+                        className="flex items-center gap-2 bg-[var(--text-primary)] text-[var(--text-inverted)] px-4 py-2.5 rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-[var(--shadow-sm)]"
+                    >
+                        <Plus size={16} /> Nouveau projet
+                    </Link>
+                )}
             </div>
 
             {/* ── Toolbar ── */}
@@ -199,7 +223,7 @@ export default function ProjectsPage() {
                     <p className="text-sm">
                         {searchQuery ? "Aucun projet trouvé" : "Aucun projet configuré"}
                     </p>
-                    {!searchQuery && (
+                    {!searchQuery && currentUser?.canCreateProjects && (
                         <Link
                             href="/projects/new"
                             className="text-[var(--accent)] text-sm font-semibold hover:underline mt-2 inline-block"
@@ -211,10 +235,11 @@ export default function ProjectsPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                     {filteredProjects.map((project) => (
-                        <ProjectCard 
-                            key={project.code} 
-                            project={project} 
+                        <ProjectCard
+                            key={project.code}
+                            project={project}
                             teamMembers={project.teamMembers}
+                            roleBadge={roleBadgeFor(project.myRoles ?? [])}
                         />
                     ))}
                 </div>

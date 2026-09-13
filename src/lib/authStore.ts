@@ -3,8 +3,7 @@
 // Connected to Backend API - NO HARDCODED DATA
 // ══════════════════════════════════════════════════════════════
 
-import type { PlatformRole, ProjectRole } from "./rbacStore";
-import { hasPermission, getPermissions, type Permission } from "./rbacStore";
+import type { PlatformRole } from "./rbacStore";
 import { authService, type LoginRequest } from "@/services/api/authService";
 
 // ── Types ──
@@ -105,29 +104,4 @@ export function canCreateProjects(): boolean {
 export function getJwtToken(): string | null {
   if (typeof window === "undefined") return null;
   return sessionStorage.getItem(TOKEN_KEY);
-}
-
-// ── Permission helpers ──
-
-/**
- * Check if current user has permission on a project
- */
-export function currentUserCan(
-  projectRole: ProjectRole | null,
-  permission: Permission,
-): boolean {
-  const session = getCurrentSession();
-  if (!session) return false;
-  return hasPermission(session.platformRole, projectRole, permission);
-}
-
-/**
- * Get all permissions for current user on a project
- */
-export function currentUserPermissions(
-  projectRole: ProjectRole | null,
-): Permission[] {
-  const session = getCurrentSession();
-  if (!session) return [];
-  return getPermissions(session.platformRole, projectRole);
 }

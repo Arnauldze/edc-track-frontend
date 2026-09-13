@@ -39,11 +39,19 @@ export interface Localisation {
   coordinates?: Coordinates;
 }
 
+export interface Contribution {
+  montant: number;
+  devise: string;
+}
+
+// Montants équivalents et pourcentages : calculés par le serveur (voir lib/financement.ts).
 export interface Bailleur {
   nom: string;
-  montant: number;
-  devise: string; // USD, EUR, FCFA, GBP, etc.
-  pourcentage?: number; // Calculé automatiquement
+  /** Apports par devise tels que saisis. Absent pour un bailleur enregistré avant ce détail. */
+  contributions?: Contribution[];
+  montant: number; // Équivalent FCFA de l'ensemble des contributions
+  devise: string;
+  pourcentage?: number;
 }
 
 export interface PartieFinancement {
@@ -68,11 +76,28 @@ export interface Financement {
   tauxChange?: Record<string, number>; // Ex: { "USD": 600, "EUR": 655 }
 }
 
+/**
+ * Financement tel qu'envoyé à l'API : montants bruts par devise. Budget,
+ * équivalents FCFA et pourcentages en sont absents — le serveur les calcule.
+ */
+export interface FinancementInput {
+  type: 'MOP' | 'PPP';
+  budgetNational?: boolean;
+  budgetNationalMontant?: number;
+  budgetNationalDevise?: string;
+  bailleurs?: { nom: string; contributions: Contribution[] }[];
+  partiesPubliques?: { nom: string; montant: number; devise: string }[];
+  partiesPrivees?: { nom: string; montant: number; devise: string }[];
+  tauxChange?: Record<string, number>;
+}
+
 export interface ProjectPermissions {
   projectCode: string;
   platformRole: string;
-  projectRole: string | null;
+  /** Rôles détenus sur le projet ; les droits sont leur union. */
+  roles: string[];
   permissions: string[];
+  canAccessInitialisation: boolean;
 }
 
 /** Membre d'équipe renvoyé par la jointure serveur de GET /projects. */
@@ -99,6 +124,8 @@ export interface Project {
   createdAt: string;
   /** Présent sur les listes (GET /projects), absent sur le détail. */
   team?: ProjectTeamMember[];
+  /** Rôles de l'utilisateur courant sur le projet — présent sur les listes. */
+  myRoles?: string[];
 }
 
 export interface CreateProjectDto {
@@ -108,7 +135,7 @@ export interface CreateProjectDto {
   devise?: string;
   progress?: number;
   localisation?: Localisation;
-  financement?: Financement;
+  financement?: FinancementInput;
   dateDebut?: string;
   dateFin?: string;
   components?: Component[];
@@ -120,7 +147,7 @@ export interface UpdateProjectDto {
   budget?: number;
   progress?: number;
   localisation?: Localisation;
-  financement?: Financement;
+  financement?: FinancementInput;
   /** `null` efface la date ; une clé absente la laisse inchangée. */
   dateDebut?: string | null;
   dateFin?: string | null;
@@ -134,6 +161,17 @@ export const projectService = {
   async getAll(region?: string): Promise<Project[]> {
     const params = region ? { region } : {};
     const response = await apiClient.get<ApiResponse<Project[]>>('/projects', { params });
+    return response.data.data || [];
+  },
+
+  /**
+   * Projets de l'espace Initialisation : ceux que l'utilisateur gère (chef de
+   * projet) ou supervise (coordinateur). Tous pour l'admin.
+   */
+  async getInitialisationProjects(): Promise<Project[]> {
+    const response = await apiClient.get<ApiResponse<Project[]>>('/projects', {
+      params: { scope: 'initialisation' },
+    });
     return response.data.data || [];
   },
 

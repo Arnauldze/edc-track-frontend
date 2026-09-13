@@ -10,14 +10,14 @@ import {
 } from "lucide-react";
 import { getProjectById, updateProject, deleteProject, isComponentLowestLevel, isSousComposantLowestLevel, type Project, type Component, type SousComposant } from "@/lib/projectStore";
 import { getProjectTeam, getUserById, getUserDirectory, type TeamAssignment, type DirectoryUser, addTeamAssignment, removeTeamAssignment } from "@/lib/userStore";
-import { PROJECT_ROLE_LABELS, PROJECT_ROLE_COLORS, type ProjectRole } from "@/lib/rbacStore";
+import { PROJECT_ROLE_LABELS, PROJECT_ROLE_COLORS, getGrantableRoles, isProjectRole, type ProjectRole } from "@/lib/rbacStore";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import AddMemberModal, { type MemberFormData } from "@/components/team/AddMemberModal";
 import { ProjectInfoCard } from "@/components/projects/ProjectInfoCard";
 import { ProjectTeamCard } from "@/components/projects/ProjectTeamCard";
 import { EditProjectInfoModal } from "@/components/projects/EditProjectInfoModal";
-import { useProjectPermissions } from "@/hooks/useProjectPermissions";
+import { usePermissions } from "@/hooks/usePermissions";
 import { CURRENCIES, DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 import { formatMoney } from "@/lib/utils";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
@@ -133,7 +133,22 @@ export default function ProjectConfigPage() {
   const [deleteTeamConfirm, setDeleteTeamConfirm] = useState<{ id: string; name: string } | null>(null);
   const [showEditInfoModal, setShowEditInfoModal] = useState(false);
 
-  const { can } = useProjectPermissions(projectId);
+  const { can, roles, isAdmin, canAccessInitialisation, loading: permissionsLoading } = usePermissions(projectId);
+
+  // Initialisation n'est ouverte, projet par projet, qu'au chef de projet et aux
+  // coordinateurs. Un utilisateur simple contributeur ici (même s'il est chef
+  // ailleurs) consulte ce projet depuis Archives, Suivi ou Planification.
+  useEffect(() => {
+    if (permissionsLoading || canAccessInitialisation) return;
+    toast.info("Vous contribuez à ce projet sans le gérer : consultez-le depuis Archives ou Suivi.");
+    router.replace("/projects");
+  }, [permissionsLoading, canAccessInitialisation, router]);
+
+  const canEditStructure = can("structure:edit");
+  // Lignes d'équipe modifiables : rôle que l'utilisateur est autorisé à attribuer
+  // (un chef de projet gère ses contributeurs ; l'admin gère tout).
+  const grantableRoles = getGrantableRoles(isAdmin, roles);
+  const canManageAssignment = (role: string) => isProjectRole(role) && grantableRoles.includes(role);
 
   const reloadTeam = useCallback(async () => {
     try {
@@ -602,7 +617,8 @@ export default function ProjectConfigPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Menu contextuel */}
+            {/* Menu contextuel — seule action : suppression, réservée à l'admin */}
+            {can("project:delete") && (
             <div className="relative">
               <button
                 onClick={(e) => {
@@ -633,6 +649,7 @@ export default function ProjectConfigPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </div>
       </div>
@@ -765,7 +782,7 @@ export default function ProjectConfigPage() {
 
                   {/* Boutons d'action : Modifier la structure / Enregistrer / Annuler */}
                   <div>
-                    {!isEditingStructure ? (
+                    {!canEditStructure ? null : !isEditingStructure ? (
                       <button
                         onClick={handleStartEditing}
                         className="flex items-center gap-2 px-4 py-1.5 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
@@ -1202,13 +1219,15 @@ export default function ProjectConfigPage() {
                 />
               </div>
 
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
-              >
-                <Plus size={16} />
-                Ajouter un membre
-              </button>
+              {can("team:add") && (
+                <button
+                  onClick={openInviteModal}
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                >
+                  <Plus size={16} />
+                  Ajouter un membre
+                </button>
+              )}
             </div>
 
             {/* Team table */}
@@ -1275,7 +1294,7 @@ export default function ProjectConfigPage() {
                           </td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${PROJECT_ROLE_COLORS[assignment.projectRole]?.bg || 'bg-gray-100'} ${PROJECT_ROLE_COLORS[assignment.projectRole]?.text || 'text-gray-800'} border ${PROJECT_ROLE_COLORS[assignment.projectRole]?.border || 'border-gray-200'}`}>
-                              {PROJECT_ROLE_LABELS[assignment.projectRole]}
+                              {isProjectRole(assignment.projectRole) ? PROJECT_ROLE_LABELS[assignment.projectRole] : "Rôle retiré"}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
@@ -1286,6 +1305,7 @@ export default function ProjectConfigPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">
+                              {can("team:edit") && canManageAssignment(assignment.projectRole) && (
                               <button
                                 onClick={() => {
                                   setEditingAssignment(assignment);
@@ -1296,6 +1316,8 @@ export default function ProjectConfigPage() {
                               >
                                 <Edit2 size={14} />
                               </button>
+                              )}
+                              {can("team:remove") && canManageAssignment(assignment.projectRole) && (
                               <button
                                 onClick={() => setDeleteTeamConfirm({ id: assignment._id, name: `${user.firstName} ${user.lastName}` })}
                                 className="p-1.5 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500 transition-all"
@@ -1303,6 +1325,7 @@ export default function ProjectConfigPage() {
                               >
                                 <Trash2 size={14} />
                               </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1314,12 +1337,14 @@ export default function ProjectConfigPage() {
                 <div className="text-center py-12 text-[var(--text-tertiary)]">
                   <Users size={48} className="mx-auto mb-3 opacity-30" />
                   <p className="text-sm">Aucun membre dans l&apos;équipe</p>
-                  <button
-                    onClick={() => setShowAddModal(true)}
-                    className="text-[var(--accent)] text-sm font-semibold hover:underline mt-2 inline-block"
-                  >
-                    Ajouter le premier membre
-                  </button>
+                  {can("team:add") && (
+                    <button
+                      onClick={openInviteModal}
+                      className="text-[var(--accent)] text-sm font-semibold hover:underline mt-2 inline-block"
+                    >
+                      Ajouter le premier membre
+                    </button>
+                  )}
                 </div>
               )}
             </div>
