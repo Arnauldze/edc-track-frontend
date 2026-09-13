@@ -4,7 +4,9 @@ import { formatMoney, formatDate } from "@/lib/utils";
 
 interface Bailleur {
   nom: string;
-  montant: number;
+  /** Apports par devise ; absent pour un bailleur enregistré avant ce détail. */
+  contributions?: { montant: number; devise: string }[];
+  montant: number; // Équivalent FCFA calculé par le serveur
   devise: string;
   pourcentage?: number;
 }
@@ -49,6 +51,7 @@ interface Project {
   status?: string;
   priority?: string;
   category?: string;
+  components?: { budget?: number; devise?: string }[];
 }
 
 interface ProjectInfoCardProps {
@@ -65,8 +68,17 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
     return parts.length > 0 ? parts.join(", ") : "—";
   };
 
-  const getAllFunders = (): Array<{ name: string; amount: number; currency: string; percentage?: number }> => {
-    const funders: Array<{ name: string; amount: number; currency: string; percentage?: number }> = [];
+  type Funder = {
+    name: string;
+    amount: number;
+    currency: string;
+    percentage?: number;
+    /** Montants saisis dans leurs devises, quand ils diffèrent de l'équivalent affiché. */
+    detail?: string;
+  };
+
+  const getAllFunders = (): Funder[] => {
+    const funders: Funder[] = [];
     
     if (!project.financement) return funders;
 
@@ -82,11 +94,17 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
       }
       if (project.financement.bailleurs) {
         project.financement.bailleurs.forEach(b => {
+          const contributions = (b.contributions ?? []).filter(c => c.montant > 0);
+          const isForeignOrSplit =
+            contributions.length > 1 || (contributions.length === 1 && contributions[0].devise !== b.devise);
           funders.push({
             name: b.nom,
             amount: b.montant,
             currency: b.devise,
             percentage: b.pourcentage,
+            detail: isForeignOrSplit
+              ? contributions.map(c => `${formatMoney(c.montant, 2)} ${c.devise}`).join(" + ")
+              : undefined,
           });
         });
       }
@@ -121,6 +139,27 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
 
   const funders = getAllFunders();
   const fundersCount = funders.length;
+
+  const rates: Record<string, number> = (project.financement?.tauxChange as Record<string, number> | undefined) ?? {};
+
+  // Taux affichés : seulement ceux des devises réellement utilisées (hors FCFA)
+  const usedCurrencies = new Set<string>();
+  if (project.financement?.type === "MOP") {
+    if (project.financement.budgetNational && project.financement.budgetNationalDevise) {
+      usedCurrencies.add(project.financement.budgetNationalDevise);
+    }
+    project.financement.bailleurs?.forEach(b => (b.contributions ?? [{ devise: b.devise }]).forEach(c => usedCurrencies.add(c.devise)));
+  } else {
+    [...(project.financement?.partiesPubliques ?? []), ...(project.financement?.partiesPrivees ?? [])].forEach(p => usedCurrencies.add(p.devise));
+  }
+  const displayedRates = Object.entries(rates).filter(([devise]) => devise !== "FCFA" && usedCurrencies.has(devise));
+
+  // Budget alloué aux composants au-delà du budget financé
+  const allocatedFCFA = (project.components ?? []).reduce(
+    (sum, c) => sum + (c.budget ?? 0) * (rates[c.devise || "FCFA"] ?? 1),
+    0,
+  );
+  const overAllocation = project.budget ? allocatedFCFA - project.budget : 0;
 
   const getStatusBadge = () => {
     const statusColors: Record<string, string> = {
@@ -231,8 +270,13 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
                   {funder.name}
                 </span>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-[var(--text-secondary)]">
-                    {formatMoney(funder.amount, 2)} {funder.currency}
+                  <span className="text-sm text-[var(--text-secondary)] text-right">
+                    {funder.detail ?? `${formatMoney(funder.amount, 2)} ${funder.currency}`}
+                    {funder.detail && (
+                      <span className="block text-xs text-[var(--text-tertiary)]">
+                        ≈ {formatMoney(funder.amount, 2)} {funder.currency}
+                      </span>
+                    )}
                   </span>
                   {funder.percentage !== undefined && (
                     <span className="text-sm font-semibold text-[var(--text-primary)] min-w-[3ch] text-right">
@@ -257,16 +301,22 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
             <div className="text-base font-bold text-[var(--text-primary)] mt-1 leading-tight">
               {project.budget ? formatMoney(project.budget, 2) : "—"} FCFA
             </div>
+            {overAllocation >= 1 && (
+              <div className="mt-2 p-2.5 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
+                Les composants totalisent {formatMoney(allocatedFCFA, 2)} FCFA, soit {formatMoney(overAllocation, 2)} FCFA
+                de plus que le budget financé.
+              </div>
+            )}
           </div>
 
           {/* Taux de change */}
-          {project.financement?.tauxChange && Object.keys(project.financement.tauxChange).length > 0 && (
+          {displayedRates.length > 0 && (
             <div>
               <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
                 Taux de Change
               </span>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {Object.entries(project.financement.tauxChange).map(([devise, taux]) => (
+                {displayedRates.map(([devise, taux]) => (
                   <div key={devise} className="flex items-center justify-between text-sm">
                     <span className="font-medium text-[var(--text-secondary)]">1 {devise}</span>
                     <span className="font-semibold text-[var(--text-primary)]">{formatMoney(taux, 2)} FCFA</span>

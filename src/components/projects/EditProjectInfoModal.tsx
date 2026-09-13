@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Info, X } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import { updateProject, type Project, type UpdateProjectDto } from "@/lib/projectStore";
 import { CAMEROON_DATA, CITY_COORDS, REGIONS } from "@/lib/cameroonGeo";
 import { getErrorMessage } from "@/services/api/client";
 import { toast } from "@/lib/toastStore";
-import { formatMoney } from "@/lib/utils";
+import { formatCurrency } from "@/lib/helpers/currencyHelpers";
+import { FinancementEditor } from "@/components/financing/FinancementEditor";
+import {
+  computeFinancementPreview,
+  financementFromProject,
+  financementToPayload,
+  validateFinancement,
+  type FinancementFormValue,
+} from "@/lib/financement";
 
 interface EditProjectInfoModalProps {
   isOpen: boolean;
@@ -14,6 +22,8 @@ interface EditProjectInfoModalProps {
   onClose: () => void;
   onSaved: (project: Project) => void;
 }
+
+type Tab = "general" | "localisation" | "financement";
 
 type FormState = {
   name: string;
@@ -28,7 +38,7 @@ type FormState = {
 
 // Les dates sont stockées à minuit UTC : les 10 premiers caractères de l'ISO
 // donnent directement la valeur attendue par <input type="date">.
-const toDateInput = (value?: string) => (value ? value.slice(0, 10) : "");
+const toDateInput = (value?: string | null) => (value ? value.slice(0, 10) : "");
 
 const fromProject = (project: Project): FormState => ({
   name: project.name ?? "",
@@ -50,15 +60,42 @@ const inputClass =
   "w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 disabled:opacity-50";
 const labelClass = "block text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider";
 
+const TABS: { id: Tab; label: string }[] = [
+  { id: "general", label: "Informations" },
+  { id: "localisation", label: "Localisation" },
+  { id: "financement", label: "Financement" },
+];
+
 export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: EditProjectInfoModalProps) {
+  const [tab, setTab] = useState<Tab>("general");
   const [form, setForm] = useState<FormState>(() => fromProject(project));
+  const [financement, setFinancement] = useState<FinancementFormValue>(() => financementFromProject(project.financement));
+  const [showFinancementErrors, setShowFinancementErrors] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Repartir des valeurs du projet à chaque ouverture : une saisie abandonnée
   // ne doit pas réapparaître à la suivante.
   useEffect(() => {
-    if (isOpen) setForm(fromProject(project));
+    if (!isOpen) return;
+    setTab("general");
+    setForm(fromProject(project));
+    setFinancement(financementFromProject(project.financement));
+    setShowFinancementErrors(false);
   }, [isOpen, project]);
+
+  // Le financement n'est envoyé que s'il a changé : le serveur recalcule alors
+  // budget et pourcentages. Modifier le seul nom ne doit pas recalculer un
+  // budget à l'insu de l'utilisateur.
+  const initialFinancementPayload = useMemo(
+    () => JSON.stringify(financementToPayload(financementFromProject(project.financement))),
+    [project.financement],
+  );
+  const financementChanged = JSON.stringify(financementToPayload(financement)) !== initialFinancementPayload;
+  const preview = useMemo(() => computeFinancementPreview(financement), [financement]);
+
+  // Budget enregistré incohérent avec son financement (saisie antérieure au calcul serveur).
+  const storedBudget = project.budget ?? 0;
+  const budgetMismatch = Math.abs(storedBudget - preview.total) >= 1;
 
   const departements = useMemo(
     () => withCurrent(form.region ? Object.keys(CAMEROON_DATA[form.region] ?? {}) : [], form.departement),
@@ -77,13 +114,29 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
     form.dateDebut && form.dateFin && form.dateFin < form.dateDebut
       ? "La date de fin doit être postérieure à la date de début"
       : null;
-  const canSubmit = !nameError && !dateError && !isSubmitting;
+  const financementErrors = validateFinancement(financement);
 
   if (!isOpen) return null;
 
+  const tabHasError: Record<Tab, boolean> = {
+    general: !!nameError || !!dateError,
+    localisation: false,
+    financement: showFinancementErrors && financementErrors.length > 0,
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (isSubmitting) return;
+
+    if (nameError || dateError) {
+      setTab("general");
+      return;
+    }
+    if (financementChanged && financementErrors.length > 0) {
+      setShowFinancementErrors(true);
+      setTab("financement");
+      return;
+    }
 
     const previous = project.localisation;
     const villeChanged = form.ville !== (previous?.ville ?? "");
@@ -111,12 +164,17 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
             ? { lat: coords[0], lng: coords[1] }
             : undefined,
       },
+      ...(financementChanged ? { financement: financementToPayload(financement) } : {}),
     };
 
     setIsSubmitting(true);
     try {
       const saved = await updateProject(project.code, updates);
-      toast.success("Informations du projet mises à jour");
+      toast.success(
+        financementChanged
+          ? `Projet mis à jour — budget recalculé : ${formatCurrency(saved.budget ?? 0, "FCFA")}`
+          : "Informations du projet mises à jour",
+      );
       onSaved(saved);
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -125,172 +183,186 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
     }
   };
 
-  const financeurs = project.financement
-    ? (project.financement.budgetNational ? 1 : 0) +
-      (project.financement.bailleurs?.length ?? 0) +
-      (project.financement.partiesPubliques?.length ?? 0) +
-      (project.financement.partiesPrivees?.length ?? 0)
-    : 0;
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 border-b border-[var(--border-default)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
-          <div>
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">Modifier les informations</h2>
-            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{project.code}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 hover:bg-[var(--bg-surface-hover)] rounded-[var(--radius-md)] transition-colors"
-          >
-            <X size={20} className="text-[var(--text-tertiary)]" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* ── Général ── */}
-          <div>
-            <label className={labelClass}>Nom du projet *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              className={inputClass}
-            />
-            {nameError && <p className="text-xs text-red-500 mt-1.5">{nameError}</p>}
-          </div>
-
-          <div>
-            <label className={labelClass}>Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              rows={5}
-              className={`${inputClass} resize-y`}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="px-6 pt-5 border-b border-[var(--border-default)]">
+          <div className="flex items-center justify-between">
             <div>
-              <label className={labelClass}>Date de début</label>
-              <input
-                type="date"
-                value={form.dateDebut}
-                onChange={(e) => set("dateDebut", e.target.value)}
-                className={inputClass}
-              />
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">Modifier le projet</h2>
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{project.code}</p>
             </div>
-            <div>
-              <label className={labelClass}>Date de fin</label>
-              <input
-                type="date"
-                value={form.dateFin}
-                min={form.dateDebut || undefined}
-                onChange={(e) => set("dateFin", e.target.value)}
-                className={inputClass}
-              />
-            </div>
-          </div>
-          {dateError && <p className="text-xs text-red-500 -mt-3">{dateError}</p>}
-
-          {/* ── Localisation ── */}
-          <div className="pt-2 border-t border-[var(--border-subtle)]">
-            <h3 className="text-sm font-bold text-[var(--text-primary)] mt-3 mb-4">Localisation</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>Région</label>
-                <select
-                  value={form.region}
-                  // Changer de région invalide département et ville
-                  onChange={(e) => setForm((prev) => ({ ...prev, region: e.target.value, departement: "", ville: "" }))}
-                  className={inputClass}
-                >
-                  <option value="">— Sélectionner —</option>
-                  {withCurrent(REGIONS, form.region).map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Département</label>
-                <select
-                  value={form.departement}
-                  onChange={(e) => setForm((prev) => ({ ...prev, departement: e.target.value, ville: "" }))}
-                  disabled={!form.region}
-                  className={inputClass}
-                >
-                  <option value="">{form.region ? "— Sélectionner —" : "Choisissez d'abord une région"}</option>
-                  {departements.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Ville</label>
-                <select
-                  value={form.ville}
-                  onChange={(e) => set("ville", e.target.value)}
-                  disabled={!form.departement}
-                  className={inputClass}
-                >
-                  <option value="">{form.departement ? "— Sélectionner —" : "Choisissez d'abord un département"}</option>
-                  {villes.map((v) => (
-                    <option key={v} value={v}>{v}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Localité</label>
-                <input
-                  type="text"
-                  value={form.localite}
-                  onChange={(e) => set("localite", e.target.value)}
-                  placeholder="Village, quartier, site…"
-                  className={inputClass}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Budget & financement (lecture seule) ── */}
-          <div className="flex gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--bg-inset)] border border-[var(--border-subtle)]">
-            <Info size={16} className="text-[var(--text-tertiary)] flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-[var(--text-secondary)] space-y-1">
-              <p>
-                <span className="font-semibold text-[var(--text-primary)]">
-                  Budget : {project.budget ? `${formatMoney(project.budget)} ${project.devise || "FCFA"}` : "—"}
-                </span>
-                {" · "}
-                {project.financement?.type || "MOP"} · {financeurs} financeur{financeurs > 1 ? "s" : ""}
-              </p>
-              <p className="text-[var(--text-tertiary)]">
-                Le budget est calculé à partir des contributions du financement : il n&apos;est pas modifiable ici.
-              </p>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              className="p-2 hover:bg-[var(--bg-surface-hover)] rounded-[var(--radius-md)] transition-colors"
             >
-              Annuler
+              <X size={20} className="text-[var(--text-tertiary)]" />
             </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="px-5 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Enregistrement…" : "Enregistrer"}
-            </button>
+          </div>
+          <div className="flex gap-1 mt-4">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                  tab === t.id
+                    ? "border-[var(--accent)] text-[var(--text-primary)]"
+                    : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                }`}
+              >
+                {t.label}
+                {tabHasError[t.id] && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                {t.id === "financement" && financementChanged && !tabHasError.financement && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" title="Modifié" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <div className="p-6 space-y-5 overflow-y-auto">
+            {tab === "general" && (
+              <>
+                <div>
+                  <label className={labelClass}>Nom du projet *</label>
+                  <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputClass} />
+                  {nameError && <p className="text-xs text-red-500 mt-1.5">{nameError}</p>}
+                </div>
+
+                <div>
+                  <label className={labelClass}>Description</label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => set("description", e.target.value)}
+                    rows={6}
+                    className={`${inputClass} resize-y`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>Date de début</label>
+                    <input type="date" value={form.dateDebut} onChange={(e) => set("dateDebut", e.target.value)} className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Date de fin</label>
+                    <input
+                      type="date"
+                      value={form.dateFin}
+                      min={form.dateDebut || undefined}
+                      onChange={(e) => set("dateFin", e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+                {dateError && <p className="text-xs text-red-500 -mt-3">{dateError}</p>}
+              </>
+            )}
+
+            {tab === "localisation" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Région</label>
+                  <select
+                    value={form.region}
+                    // Changer de région invalide département et ville
+                    onChange={(e) => setForm((prev) => ({ ...prev, region: e.target.value, departement: "", ville: "" }))}
+                    className={inputClass}
+                  >
+                    <option value="">— Sélectionner —</option>
+                    {withCurrent(REGIONS, form.region).map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Département</label>
+                  <select
+                    value={form.departement}
+                    onChange={(e) => setForm((prev) => ({ ...prev, departement: e.target.value, ville: "" }))}
+                    disabled={!form.region}
+                    className={inputClass}
+                  >
+                    <option value="">{form.region ? "— Sélectionner —" : "Choisissez d'abord une région"}</option>
+                    {departements.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Ville</label>
+                  <select
+                    value={form.ville}
+                    onChange={(e) => set("ville", e.target.value)}
+                    disabled={!form.departement}
+                    className={inputClass}
+                  >
+                    <option value="">{form.departement ? "— Sélectionner —" : "Choisissez d'abord un département"}</option>
+                    {villes.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Localité</label>
+                  <input
+                    type="text"
+                    value={form.localite}
+                    onChange={(e) => set("localite", e.target.value)}
+                    placeholder="Village, quartier, site…"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            )}
+
+            {tab === "financement" && (
+              <>
+                {budgetMismatch && !financementChanged && (
+                  <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
+                    <AlertTriangle size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                      Le budget enregistré ({storedBudget > 0 ? formatCurrency(storedBudget, "FCFA") : "non défini"}) ne
+                      correspond pas à son financement ({formatCurrency(preview.total, "FCFA")}). Vérifiez les montants
+                      ci-dessous : à l&apos;enregistrement du financement, le budget sera recalculé à partir de ces sources.
+                    </p>
+                  </div>
+                )}
+                <FinancementEditor value={financement} onChange={setFinancement} showErrors={showFinancementErrors} />
+              </>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-[var(--border-default)]">
+            <p className="text-[11px] text-[var(--text-tertiary)]">
+              {financementChanged
+                ? `Budget après enregistrement : ${preview.total > 0 ? formatCurrency(preview.total, "FCFA") : "à définir"}`
+                : ""}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Enregistrement…" : "Enregistrer"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
