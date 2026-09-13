@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ChevronRight, ChevronDown, Save, X, Calendar, Filter, Columns3, Search, RotateCcw,
-  ArrowDown, ArrowUp, CornerDownRight, FolderPlus, IndentDecrease, IndentIncrease, ListTree, Pencil, Plus, Trash2,
+  ArrowDown, ArrowUp, CalendarClock, CornerDownRight, ZoomIn, ZoomOut, FolderPlus, IndentDecrease, IndentIncrease, ListTree, Pencil, Plus, Trash2,
 } from "lucide-react";
 import type { Project } from "@/lib/projectStore";
 import type { Planning, Livrable } from "@/services/api/planningService";
@@ -21,16 +21,18 @@ import { useStructureEditor } from "@/hooks/useStructureEditor";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StructureEditBar, StructureRowMenu, type StructureAction } from "./StructureEditBar";
+import { TIME_SCALES, buildTimeline, daysBetween, dateToX, suggestScale, xToDate, type TimeScale } from "@/lib/timescale";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const DAY_WIDTH = 24;
 const ROW_HEIGHT = 28;
 const HEADER_HEIGHT = 44;
-const SUB_HEADER_HEIGHT = 22;
-const FRENCH_DAY_LETTERS = ["D", "L", "M", "M", "J", "V", "S"];
+/** En-tête du Gantt : bandeau supérieur + graduation = hauteur de l'en-tête du tableau. */
+const GANTT_TOP_HEIGHT = 18;
+const GANTT_BOTTOM_HEIGHT = HEADER_HEIGHT - GANTT_TOP_HEIGHT;
+const SCALE_STORAGE_KEY = "edc.planification.echelle";
 
 const ACTIVITY_COLORS: Record<string, string> = {
   travaux: "#4472C4",
@@ -153,11 +155,6 @@ interface TaskRow {
   livrableData?: Livrable;
 }
 
-interface WeekGroup {
-  weekStart: Date;
-  days: Date[];
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILITAIRES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -184,13 +181,6 @@ const calculateMonthsDiff = (start: Date, end: Date): number => {
   const months = (end.getFullYear() - start.getFullYear()) * 12 + 
                  (end.getMonth() - start.getMonth());
   return Math.max(0, months);
-};
-
-const formatWeekLabel = (date: Date) => {
-  const day = date.getDate();
-  const month = date.toLocaleDateString("fr-FR", { month: "short" });
-  const year = date.getFullYear().toString().slice(-2);
-  return `${day} ${month} '${year}`;
 };
 
 const convertDate = (d: string | Date | undefined): string | undefined => {
@@ -260,9 +250,12 @@ export function MSProjectViewV2({
   const columnsVisible = useMemo(() => COLUMN_DEFS.filter(c => visibleColumns.has(c.id)), [visibleColumns]);
   const gridTemplate = useMemo(() => columnsVisible.map(c => c.width).join(" "), [columnsVisible]);
   
-  // Timeline
-  const [timelineStart, setTimelineStart] = useState<Date>(new Date());
-  const [timelineEnd, setTimelineEnd] = useState<Date>(new Date());
+  // Échelle de temps : choix mémorisé sur ce navigateur, sinon déduite de la durée du projet
+  const [chosenScale, setChosenScale] = useState<TimeScale | null>(null);
+  const [ganttViewportWidth, setGanttViewportWidth] = useState(0);
+  /** Date à garder au bord gauche après un changement d'échelle. */
+  const scrollAnchorRef = useRef<Date | null>(null);
+  const initialScrollDoneRef = useRef(false);
   
   // Refs pour synchroniser le scroll
   const leftBodyRef = useRef<HTMLDivElement>(null);
@@ -515,80 +508,30 @@ export function MSProjectViewV2({
   // TIMELINE CALCULATION
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const calculateTimeline = useCallback(() => {
-    let minDate = new Date();
-    let maxDate = new Date();
-    let hasData = false;
-
-    const trackDate = (dateVal: string | Date | undefined, type: 'start' | 'end') => {
-      if (!dateVal) return;
-      const d = new Date(dateVal);
+  /** Première et dernière date présentes dans les planifications. */
+  const dataRange = useMemo(() => {
+    let min: Date | null = null;
+    let max: Date | null = null;
+    const track = (value: string | Date | undefined) => {
+      if (!value) return;
+      const d = new Date(value);
       if (isNaN(d.getTime())) return;
-      if (type === 'start') {
-        if (!hasData || d < minDate) minDate = d;
-      } else {
-        if (!hasData || d > maxDate) maxDate = d;
-      }
-      hasData = true;
+      if (!min || d < min) min = d;
+      if (!max || d > max) max = d;
     };
-
     plannings.forEach((p) => {
-      // Activity-level dates
-      trackDate(p.dateDebutActualisee || p.dateDebutInitiale, 'start');
-      trackDate(p.dateFinActualisee || p.dateFinInitiale, 'end');
-
-      // Livrable-level dates (critical for Étude planification)
-      if (p.livrables) {
-        p.livrables.forEach((liv) => {
-          trackDate(liv.dateDebut, 'start');
-          trackDate(liv.dateFin || liv.dateEcheance, 'end');
-        });
-      }
-
-      // Tache-level dates (for Exécution)
-      if (p.tachesExecution) {
-        p.tachesExecution.forEach((tache) => {
-          trackDate(tache.dateDebut, 'start');
-          trackDate(tache.dateFin, 'end');
-        });
-      }
-
-      // Étape passation dates
-      if (p.etapesPassation) {
-        p.etapesPassation.forEach((etape) => {
-          trackDate(etape.dateDebut, 'start');
-          trackDate(etape.dateFin, 'end');
-        });
-      }
+      track(p.dateDebutActualisee || p.dateDebutInitiale);
+      track(p.dateFinActualisee || p.dateFinInitiale);
+      p.livrables?.forEach((liv) => { track(liv.dateDebut); track(liv.dateFin || liv.dateEcheance); });
+      p.tachesExecution?.forEach((tache) => { track(tache.dateDebut); track(tache.dateFin); });
+      p.etapesPassation?.forEach((etape) => { track(etape.dateDebut); track(etape.dateFin); });
     });
-
-    if (!hasData) {
-      minDate = new Date();
-      maxDate = new Date();
-      maxDate.setMonth(maxDate.getMonth() + 12);
-    }
-
-    // Extend range
-    minDate = new Date(minDate);
-    minDate.setDate(minDate.getDate() - 14);
-    maxDate = new Date(maxDate);
-    maxDate.setDate(maxDate.getDate() + 30);
-
-    // Align to Monday
-    const startDay = minDate.getDay();
-    minDate.setDate(minDate.getDate() - (startDay === 0 ? 6 : startDay - 1));
-
-    minDate.setHours(0, 0, 0, 0);
-    maxDate.setHours(0, 0, 0, 0);
-
-    setTimelineStart(minDate);
-    setTimelineEnd(maxDate);
+    return { start: min as Date | null, end: max as Date | null };
   }, [plannings]);
 
   useEffect(() => {
     buildTaskTree();
-    calculateTimeline();
-  }, [buildTaskTree, calculateTimeline]);
+  }, [buildTaskTree]);
 
   // Auto-expand focused activity and all its parents when focusedActivityPath changes
   useEffect(() => {
@@ -610,39 +553,82 @@ export function MSProjectViewV2({
   // COMPUTED DAYS & WEEKS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const { allDays, weeks, todayIndex } = useMemo(() => {
-    const days: Date[] = [];
-    const current = new Date(timelineStart);
-    current.setHours(0, 0, 0, 0);
+  const scale = chosenScale ?? suggestScale(dataRange.start, dataRange.end);
+  const timeline = useMemo(
+    () => buildTimeline(dataRange.start, dataRange.end, scale, ganttViewportWidth),
+    [dataRange, scale, ganttViewportWidth],
+  );
+  const totalGanttWidth = timeline.width;
 
-    while (current <= timelineEnd) {
-      days.push(new Date(current));
-      current.setDate(current.getDate() + 1);
+  useEffect(() => {
+    const saved = localStorage.getItem(SCALE_STORAGE_KEY) as TimeScale | null;
+    if (saved && TIME_SCALES.some((s) => s.id === saved)) setChosenScale(saved);
+  }, []);
+
+  // Largeur visible du Gantt : la période est prolongée pour la remplir.
+  useEffect(() => {
+    const body = rightBodyRef.current;
+    if (!body) return;
+    const observer = new ResizeObserver(() => setGanttViewportWidth(body.clientWidth));
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, []);
+
+  /** Change d'échelle en gardant la même date au bord gauche. */
+  const changeScale = useCallback(
+    (next: TimeScale) => {
+      if (next === scale) return;
+      scrollAnchorRef.current = xToDate(timeline, rightBodyRef.current?.scrollLeft ?? 0);
+      setChosenScale(next);
+      localStorage.setItem(SCALE_STORAGE_KEY, next);
+    },
+    [scale, timeline],
+  );
+
+  const zoom = useCallback(
+    (direction: 1 | -1) => {
+      const index = TIME_SCALES.findIndex((s) => s.id === scale);
+      const next = TIME_SCALES[index - direction];
+      if (next) changeScale(next.id);
+    },
+    [scale, changeScale],
+  );
+
+  const scrollToDate = useCallback((date: Date, align: "start" | "center" = "center") => {
+    const body = rightBodyRef.current;
+    if (!body) return;
+    const x = dateToX(timeline, date);
+    body.scrollLeft = Math.max(0, align === "center" ? x - body.clientWidth / 2 : x - 40);
+  }, [timeline]);
+
+  // Après un changement d'échelle : retrouver la date ancrée. Au premier affichage :
+  // se placer sur le début des travaux, ou sur aujourd'hui.
+  useEffect(() => {
+    const body = rightBodyRef.current;
+    if (!body || ganttViewportWidth === 0) return;
+    if (scrollAnchorRef.current) {
+      body.scrollLeft = dateToX(timeline, scrollAnchorRef.current);
+      scrollAnchorRef.current = null;
+    } else if (!initialScrollDoneRef.current) {
+      scrollToDate(dataRange.start ?? new Date(), dataRange.start ? "start" : "center");
+      initialScrollDoneRef.current = true;
     }
+    if (rightHeaderRef.current) rightHeaderRef.current.scrollLeft = body.scrollLeft;
+  }, [timeline, ganttViewportWidth, dataRange.start, scrollToDate]);
 
-    // Group by weeks
-    const weekGroups: WeekGroup[] = [];
-    let currentWeek: WeekGroup | null = null;
-    days.forEach((day) => {
-      const dow = day.getDay();
-      if (!currentWeek || dow === 1) {
-        currentWeek = { weekStart: new Date(day), days: [] };
-        weekGroups.push(currentWeek);
-      }
-      currentWeek.days.push(day);
-    });
+  // Ctrl + molette sur le Gantt : zoom, comme dans MS Project.
+  useEffect(() => {
+    const body = rightBodyRef.current;
+    if (!body) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoom(e.deltaY < 0 ? 1 : -1);
+    };
+    body.addEventListener("wheel", onWheel, { passive: false });
+    return () => body.removeEventListener("wheel", onWheel);
+  }, [zoom]);
 
-    // Today index
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tIdx = days.findIndex(
-      (d) => d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
-    );
-
-    return { allDays: days, weeks: weekGroups, todayIndex: tIdx };
-  }, [timelineStart, timelineEnd]);
-
-  const totalGanttWidth = allDays.length * DAY_WIDTH;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // HANDLERS
@@ -1099,22 +1085,15 @@ export function MSProjectViewV2({
   // ═══════════════════════════════════════════════════════════════════════════
 
   const calculateBarPosition = (dateDebut?: string | Date, dateFin?: string | Date) => {
-    if (!dateDebut || !dateFin || allDays.length === 0) return null;
-
+    if (!dateDebut || !dateFin) return null;
     const debut = parseDate(dateDebut);
     const fin = parseDate(dateFin);
     if (!debut || !fin) return null;
 
-    debut.setHours(0, 0, 0, 0);
-    fin.setHours(0, 0, 0, 0);
-
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const startOffset = Math.floor((debut.getTime() - timelineStart.getTime()) / msPerDay);
-    const duration = Math.max(1, Math.ceil((fin.getTime() - debut.getTime()) / msPerDay));
-
+    const days = Math.max(1, daysBetween(debut, fin));
     return {
-      left: Math.max(0, startOffset) * DAY_WIDTH,
-      width: Math.max(DAY_WIDTH, duration * DAY_WIDTH),
+      left: Math.max(0, dateToX(timeline, debut)),
+      width: Math.max(6, days * timeline.pxPerDay),
     };
   };
 
@@ -1414,6 +1393,51 @@ export function MSProjectViewV2({
           >
             <Columns3 size={12} /> Colonnes
           </button>
+
+          <div role="group" aria-label="Échelle de temps" style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: 6 }}>
+            <button
+              onClick={() => zoom(-1)}
+              disabled={scale === TIME_SCALES[TIME_SCALES.length - 1].id}
+              title="Dézoomer (Ctrl + molette)"
+              className="msp-tool"
+              style={{ display: "flex", padding: 3, background: "transparent", border: "none", borderRadius: 3, color: "var(--msp-text)", cursor: "pointer" }}
+            >
+              <ZoomOut size={13} />
+            </button>
+            <div style={{ display: "flex", border: "1px solid var(--msp-border)", borderRadius: 3, overflow: "hidden" }}>
+              {TIME_SCALES.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => changeScale(option.id)}
+                  aria-pressed={scale === option.id}
+                  style={{
+                    padding: "3px 8px", border: "none", fontSize: 10, fontWeight: 600, cursor: "pointer",
+                    background: scale === option.id ? "var(--accent)" : "transparent",
+                    color: scale === option.id ? "#fff" : "var(--msp-text)",
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => zoom(1)}
+              disabled={scale === TIME_SCALES[0].id}
+              title="Zoomer (Ctrl + molette)"
+              className="msp-tool"
+              style={{ display: "flex", padding: 3, background: "transparent", border: "none", borderRadius: 3, color: "var(--msp-text)", cursor: "pointer" }}
+            >
+              <ZoomIn size={13} />
+            </button>
+            <button
+              onClick={() => scrollToDate(new Date())}
+              title="Aller à aujourd'hui"
+              className="msp-tool"
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 6px", background: "transparent", border: "none", borderRadius: 3, color: "var(--msp-text)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+            >
+              <CalendarClock size={12} /> Aujourd&apos;hui
+            </button>
+          </div>
 
           {canEditStructure && !editor.isEditing && (
             <button
@@ -1939,56 +1963,47 @@ export function MSProjectViewV2({
             className="msp-header-sync"
             style={{ overflow: "hidden", flexShrink: 0, background: "var(--msp-bg-header)", borderBottom: "2px solid var(--msp-border-header)" }}
           >
-            {/* Week labels */}
-            <div style={{ display: "flex", width: totalGanttWidth, height: 22 }}>
-              {weeks.map((week, wIdx) => (
+            {/* Bandeau supérieur : période large */}
+            <div style={{ position: "relative", width: totalGanttWidth, height: GANTT_TOP_HEIGHT, borderBottom: "1px solid var(--msp-border)" }}>
+              {timeline.top.map((cell) => (
                 <div
-                  key={wIdx}
+                  key={cell.key}
+                  title={cell.title}
                   style={{
-                    width: week.days.length * DAY_WIDTH,
-                    flexShrink: 0,
+                    position: "absolute", left: cell.left, width: cell.width, height: "100%",
                     borderRight: "1px solid var(--msp-border-header)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: "var(--msp-text-header)",
-                    letterSpacing: "0.3px",
-                    overflow: "hidden",
+                    display: "flex", alignItems: "center",
+                    fontSize: 10, fontWeight: 600, color: "var(--msp-text-header)",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {week.days.length >= 4 ? formatWeekLabel(week.weekStart) : ""}
+                  {/* Collé au bord gauche : le libellé reste lisible quand la période déborde */}
+                  <span style={{ position: "sticky", left: 0, padding: "0 6px", overflow: "hidden", textOverflow: "ellipsis", maxWidth: cell.width }}>
+                    {cell.width >= 40 ? cell.label : ""}
+                  </span>
                 </div>
               ))}
             </div>
 
-            {/* Day letters */}
-            <div style={{ display: "flex", width: totalGanttWidth, height: 22 }}>
-              {allDays.map((day, dIdx) => {
-                const dow = day.getDay();
-                const isWeekend = dow === 0 || dow === 6;
-                return (
-                  <div
-                    key={dIdx}
-                    style={{
-                      width: DAY_WIDTH,
-                      flexShrink: 0,
-                      borderRight: dow === 0 ? "1px solid var(--msp-border-header)" : "1px solid var(--msp-border)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 9,
-                      fontWeight: 500,
-                      color: isWeekend ? "var(--msp-text-muted)" : "var(--msp-text-header)",
-                      background: isWeekend ? "var(--msp-weekend)" : "transparent",
-                    }}
-                  >
-                    {FRENCH_DAY_LETTERS[dow]}
-                  </div>
-                );
-              })}
+            {/* Graduation */}
+            <div style={{ position: "relative", width: totalGanttWidth, height: GANTT_BOTTOM_HEIGHT }}>
+              {timeline.bottom.map((cell) => (
+                <div
+                  key={cell.key}
+                  title={cell.title}
+                  style={{
+                    position: "absolute", left: cell.left, width: cell.width, height: "100%",
+                    borderRight: "1px solid var(--msp-border)",
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    fontSize: 9.5, lineHeight: "11px", fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap",
+                    color: cell.weekend ? "var(--msp-text-muted)" : "var(--msp-text-header)",
+                    background: cell.weekend ? "var(--msp-weekend)" : "transparent",
+                  }}
+                >
+                  <span style={{ fontWeight: cell.sub ? 400 : 600 }}>{cell.width >= 14 ? cell.label : ""}</span>
+                  {cell.sub && <span style={{ fontWeight: 700 }}>{cell.sub}</span>}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1999,48 +2014,30 @@ export function MSProjectViewV2({
             onScroll={handleRightScroll}
             style={{ flex: 1, overflow: "auto", position: "relative" }}
           >
-            <div style={{ width: totalGanttWidth, position: "relative" }}>
-              {/* Day grid lines */}
-              <div style={{
-                position: "absolute",
-                inset: 0,
-                pointerEvents: "none",
-                backgroundImage: `repeating-linear-gradient(to right, transparent 0px, transparent ${DAY_WIDTH - 1}px, var(--msp-border) ${DAY_WIDTH - 1}px, var(--msp-border) ${DAY_WIDTH}px)`,
-              }} />
-
-              {/* Weekend shading */}
+            <div style={{ width: totalGanttWidth, minHeight: "100%", position: "relative" }}>
+              {/* Graduations et week-ends */}
               <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                {allDays.map((day, dIdx) => {
-                  const dow = day.getDay();
-                  if (dow !== 0 && dow !== 6) return null;
-                  return (
-                    <div
-                      key={dIdx}
-                      style={{
-                        position: "absolute",
-                        left: dIdx * DAY_WIDTH,
-                        top: 0,
-                        width: DAY_WIDTH,
-                        height: "100%",
-                        background: "var(--msp-weekend)",
-                      }}
-                    />
-                  );
-                })}
+                {timeline.bottom.map((cell) => (
+                  <div
+                    key={cell.key}
+                    style={{
+                      position: "absolute", left: cell.left, top: 0, width: cell.width, height: "100%",
+                      borderRight: "1px solid var(--msp-border)",
+                      background: cell.weekend ? "var(--msp-weekend)" : "transparent",
+                    }}
+                  />
+                ))}
               </div>
 
-              {/* Today marker */}
-              {todayIndex >= 0 && (
-                <div style={{
-                  position: "absolute",
-                  left: todayIndex * DAY_WIDTH + DAY_WIDTH / 2,
-                  top: 0,
-                  width: 2,
-                  height: "100%",
-                  background: MSP_TODAY_COLOR,
-                  zIndex: 10,
-                  pointerEvents: "none",
-                }} />
+              {/* Aujourd'hui */}
+              {timeline.todayX !== null && (
+                <div
+                  title="Aujourd'hui"
+                  style={{
+                    position: "absolute", left: timeline.todayX - 1, top: 0, width: 2, height: "100%",
+                    background: MSP_TODAY_COLOR, zIndex: 10, pointerEvents: "none",
+                  }}
+                />
               )}
 
               {/* Task bars */}
