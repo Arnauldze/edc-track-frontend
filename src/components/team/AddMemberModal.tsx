@@ -455,6 +455,16 @@ export default function AddMemberModal({
             </div>
           )}
 
+          {formData.projectRole === "contributeur" && formData.level !== "project" && (
+            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
+              <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed">
+                Ce contributeur consultera tout le projet, mais ne pourra déposer des documents que dans{" "}
+                <strong>{formData.entityName || "l'élément sélectionné"}</strong> et ses sous-niveaux.
+              </p>
+            </div>
+          )}
+
           {/* ── Actions ── */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-default)]">
             <button

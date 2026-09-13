@@ -21,6 +21,8 @@ import {
   type TrackedDocument,
 } from "@/lib/documentTrackingStore";
 import { toast } from "@/lib/toastStore";
+import { usePermissions } from "@/hooks/usePermissions";
+import { getErrorMessage } from "@/services/api/client";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import {
@@ -376,6 +378,7 @@ export default function ProjectConfigPage() {
         : "";
   
   const [PROJECT, setPROJECT] = useState<typeof DEFAULT_PROJECT>(DEFAULT_PROJECT);
+  const { canUploadIn, uploadScope } = usePermissions(projectId);
   
   useEffect(() => {
     async function loadProject() {
@@ -720,6 +723,16 @@ export default function ProjectConfigPage() {
   };
 
   const handleUploadClick = (phase: string, docIdx: number) => {
+    // Un contributeur affecté à un composant ne dépose que dans ce composant :
+    // inutile d'ouvrir le sélecteur pour un dépôt que le serveur refusera.
+    if (!canUploadIn(context)) {
+      toast.info(
+        uploadScope.labels.length > 0
+          ? `Vous ne pouvez déposer que dans : ${uploadScope.labels.join(", ")}`
+          : "Vous n'avez pas le droit de déposer des documents dans ce projet",
+      );
+      return;
+    }
     setUploadTarget({ phase, docIdx });
     fileInputRef.current?.click();
   };
@@ -728,30 +741,39 @@ export default function ProjectConfigPage() {
     if (!selectedFiles || !uploadTarget) return;
     const [docs, setter] = getPhaseDocsAndSetter(uploadTarget.phase);
     const folderName = docs[uploadTarget.docIdx]?.name || "Dossier";
-    const newFiles: FileData[] = await Promise.all(
-      Array.from(selectedFiles).map(async (f) => {
-        const sizeStr = formatFileSize(f.size);
-        const ext = getFileExt(f.name);
-        const tracked = await addTrackedDocument(f, {
-          projectId: PROJECT.id,
-          phase: uploadTarget.phase,
-          folderName,
-          context: context,
-        });
-        return {
-          name: f.name,
-          size: sizeStr,
-          type: ext,
-          status: "encours" as FileStatus,
-          lastModif: todayStr(),
-          lastModifBy: "Chef de Projet",
-          file: f,
-          blobUrl: URL.createObjectURL(f),
-          trackingId: tracked._id,
-          version: tracked.version || 1,
-        };
-      })
-    );
+    let newFiles: FileData[];
+    try {
+      newFiles = await Promise.all(
+        Array.from(selectedFiles).map(async (f) => {
+          const sizeStr = formatFileSize(f.size);
+          const ext = getFileExt(f.name);
+          const tracked = await addTrackedDocument(f, {
+            projectId: PROJECT.id,
+            phase: uploadTarget.phase,
+            folderName,
+            context: context,
+          });
+          return {
+            name: f.name,
+            size: sizeStr,
+            type: ext,
+            status: "encours" as FileStatus,
+            lastModif: todayStr(),
+            lastModifBy: "Chef de Projet",
+            file: f,
+            blobUrl: URL.createObjectURL(f),
+            trackingId: tracked._id,
+            version: tracked.version || 1,
+          };
+        })
+      );
+    } catch (error) {
+      // Un refus du serveur (droits, périmètre) restait jusqu'ici silencieux.
+      toast.error(getErrorMessage(error));
+      e.target.value = "";
+      setUploadTarget(null);
+      return;
+    }
     setter((prev) =>
       prev.map((doc, i) => {
         if (i !== uploadTarget.docIdx) return doc;

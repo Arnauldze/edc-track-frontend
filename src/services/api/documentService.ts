@@ -64,6 +64,9 @@ export async function uploadDocument(params: UploadDocumentParams): Promise<Docu
   formData.append('projectId', params.projectId);
   formData.append('phase', params.phase);
   formData.append('folderName', params.folderName);
+  // Sans l'emplacement, le serveur classait chaque document au niveau projet,
+  // quel que soit le composant où il avait été déposé.
+  if (params.context) formData.append('context', params.context);
 
   const response = await apiClient.post<{ data: DocumentMetadata }>('/documents/upload', formData, {
     headers: {
