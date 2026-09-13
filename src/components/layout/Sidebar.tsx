@@ -20,23 +20,20 @@ import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { alertService } from "@/services/api";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { UserSessionSwitcher } from "@/components/auth/AuthProvider";
-import { canCreateProjects } from "@/lib/authStore";
 
 export function Sidebar() {
     const pathname = usePathname();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [alertsCount, setAlertsCount] = useState(0);
-    const [canCreate, setCanCreate] = useState(false);
     const { theme, setTheme } = useTheme();
-    const { isAdmin, user } = usePermissions();
+    const { isAdmin } = usePermissions();
+    const { data: currentUser } = useCurrentUser();
 
     useEffect(() => {
         setMounted(true);
-        
-        // Check if user can create projects
-        setCanCreate(canCreateProjects());
         
         // Fetch unread alerts count
         const fetchAlertsCount = async () => {
@@ -98,8 +95,9 @@ export function Sidebar() {
             <div className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
                 {navigation
                     .filter((item) => {
-                        // Filtrer "Initialisation" : admin OU canCreateProjects
-                        if (item.name === "Initialisation" && !isAdmin && !canCreate) return false;
+                        // Initialisation : quiconque gère ou supervise au moins un projet,
+                        // ou peut en créer — capacité calculée par le serveur (/auth/me).
+                        if (item.name === "Initialisation" && !currentUser?.canAccessInitialisation) return false;
                         // Filtrer "Utilisateurs" : admin seulement
                         if (item.name === "Utilisateurs" && !isAdmin) return false;
                         return true;

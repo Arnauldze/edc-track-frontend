@@ -41,7 +41,9 @@ interface Props {
 }
 
 export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Props) {
-  const { can, isView } = usePermissions(projectId);
+  const { can, loading: permissionsLoading } = usePermissions(projectId);
+  // Planifier est réservé au chef de projet : contributeurs et coordinateurs consultent.
+  const readOnly = !can("planning:edit");
   const [taches, setTaches] = useState<TacheExecution[]>(
     data?.tachesExecution || [
       { numero: "T1", designation: "", ponderation: 0, duree: 1, dureeUnite: "jours", delaiUnite: "jours", statut: "en_attente", predecesseur: "" },
@@ -235,11 +237,11 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
         </div>
 
         <div className="p-5 space-y-5">
-          {isView && (
+          {!permissionsLoading && readOnly && (
             <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
               <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
               <div className="text-[11px] text-amber-600 dark:text-amber-400">
-                <strong>Mode lecture seule :</strong> Vous ne pouvez pas modifier la planification. Seul le chef de projet peut effectuer des modifications.
+                <strong>Mode lecture seule :</strong> Vous consultez cette planification. Seul le chef de projet peut la modifier.
               </div>
             </div>
           )}
@@ -291,7 +293,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       type="text"
                       value={tache.numero}
                       onChange={(e) => updateTache(index, "numero", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[11px] font-bold text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="T1"
                     />
@@ -302,7 +304,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       type="text"
                       value={tache.designation}
                       onChange={(e) => updateTache(index, "designation", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[12px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="Désignation..."
                     />
@@ -315,7 +317,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       max="100"
                       value={tache.ponderation || ""}
                       onChange={(e) => updateTache(index, "ponderation", parseFloat(e.target.value) || 0)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="20"
                     />
@@ -327,14 +329,14 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       min="0"
                       value={tache.delai || ""}
                       onChange={(e) => updateTache(index, "delai", parseInt(e.target.value) || undefined)}
-                      disabled={isView || (!!tache.dateEcheance && !tache.delai)}
+                      disabled={readOnly || (!!tache.dateEcheance && !tache.delai)}
                       className="w-[45px] px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                       placeholder="1"
                     />
                     <select
                       value={tache.delaiUnite || 'jours'}
                       onChange={(e) => updateTache(index, "delaiUnite", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-[65px] px-0.5 py-1 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border border-[var(--border-subtle)] disabled:opacity-50"
                     >
                       <option value="jours">jours</option>
@@ -349,14 +351,14 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       min="0"
                       value={tache.duree || ""}
                       onChange={(e) => updateTache(index, "duree", parseInt(e.target.value) || undefined)}
-                      disabled={isView || (!!tache.dateDebut && !!tache.dateFin && !tache.duree)}
+                      disabled={readOnly || (!!tache.dateDebut && !!tache.dateFin && !tache.duree)}
                       className="w-[45px] px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                       placeholder="1"
                     />
                     <select
                       value={tache.dureeUnite || 'jours'}
                       onChange={(e) => updateTache(index, "dureeUnite", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-[65px] px-0.5 py-1 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border border-[var(--border-subtle)] disabled:opacity-50"
                     >
                       <option value="jours">jours</option>
@@ -370,7 +372,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       type="date"
                       value={tache.dateDebut || ""}
                       onChange={(e) => updateTache(index, "dateDebut", e.target.value)}
-                      disabled={isView || !!tache.predecesseur}
+                      disabled={readOnly || !!tache.predecesseur}
                       className="w-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                     />
                   </div>
@@ -380,7 +382,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       type="date"
                       value={tache.dateFin || ""}
                       onChange={(e) => updateTache(index, "dateFin", e.target.value)}
-                      disabled={isView || (!!tache.dateDebut && !!tache.duree)}
+                      disabled={readOnly || (!!tache.dateDebut && !!tache.duree)}
                       className="w-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
                       placeholder={formatDate(tache.dateEcheance)}
                     />
@@ -391,7 +393,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       type="text"
                       value={tache.predecesseur || ""}
                       onChange={(e) => updateTache(index, "predecesseur", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="T1"
                     />
@@ -402,14 +404,14 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
                       type="text"
                       value={tache.successeur || ""}
                       onChange={(e) => updateTache(index, "successeur", e.target.value)}
-                      disabled={isView}
+                      disabled={readOnly}
                       className="w-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="T3"
                     />
                   </div>
 
                   <div className="px-2 py-2 flex items-center justify-center border-b border-[var(--border-default)]">
-                    {can("structure:edit") && (
+                    {can("planning:edit") && (
                       <button
                         onClick={() => removeTache(index)}
                         className="p-1 rounded hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all"
@@ -422,7 +424,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
               ))}
 
               <div className="px-3 py-2 bg-[var(--bg-inset)]/30 border-t border-[var(--border-default)]">
-                {can("structure:edit") && (
+                {can("planning:edit") && (
                   <button
                     onClick={addTache}
                     className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)] transition-colors"
@@ -438,7 +440,7 @@ export function PlanningFormExecution({ data, onChange, dateT0, projectId }: Pro
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {can("structure:edit") && (
+            {can("planning:edit") && (
               <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center gap-2 px-4 py-2 text-[12px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-default)] rounded-[var(--radius-md)] transition-colors"

@@ -30,6 +30,8 @@ interface Project {
 interface ProjectCardProps {
   project: Project;
   teamMembers?: Array<{ initials: string; color: string }>;
+  /** Rôle de l'utilisateur sur ce projet, affiché en badge (ex. « Chef de projet », « Supervision »). */
+  roleBadge?: { label: string; className: string };
 }
 
 // Couleurs pour les tags de secteur
@@ -48,7 +50,7 @@ const FINANCEMENT_COLORS: Record<string, { bg: string; text: string; border: str
   PPP: { bg: "bg-indigo-500/10", text: "text-indigo-700", border: "border-indigo-500/20" },
 };
 
-export function ProjectCard({ project, teamMembers = [] }: ProjectCardProps) {
+export function ProjectCard({ project, teamMembers = [], roleBadge }: ProjectCardProps) {
   const router = useRouter();
 
   // Détecter le secteur basé sur le nom ou la description
@@ -95,6 +97,13 @@ export function ProjectCard({ project, teamMembers = [] }: ProjectCardProps) {
           >
             {financementType}
           </span>
+          {roleBadge && (
+            <span
+              className={`ml-auto inline-flex items-center px-2.5 py-1 rounded-[20px] text-[10px] font-bold uppercase tracking-wide border ${roleBadge.className}`}
+            >
+              {roleBadge.label}
+            </span>
+          )}
         </div>
 
         {/* Titre */}

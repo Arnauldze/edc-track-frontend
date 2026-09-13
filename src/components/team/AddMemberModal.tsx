@@ -8,7 +8,7 @@ import {
   PROJECT_ROLE_LABELS,
   PROJECT_ROLE_DESCRIPTIONS,
   PROJECT_ROLE_COLORS,
-  ALL_PROJECT_ROLES,
+  getGrantableRoles,
 } from "@/lib/rbacStore";
 import { toast } from "@/lib/toastStore";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -40,7 +40,7 @@ export default function AddMemberModal({
   project,
   editingAssignment,
 }: AddMemberModalProps) {
-  const { isAdmin, isChefProjet } = usePermissions(projectId);
+  const { isAdmin, isChefProjet, roles } = usePermissions(projectId);
   const [allUsers, setAllUsers] = useState<DirectoryUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -49,7 +49,7 @@ export default function AddMemberModal({
 
   const [formData, setFormData] = useState<MemberFormData>({
     userId: "",
-    projectRole: "view",
+    projectRole: "contributeur",
     level: "project",
     entityId: "",
     entityName: "",
@@ -108,15 +108,9 @@ export default function AddMemberModal({
     setFormData({ ...formData, userId: "" });
   };
 
-  // Rôles assignables selon le rôle de l'utilisateur courant
-  const getAssignableRoles = (): ProjectRole[] => {
-    if (isAdmin) {
-      // L'administrateur a tous les droits et peut attribuer tous les rôles (y compris Chef de Projet)
-      return ALL_PROJECT_ROLES;
-    }
-    // Pour un Chef de Projet (non-admin), le rôle Chef de Projet (et supérieurs) ne s'affiche pas
-    return ["contributeur", "view"] as ProjectRole[];
-  };
+  // Rôles que l'utilisateur peut attribuer : mêmes règles que le serveur
+  // (un chef de projet attribue le rôle contributeur ; l'admin, tous les rôles).
+  const getAssignableRoles = (): ProjectRole[] => getGrantableRoles(isAdmin, roles);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -2,6 +2,7 @@
 // TEAM SERVICE - Team Assignments API
 // ══════════════════════════════════════════════════════════════
 
+import type { ProjectRole } from "@/lib/rbacStore";
 import apiClient, { ApiResponse } from './client';
 
 export interface TeamAssignment {
@@ -9,7 +10,7 @@ export interface TeamAssignment {
   projectId: string;
   userId: string;
   functionalRole: string;
-  projectRole: 'coordinateur_general' | 'coordinateur' | 'chef_projet' | 'contributeur' | 'view';
+  projectRole: ProjectRole;
   level: 'project' | 'component' | 'subcomponent' | 'activity';
   entityId?: string;
   entityName?: string;
@@ -22,7 +23,7 @@ export interface CreateTeamAssignmentDto {
   projectId: string;
   userId: string;
   functionalRole?: string;
-  projectRole?: 'coordinateur_general' | 'coordinateur' | 'chef_projet' | 'contributeur' | 'view';
+  projectRole?: ProjectRole;
   level?: 'project' | 'component' | 'subcomponent' | 'activity';
   entityId?: string;
   entityName?: string;
