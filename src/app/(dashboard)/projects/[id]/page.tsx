@@ -13,6 +13,7 @@ import { getProjectTeam, getUserById, getUserDirectory, type TeamAssignment, typ
 import { PROJECT_ROLE_LABELS, PROJECT_ROLE_COLORS, getGrantableRoles, isProjectRole, type ProjectRole } from "@/lib/rbacStore";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import AddMemberModal, { type MemberFormData } from "@/components/team/AddMemberModal";
 import { ChangeChefModal } from "@/components/team/ChangeChefModal";
 import { teamService } from "@/services/api/teamService";
@@ -63,15 +64,23 @@ export default function ProjectConfigPage() {
   const { blockNavigation, unblockNavigation } = useNavigationGuard();
 
   const [project, setProject] = useState<Project | undefined>(undefined);
+  // Distingue « en cours de chargement » de « introuvable » : les deux laissaient
+  // project à undefined, et la page affichait « Projet introuvable » avant le projet.
+  const [projectLoading, setProjectLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"info" | "structure" | "team">("info");
 
   // Load project
   useEffect(() => {
     async function loadProject() {
-      const proj = await getProjectById(projectId);
-      setProject(proj);
-      if (proj) {
-        setComponents(proj.components || []);
+      setProjectLoading(true);
+      try {
+        const proj = await getProjectById(projectId);
+        setProject(proj);
+        if (proj) {
+          setComponents(proj.components || []);
+        }
+      } finally {
+        setProjectLoading(false);
       }
     }
     loadProject();
@@ -584,6 +593,10 @@ export default function ProjectConfigPage() {
     .filter(([devise]) => devise !== 'FCFA' && budgetParDevise[devise])
     .map(([devise, rate]) => `1 ${devise} = ${rate.toLocaleString('fr-FR')} FCFA`)
     .join(', ');
+
+  if (projectLoading) {
+    return <LoadingSpinner className="min-h-[60vh]" />;
+  }
 
   if (!project) {
     return (
