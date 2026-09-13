@@ -14,6 +14,9 @@ import { PROJECT_ROLE_LABELS, PROJECT_ROLE_COLORS, getGrantableRoles, isProjectR
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import AddMemberModal, { type MemberFormData } from "@/components/team/AddMemberModal";
+import { ChangeChefModal } from "@/components/team/ChangeChefModal";
+import { teamService } from "@/services/api/teamService";
+import { getErrorMessage } from "@/services/api/client";
 import { ProjectInfoCard } from "@/components/projects/ProjectInfoCard";
 import { ProjectTeamCard } from "@/components/projects/ProjectTeamCard";
 import { EditProjectInfoModal } from "@/components/projects/EditProjectInfoModal";
@@ -53,7 +56,7 @@ export default function ProjectConfigPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = typeof params.id === "string" ? params.id : Array.isArray(params.id) ? params.id[0] : "";
-  
+
   // Navigation guard
   const { blockNavigation, unblockNavigation } = useNavigationGuard();
 
@@ -148,6 +151,7 @@ export default function ProjectConfigPage() {
   // Lignes d'équipe modifiables : rôle que l'utilisateur est autorisé à attribuer
   // (un chef de projet gère ses contributeurs ; l'admin gère tout).
   const grantableRoles = getGrantableRoles(isAdmin, roles);
+  const [showChangeChef, setShowChangeChef] = useState(false);
   const canManageAssignment = (role: string) => isProjectRole(role) && grantableRoles.includes(role);
 
   const reloadTeam = useCallback(async () => {
@@ -179,6 +183,14 @@ export default function ProjectConfigPage() {
     reloadTeam();
   }, [reloadTeam]);
 
+  // Un projet n'a qu'un chef ; plusieurs subsistent sur des données antérieures à la règle.
+  const currentChefs = teamAssignments
+    .filter((a) => a.projectRole === "chef_projet" && a.activeInProject)
+    .map((a) => {
+      const u = teamUsers.get(a.userId);
+      return { userId: a.userId, name: u ? `${u.firstName} ${u.lastName}` : "Utilisateur inconnu" };
+    });
+
   const openInviteModal = () => {
     setEditingAssignment(null);
     setShowAddModal(true);
@@ -188,7 +200,7 @@ export default function ProjectConfigPage() {
 
   // ── Auto-save local (localStorage) ──
   const DRAFT_KEY = `project-structure-draft-${projectId}`;
-  
+
   // Sauvegarder dans localStorage avec debounce
   useEffect(() => {
     if (isEditingStructure && hasChanges) {
@@ -215,7 +227,7 @@ export default function ProjectConfigPage() {
           const draftDate = new Date(draft.timestamp);
           const now = new Date();
           const diffMinutes = Math.floor((now.getTime() - draftDate.getTime()) / 60000);
-          
+
           if (diffMinutes < 60) { // Draft de moins d'1 heure
             const restore = confirm(
               `Une modification non enregistrée a été trouvée (${diffMinutes} minute(s) ago).\n\nVoulez-vous la restaurer ?`
@@ -1219,16 +1231,36 @@ export default function ProjectConfigPage() {
                 />
               </div>
 
-              {can("team:add") && (
-                <button
-                  onClick={openInviteModal}
-                  className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
-                >
-                  <Plus size={16} />
-                  Ajouter un membre
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {can("team:edit") && grantableRoles.includes("chef_projet") && (
+                  <button
+                    onClick={() => setShowChangeChef(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] rounded-[var(--radius-md)] text-sm font-semibold hover:bg-[var(--bg-surface-hover)] transition-colors"
+                  >
+                    Changer le chef de projet
+                  </button>
+                )}
+                {can("team:add") && (
+                  <button
+                    onClick={openInviteModal}
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                  >
+                    <Plus size={16} />
+                    Ajouter un membre
+                  </button>
+                )}
+              </div>
             </div>
+
+            {currentChefs.length > 1 && (
+              <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>
+                  Ce projet a {currentChefs.length} chefs de projet ({currentChefs.map((c) => c.name).join(", ")}).
+                  Un projet n&apos;en a qu&apos;un : désignez-le avec « Changer le chef de projet ».
+                </span>
+              </div>
+            )}
 
             {/* Team table */}
             <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden shadow-sm">
@@ -1377,8 +1409,18 @@ export default function ProjectConfigPage() {
           }
 
           try {
-            if (editingAssignment) {
-              await removeTeamAssignment(editingAssignment._id);
+            if (editingAssignment && editingAssignment.userId === data.userId) {
+              // Modification sur place. L'ancienne méthode (supprimer puis
+              // recréer) retirait le membre si la recréation était refusée.
+              await teamService.update(editingAssignment._id, {
+                projectRole: data.projectRole,
+                level: data.level,
+                entityId: data.entityId,
+                entityName: data.entityName,
+              });
+              toast.success("Affectation modifiée");
+            } else if (editingAssignment) {
+              // Autre personne : l'ajouter d'abord, retirer l'ancienne ensuite.
               await addTeamAssignment({
                 projectId,
                 userId: data.userId,
@@ -1387,6 +1429,7 @@ export default function ProjectConfigPage() {
                 entityId: data.entityId,
                 entityName: data.entityName,
               });
+              await removeTeamAssignment(editingAssignment._id);
               toast.success("Affectation modifiée");
             } else {
               await addTeamAssignment({
@@ -1407,12 +1450,21 @@ export default function ProjectConfigPage() {
             setEditingAssignment(null);
           } catch (error) {
             console.error('Error saving team assignment:', error);
-            toast.error("Erreur lors de l'enregistrement");
+            toast.error(getErrorMessage(error));
           }
         }}
         projectId={projectId}
         project={project}
         editingAssignment={editingAssignment}
+        currentChef={currentChefs[0] ?? null}
+      />
+
+      <ChangeChefModal
+        isOpen={showChangeChef}
+        projectId={projectId}
+        currentChefs={currentChefs}
+        onClose={() => setShowChangeChef(false)}
+        onChanged={reloadTeam}
       />
 
       {/* Modal de confirmation de suppression de membre */}
