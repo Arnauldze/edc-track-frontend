@@ -28,6 +28,7 @@ import { downloadDocument, getDocumentObjectUrl } from "@/services/api/documentS
 import { createFolder, deleteFolder, listFolders, type DocumentPhase, type Folder } from "@/services/api/folderService";
 import { getUserDirectory } from "@/lib/userStore";
 import { getCurrentUserId } from "@/lib/authStore";
+import { ACCEPT_ATTRIBUTE, ACCEPTED_EXTENSIONS, isAcceptedFile } from "@/lib/documentTypes";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import {
@@ -41,6 +42,7 @@ import {
   Network,
   Zap,
   FileText,
+  Image as ImageIcon,
   FolderOpen,
   Upload,
   Search,
@@ -82,7 +84,7 @@ type FileStatus = "valide" | "encours" | "rejete" | "manquant";
 type FileData = {
   name: string;
   size: string;
-  type: "pdf" | "dwg" | "zip" | "xls" | "doc";
+  type: "pdf" | "dwg" | "zip" | "xls" | "doc" | "img";
   status: FileStatus;
   lastModif?: string;
   lastModifBy?: string;
@@ -126,6 +128,7 @@ const getFileExt = (name: string): FileData["type"] => {
   if (["doc", "docx"].includes(ext)) return "doc";
   if (ext === "dwg") return "dwg";
   if (ext === "zip") return "zip";
+  if (["png", "jpg", "jpeg"].includes(ext)) return "img";
   return "pdf";
 };
 const todayStr = () =>
@@ -166,7 +169,7 @@ const groupTrackedByFolder = (docs: TrackedDocument[]): DocData[] => {
     files.push({
       name: doc.fileName,
       size: doc.fileSize || "0 KB",
-      type: (["pdf", "dwg", "zip", "xls", "doc"].includes(doc.fileType || "") ? doc.fileType : "pdf") as FileData["type"],
+      type: getFileExt(`fichier.${doc.fileType || ""}`),
       status: (doc.status === "valide" || doc.status === "rejete" ? doc.status : "encours") as FileStatus,
       lastModif: formatUploadDate(doc.createdAt || new Date().toISOString()),
       lastModifBy: doc.uploadedBy,
@@ -525,6 +528,7 @@ export default function ProjectConfigPage() {
       zip: { color: "text-amber-500", icon: <File size={14} /> },
       xls: { color: "text-green-500", icon: <File size={14} /> },
       doc: { color: "text-blue-500", icon: <File size={14} /> },
+      img: { color: "text-teal-500", icon: <ImageIcon size={14} /> },
     };
     const s = styles[type] || {
       color: "text-[var(--text-tertiary)]",
@@ -619,14 +623,28 @@ export default function ProjectConfigPage() {
     fileInputRef.current?.click();
   };
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files;
-    if (!selectedFiles || !uploadTarget) return;
+    if (!e.target.files || !uploadTarget) return;
+
+    // Le serveur refuse les autres formats : les écarter avant téléversement.
+    const allFiles = Array.from(e.target.files);
+    const refused = allFiles.filter((f) => !isAcceptedFile(f.name));
+    if (refused.length > 0) {
+      toast.error(
+        `Format non accepté : ${refused.map((f) => f.name).join(", ")}. Formats acceptés : ${ACCEPTED_EXTENSIONS.join(", ")}`,
+      );
+    }
+    const selectedFiles = allFiles.filter((f) => isAcceptedFile(f.name));
+    if (selectedFiles.length === 0) {
+      e.target.value = "";
+      setUploadTarget(null);
+      return;
+    }
     const [docs, setter] = getPhaseDocsAndSetter(uploadTarget.phase);
     const folderName = docs[uploadTarget.docIdx]?.name || "Dossier";
     let newFiles: FileData[];
     try {
       newFiles = await Promise.all(
-        Array.from(selectedFiles).map(async (f) => {
+        selectedFiles.map(async (f) => {
           const sizeStr = formatFileSize(f.size);
           const ext = getFileExt(f.name);
           const tracked = await addTrackedDocument(f, {
@@ -2006,6 +2024,7 @@ export default function ProjectConfigPage() {
         ref={fileInputRef}
         className="hidden"
         multiple
+        accept={ACCEPT_ATTRIBUTE}
         onChange={handleFileSelected}
       />
 
