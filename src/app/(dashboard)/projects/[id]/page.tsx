@@ -331,7 +331,8 @@ export default function ProjectConfigPage() {
       toast.success("Structure du projet mise à jour");
     } catch (error: any) {
       console.error('❌ Erreur sauvegarde:', error);
-      toast.error(error?.message || "Erreur lors de la sauvegarde");
+      // Le serveur explique ses refus (ex. unité qui porte encore une planification)
+      toast.error(error?.response?.data?.message || error?.message || "Erreur lors de la sauvegarde");
     }
   };
 

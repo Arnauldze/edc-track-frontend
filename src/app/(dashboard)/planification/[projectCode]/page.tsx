@@ -19,6 +19,7 @@ import {
 import { getProjectById, getLeafActivities, countLeafActivities, type Project, type Component, type SousComposant } from "@/lib/projectStore";
 import { planningService, type Planning } from "@/services/api/planningService";
 import { MSProjectViewV2 } from "@/components/planning/MSProjectViewV2";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Types d'activités avec couleurs
 const ACTIVITY_TYPES = [
@@ -43,6 +44,7 @@ export default function ProjectPlanningPage() {
   const searchParams = useSearchParams();
   const focusedActivity = searchParams.get('activity') || undefined;
   const refreshToken = searchParams.get('t') || '';
+  const { can } = usePermissions(projectCode);
 
   useEffect(() => {
     loadData();
@@ -172,6 +174,20 @@ export default function ProjectPlanningPage() {
       console.error("Erreur chargement:", error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Structure enregistrée depuis le tableau : le serveur a pu transférer des
+   * planifications. On recharge sans repasser par l'écran de chargement.
+   */
+  async function handleStructureSaved(saved: Project) {
+    setProject(saved);
+    try {
+      const plans = await planningService.getByProject(projectCode);
+      setPlannings(Array.isArray(plans) ? plans : []);
+    } catch (error) {
+      console.error("Erreur chargement planifications:", error);
     }
   }
 
@@ -372,6 +388,8 @@ export default function ProjectPlanningPage() {
             onActivityClick={(activityPath) => router.push(`/planification/${projectCode}/${activityPath}`)}
             onRefresh={loadData}
             focusedActivityPath={focusedActivity}
+            canEditStructure={can("structure:edit")}
+            onStructureSaved={handleStructureSaved}
           />
         ) : (
           <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] p-8 text-center m-8">

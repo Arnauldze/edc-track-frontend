@@ -1,12 +1,26 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { ChevronRight, ChevronDown, Save, X, Calendar, Filter, Columns3, Search, RotateCcw } from "lucide-react";
+import {
+  ChevronRight, ChevronDown, Save, X, Calendar, Filter, Columns3, Search, RotateCcw,
+  ArrowDown, ArrowUp, CornerDownRight, FolderPlus, IndentDecrease, IndentIncrease, ListTree, Pencil, Plus, Trash2,
+} from "lucide-react";
 import type { Project } from "@/lib/projectStore";
 import type { Planning, Livrable } from "@/services/api/planningService";
 import { planningService } from "@/services/api/planningService";
+import { projectService, type Component } from "@/services/api/projectService";
 import { toast } from "@/lib/toastStore";
-import { findUnit } from "@/lib/structureUnits";
+import { findUnit, listUnits, type UnitLevel } from "@/lib/structureUnits";
+import {
+  addChild, addComponent, addSibling, canAddChild, canIndent, canMoveDown, canMoveUp, canOutdent,
+  indentUnit, moveUnitDown, moveUnitUp, outdentUnit, removeUnit, renameUnit, setUnitType, wbsNumbers,
+  type ActivityType,
+} from "@/lib/structureOps";
+import { checkStructureChange, hasPlannedDescendant } from "@/lib/structureRules";
+import { useStructureEditor } from "@/hooks/useStructureEditor";
+import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StructureEditBar, StructureRowMenu, type StructureAction } from "./StructureEditBar";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -25,6 +39,21 @@ const ACTIVITY_COLORS: Record<string, string> = {
   etudes: "#7030A0",
   pi: "#E84C88",
 };
+
+const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  travaux: "Travaux",
+  fourniture: "Fourniture",
+  services: "Services",
+  etudes: "Études",
+  pi: "Prest. intellectuelles",
+};
+
+const NEW_UNIT_NAMES: Record<UnitLevel, string> = {
+  component: "Nouveau composant",
+  subcomponent: "Nouveau sous-composant",
+  activity: "Nouvelle activité",
+};
+const CHILD_LEVEL: Record<UnitLevel, UnitLevel> = { component: "subcomponent", subcomponent: "activity", activity: "activity" };
 
 const MSP_BAR_BLUE = "#4472C4";
 const MSP_SUMMARY_COLOR = "#555555";
@@ -50,6 +79,7 @@ interface ColumnDef {
 const COLUMN_DEFS: ColumnDef[] = [
   { id: "numero", label: "N°", width: "60px", align: "center", defaultVisible: true, filterType: "text", field: "numero" },
   { id: "nom", label: "Nom", width: "minmax(200px, 1fr)", align: "left", defaultVisible: true, filterType: "level", field: "nom" },
+  { id: "type", label: "Type", width: "110px", align: "center", defaultVisible: true, filterType: "text", field: "activityType" },
   { id: "ponderation", label: "Pond.", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "ponderation" },
   { id: "dateDebut", label: "Début", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateDebut" },
   { id: "dateFin", label: "Fin", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateFin" },
@@ -85,14 +115,21 @@ interface MSProjectViewV2Props {
   onRefresh: () => void;
   onActivityClick?: (activityPath: string) => void;
   focusedActivityPath?: string;
+  /** Chef de projet ou admin : peut modifier la structure dans le tableau. */
+  canEditStructure?: boolean;
+  /** Structure enregistrée : le parent recharge projet et planifications. */
+  onStructureSaved?: (project: Project) => void;
 }
 
 interface TaskRow {
   id: string;
-  numero: string; // PRJ, C1, SC1.1, A1, R1, T1...
+  numero: string; // PRJ, numérotation WBS (1, 1.2, 1.2.3), R1, T1...
   nom: string;
   level: number;
+  /** « activity » = unité fine, planifiable, quel que soit son niveau. */
   type: "project" | "component" | "subcomponent" | "activity" | "livrable";
+  /** Identifiant de l'unité de structure (absent pour le projet et les livrables). */
+  unitId?: string;
   activityPath?: string;
   activityType?: string;
   hasChildren: boolean;
@@ -166,15 +203,37 @@ const convertDate = (d: string | Date | undefined): string | undefined => {
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick, focusedActivityPath }: MSProjectViewV2Props) {
+export function MSProjectViewV2({
+  project,
+  plannings,
+  onRefresh,
+  onActivityClick,
+  focusedActivityPath,
+  canEditStructure = false,
+  onStructureSaved,
+}: MSProjectViewV2Props) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const initialExpanded = new Set<string>();
     initialExpanded.add("project-root"); // Projet expanded by default
     project.components.forEach((comp) => {
-      initialExpanded.add(`comp-${comp.id}`);
+      initialExpanded.add(comp.id);
     });
     return initialExpanded;
   });
+
+  // ── Édition de la structure ──
+  // La structure affichée est le brouillon pendant l'édition, celle du projet sinon.
+  const editor = useStructureEditor();
+  const structure = editor.draft ?? project.components;
+  const units = useMemo(() => listUnits(structure), [structure]);
+  const wbs = useMemo(() => wbsNumbers(structure), [structure]);
+  const plannedIds = useMemo(() => new Set(plannings.map((p) => p.activityPath)), [plannings]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; message: string } | null>(null);
+  const [savingStructure, setSavingStructure] = useState(false);
+  const { blockNavigation, unblockNavigation } = useNavigationGuard();
   
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
@@ -355,251 +414,102 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
       };
     };
 
-    // Construire l'arbre — Commencer par le noeud Projet
-    const allLeafPaths: string[] = [];
-    project.components.forEach((comp) => {
-      const hasSC = comp.sousComposants && comp.sousComposants.length > 0;
-      if (!hasSC) {
-        allLeafPaths.push(comp.id);
-      } else {
-        comp.sousComposants.forEach((sc) => {
-          const hasAct = sc.activities && sc.activities.length > 0;
-          if (!hasAct) {
-            allLeafPaths.push(sc.id);
-          } else {
-            sc.activities.forEach((act) => allLeafPaths.push(act.id));
-          }
-        });
-      }
-    });
+    // Arbre uniforme des unités : composant › sous-composant › activité.
+    // Une unité sans enfant est planifiable, quel que soit son niveau.
+    interface Node { id: string; name: string; typeActivite?: string; children: Node[] }
+    const nodes: Node[] = structure.map((c) => ({
+      id: c.id,
+      name: c.name,
+      typeActivite: c.typeActivite,
+      children: (c.sousComposants ?? []).map((sc) => ({
+        id: sc.id,
+        name: sc.name,
+        typeActivite: sc.typeActivite,
+        children: (sc.activities ?? []).map((a) => ({ id: a.id, name: a.name, typeActivite: a.typeActivite, children: [] })),
+      })),
+    }));
+    const leafIds = (node: Node): string[] => (node.children.length ? node.children.flatMap(leafIds) : [node.id]);
 
-    // Noeud racine Projet
     rows.push({
       id: "project-root",
       numero: "PRJ",
       nom: project.name,
       level: 0,
       type: "project",
-      hasChildren: project.components.length > 0,
+      hasChildren: nodes.length > 0,
       isExpanded: expandedIds.has("project-root"),
-      ...aggregateDates(allLeafPaths),
+      ...aggregateDates(nodes.flatMap(leafIds)),
     });
 
-    if (!expandedIds.has("project-root")) {
-      setTasks(rows);
-      return;
-    }
-
-    // Construire les composantes (level 1+)
-    project.components.forEach((comp, compIdx) => {
-      const compId = comp.id;
-      const compNodeId = `comp-${compId}`;
-      const hasSC = comp.sousComposants && comp.sousComposants.length > 0;
-
-      if (!hasSC) {
-        // Composant seul = activité
-        const activityPath = compId;
-        const planning = findPlanning(activityPath);
-        const livrables = modifiedLivrables.get(activityPath) || planning?.livrables || [];
-
+    const pushLivrables = (activityPath: string, livrables: Livrable[], level: number) => {
+      livrables.forEach((liv) => {
         rows.push({
-          id: activityPath,
-          numero: `C${compIdx + 1}`,
-          nom: comp.name,
-          level: 1,
-          type: "activity",
+          id: `${activityPath}.${liv.numero}`,
+          numero: liv.numero,
+          nom: liv.intitule,
+          level,
+          type: "livrable",
           activityPath,
-          activityType: comp.typeActivite || 'travaux',
-          hasChildren: livrables.length > 0,
-          isExpanded: expandedIds.has(activityPath),
-          planning,
-          ...aggregateDates([activityPath]),
+          hasChildren: false,
+          isExpanded: false,
+          parentId: activityPath,
+          livrableData: liv,
+          ponderation: liv.ponderation,
+          dateDebut: convertDate(liv.dateDebut),
+          dateFin: convertDate(liv.dateFin),
+          duree: liv.duree,
+          dureeUnite: liv.dureeUnite,
+          delai: liv.delai,
+          delaiUnite: liv.delaiUnite,
+          dateEcheance: convertDate(liv.dateEcheance),
+          predecesseur: liv.predecesseur,
+          successeur: liv.successeur,
         });
+      });
+    };
 
-        // Ajouter les livrables
-        if (expandedIds.has(activityPath) && livrables.length > 0) {
-          livrables.forEach((liv) => {
-            const convertDate = (d: string | Date | undefined) => {
-              if (!d) return undefined;
-              if (d instanceof Date) return d.toISOString().split('T')[0];
-              return d;
-            };
+    const walk = (list: Node[], level: number, parentId: string) => {
+      list.forEach((node) => {
+        const common = {
+          id: node.id,
+          unitId: node.id,
+          numero: wbs.get(node.id) ?? "",
+          nom: node.name,
+          level,
+          parentId,
+          isExpanded: expandedIds.has(node.id),
+        };
 
-            rows.push({
-              id: `${activityPath}.${liv.numero}`,
-              numero: liv.numero,
-              nom: liv.intitule,
-              level: 2,
-              type: "livrable",
-              activityPath,
-              hasChildren: false,
-              isExpanded: false,
-              parentId: activityPath,
-              livrableData: liv,
-              ponderation: liv.ponderation,
-              dateDebut: convertDate(liv.dateDebut),
-              dateFin: convertDate(liv.dateFin),
-              duree: liv.duree,
-              dureeUnite: liv.dureeUnite,
-              delai: liv.delai,
-              delaiUnite: liv.delaiUnite,
-              dateEcheance: convertDate(liv.dateEcheance),
-              predecesseur: liv.predecesseur,
-              successeur: liv.successeur,
-            });
+        if (node.children.length === 0) {
+          const planning = findPlanning(node.id);
+          const livrables = modifiedLivrables.get(node.id) || planning?.livrables || [];
+          rows.push({
+            ...common,
+            type: "activity",
+            activityPath: node.id,
+            activityType: node.typeActivite || "travaux",
+            hasChildren: livrables.length > 0,
+            planning,
+            ...aggregateDates([node.id]),
           });
+          if (expandedIds.has(node.id)) pushLivrables(node.id, livrables, level + 1);
+          return;
         }
-      } else {
-        // Composant avec sous-composants
-        const leafPaths: string[] = [];
-        comp.sousComposants.forEach((sc) => {
-          const hasAct = sc.activities && sc.activities.length > 0;
-          if (!hasAct) {
-            leafPaths.push(sc.id);
-          } else {
-            sc.activities.forEach((act) => leafPaths.push(act.id));
-          }
-        });
 
         rows.push({
-          id: compNodeId,
-          numero: `C${compIdx + 1}`,
-          nom: comp.name,
-          level: 1,
-          type: "component",
-          activityType: comp.typeActivite,
+          ...common,
+          type: level === 1 ? "component" : "subcomponent",
           hasChildren: true,
-          isExpanded: expandedIds.has(compNodeId),
-          ...aggregateDates(leafPaths),
+          ...aggregateDates(leafIds(node)),
         });
+        if (expandedIds.has(node.id)) walk(node.children, level + 1, node.id);
+      });
+    };
 
-        if (!expandedIds.has(compNodeId)) return;
-
-        comp.sousComposants.forEach((sc, scIdx) => {
-          const scNodeId = `sc-${compId}.${sc.id}`;
-          const hasAct = sc.activities && sc.activities.length > 0;
-
-          if (!hasAct) {
-            // Sous-composant sans activités = activité
-            const activityPath = sc.id;
-            const planning = findPlanning(activityPath);
-            const livrables = modifiedLivrables.get(activityPath) || planning?.livrables || [];
-
-            rows.push({
-              id: activityPath,
-              numero: `SC${compIdx + 1}.${scIdx + 1}`,
-              nom: sc.name,
-              level: 2,
-              type: "activity",
-              activityPath,
-              activityType: sc.typeActivite || 'travaux',
-              hasChildren: livrables.length > 0,
-              isExpanded: expandedIds.has(activityPath),
-              parentId: compNodeId,
-              planning,
-              ...aggregateDates([activityPath]),
-            });
-
-            if (expandedIds.has(activityPath) && livrables.length > 0) {
-              livrables.forEach((liv) => {
-                rows.push({
-                  id: `${activityPath}.${liv.numero}`,
-                  numero: liv.numero,
-                  nom: liv.intitule,
-                  level: 3,
-                  type: "livrable",
-                  activityPath,
-                  hasChildren: false,
-                  isExpanded: false,
-                  parentId: activityPath,
-                  livrableData: liv,
-                  ponderation: liv.ponderation,
-                  dateDebut: convertDate(liv.dateDebut),
-                  dateFin: convertDate(liv.dateFin),
-                  duree: liv.duree,
-                  dureeUnite: liv.dureeUnite,
-                  delai: liv.delai,
-                  delaiUnite: liv.delaiUnite,
-                  dateEcheance: convertDate(liv.dateEcheance),
-                  predecesseur: liv.predecesseur,
-                  successeur: liv.successeur,
-                });
-              });
-            }
-          } else {
-            // Sous-composant avec activités
-            const scLeafPaths = sc.activities.map((act) => act.id);
-
-            rows.push({
-              id: scNodeId,
-              numero: `SC${compIdx + 1}.${scIdx + 1}`,
-              nom: sc.name,
-              level: 2,
-              type: "subcomponent",
-              hasChildren: true,
-              isExpanded: expandedIds.has(scNodeId),
-              parentId: compNodeId,
-              ...aggregateDates(scLeafPaths),
-            });
-
-            if (!expandedIds.has(scNodeId)) return;
-
-            sc.activities.forEach((act, actIdx) => {
-              const activityPath = act.id;
-              const actName = typeof act === "string" ? act : act.name;
-              const actType = typeof act === "string" ? "travaux" : act.typeActivite;
-              const planning = findPlanning(activityPath);
-              const livrables = modifiedLivrables.get(activityPath) || planning?.livrables || [];
-
-              rows.push({
-                id: activityPath,
-                numero: `A${actIdx + 1}`,
-                nom: actName,
-                level: 3,
-                type: "activity",
-                activityPath,
-                activityType: actType,
-                hasChildren: livrables.length > 0,
-                isExpanded: expandedIds.has(activityPath),
-                parentId: scNodeId,
-                planning,
-                ...aggregateDates([activityPath]),
-              });
-
-              if (expandedIds.has(activityPath) && livrables.length > 0) {
-                livrables.forEach((liv) => {
-                  rows.push({
-                    id: `${activityPath}.${liv.numero}`,
-                    numero: liv.numero,
-                    nom: liv.intitule,
-                    level: 4,
-                    type: "livrable",
-                    activityPath,
-                    hasChildren: false,
-                    isExpanded: false,
-                    parentId: activityPath,
-                    livrableData: liv,
-                    ponderation: liv.ponderation,
-                    dateDebut: convertDate(liv.dateDebut),
-                    dateFin: convertDate(liv.dateFin),
-                    duree: liv.duree,
-                    dureeUnite: liv.dureeUnite,
-                    delai: liv.delai,
-                    delaiUnite: liv.delaiUnite,
-                    dateEcheance: convertDate(liv.dateEcheance),
-                    predecesseur: liv.predecesseur,
-                    successeur: liv.successeur,
-                  });
-                });
-              }
-            });
-          }
-        });
-      }
-    });
+    if (expandedIds.has("project-root")) walk(nodes, 1, "project-root");
 
     setTasks(rows);
-  }, [project, plannings, expandedIds, modifiedLivrables]);
+  }, [project.name, structure, wbs, plannings, expandedIds, modifiedLivrables]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TIMELINE CALCULATION
@@ -687,10 +597,8 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
     setExpandedIds(prev => {
       const next = new Set(prev);
       // Déplier les parents de l'unité : composant, puis sous-composant
-      const [compId, scId] = findUnit(project.components, focusedActivityPath)?.ancestors ?? [];
       next.add("project-root");
-      if (compId) next.add(`comp-${compId}`);
-      if (compId && scId) next.add(`sc-${compId}.${scId}`);
+      findUnit(project.components, focusedActivityPath)?.ancestors.forEach((id) => next.add(id));
       // Expand the activity itself (to show its livrables)
       next.add(focusedActivityPath);
       
@@ -801,6 +709,223 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
     setHasChanges(false);
     buildTaskTree();
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ÉDITION DE LA STRUCTURE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const selectedUnit = useMemo(() => units.find((u) => u.id === selectedId) ?? null, [units, selectedId]);
+  const rates = project.financement?.tauxChange as Record<string, number> | undefined;
+
+  /** Déplie les parents d'une unité pour qu'elle soit visible. */
+  const reveal = useCallback((components: Component[], id: string) => {
+    const unit = findUnit(components, id);
+    if (!unit) return;
+    setExpandedIds((prev) => new Set([...prev, "project-root", ...unit.ancestors]));
+  }, []);
+
+  /**
+   * Applique une nouvelle version du brouillon après vérification des règles
+   * de planification. Renvoie false si elle est refusée ou sans effet.
+   */
+  const commit = useCallback(
+    (next: Component[], focusId?: string | null) => {
+      const draft = editor.draft;
+      if (!draft || next === draft) return false;
+
+      const check = checkStructureChange(project.components, next, plannedIds);
+      if (check.error) {
+        toast.error(check.error);
+        return false;
+      }
+      const known = new Set(checkStructureChange(project.components, draft, plannedIds).notices);
+      check.notices.filter((notice) => !known.has(notice)).forEach((notice) => toast.info(notice));
+
+      editor.apply(next);
+      if (focusId) {
+        setSelectedId(focusId);
+        reveal(next, focusId);
+      }
+      return true;
+    },
+    [editor, project.components, plannedIds, reveal],
+  );
+
+  const startStructureEdit = () => {
+    editor.start(project.components);
+    setSelectedId(null);
+    setEditingCell(null);
+  };
+
+  const closeStructureEdit = () => {
+    if (editor.changeCount > 0 && !confirm("Abandonner les modifications de la structure ?")) return;
+    editor.stop();
+    setSelectedId(null);
+    setRenaming(null);
+  };
+
+  const startRename = (id: string, components: Component[] = structure) => {
+    const unit = findUnit(components, id);
+    if (unit) setRenaming({ id, value: unit.name });
+  };
+
+  const finishRename = (save: boolean) => {
+    if (!renaming || !editor.draft) return;
+    const name = renaming.value.trim();
+    setRenaming(null);
+    if (save && name) commit(renameUnit(editor.draft, renaming.id, name));
+  };
+
+  /** Insère une unité puis ouvre son nom à la saisie. */
+  const insert = (result: { components: Component[]; id: string | null }) => {
+    if (result.id && commit(result.components, result.id)) startRename(result.id, result.components);
+  };
+
+  const requestDelete = (id: string) => {
+    const unit = findUnit(structure, id);
+    if (!unit) return;
+    if (hasPlannedDescendant(structure, id, plannedIds)) {
+      toast.error(`« ${unit.name} » ou l'une de ses sous-unités est planifiée : supprimez d'abord la planification.`);
+      return;
+    }
+    const descendants = units.filter((u) => u.ancestors.includes(id)).length;
+    setPendingDelete({
+      id,
+      message:
+        `« ${unit.name} »` +
+        (descendants ? ` et ses ${descendants} sous-unité${descendants > 1 ? "s" : ""}` : "") +
+        " seront retirés de la structure à l'enregistrement.",
+    });
+  };
+
+  const structureActions = useMemo((): StructureAction[] => {
+    if (!editor.draft) return [];
+    const draft = editor.draft;
+    const sel = selectedUnit;
+    const none = "Sélectionnez une ligne";
+    const childLevel = sel ? CHILD_LEVEL[sel.level] : "activity";
+    return [
+      {
+        key: "add-component", label: "Composant", icon: FolderPlus, enabled: true,
+        run: () => insert(addComponent(draft, NEW_UNIT_NAMES.component)),
+      },
+      {
+        key: "add-sibling", label: "Insérer", icon: Plus, shortcut: "Inser", enabled: !!sel, hint: none,
+        run: () => sel && insert(addSibling(draft, sel.id, NEW_UNIT_NAMES[sel.level], sel.typeActivite as ActivityType | undefined)),
+      },
+      {
+        key: "add-child", label: "Décomposer", icon: CornerDownRight, shortcut: "Ctrl+Inser",
+        enabled: !!sel && canAddChild(draft, sel.id),
+        hint: sel ? "Trois niveaux au plus : une activité ne se décompose pas" : none,
+        run: () => sel && insert(addChild(draft, sel.id, NEW_UNIT_NAMES[childLevel])),
+      },
+      {
+        key: "outdent", label: "Hausser", icon: IndentDecrease, shortcut: "Alt+Maj+←", separator: true,
+        enabled: !!sel && canOutdent(draft, sel.id), hint: sel ? "Déjà au niveau composant" : none,
+        run: () => sel && commit(outdentUnit(draft, sel.id), sel.id),
+      },
+      {
+        key: "indent", label: "Abaisser", icon: IndentIncrease, shortcut: "Alt+Maj+→",
+        enabled: !!sel && canIndent(draft, sel.id),
+        hint: sel ? "Il faut une unité au-dessus, et trois niveaux au plus" : none,
+        run: () => sel && commit(indentUnit(draft, sel.id, rates), sel.id),
+      },
+      {
+        key: "up", label: "Monter", icon: ArrowUp, shortcut: "Alt+Maj+↑",
+        enabled: !!sel && canMoveUp(draft, sel.id), hint: sel ? "Déjà en tête" : none,
+        run: () => sel && commit(moveUnitUp(draft, sel.id), sel.id),
+      },
+      {
+        key: "down", label: "Descendre", icon: ArrowDown, shortcut: "Alt+Maj+↓",
+        enabled: !!sel && canMoveDown(draft, sel.id), hint: sel ? "Déjà en dernier" : none,
+        run: () => sel && commit(moveUnitDown(draft, sel.id), sel.id),
+      },
+      {
+        key: "rename", label: "Renommer", icon: Pencil, shortcut: "F2", separator: true, enabled: !!sel, hint: none,
+        run: () => sel && startRename(sel.id),
+      },
+      {
+        key: "delete", label: "Supprimer", icon: Trash2, shortcut: "Suppr", danger: true, enabled: !!sel, hint: none,
+        run: () => sel && requestDelete(sel.id),
+      },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.draft, selectedUnit, rates, plannedIds, units]);
+
+  const saveStructure = async () => {
+    const draft = editor.draft;
+    if (!draft) return;
+    const unnamed = listUnits(draft).find((u) => !u.name.trim());
+    if (unnamed) {
+      toast.error("Chaque unité doit avoir un nom.");
+      setSelectedId(unnamed.id);
+      return;
+    }
+    setSavingStructure(true);
+    try {
+      const saved = await projectService.update(project.code, { components: draft });
+      editor.stop();
+      setSelectedId(null);
+      toast.success("Structure du projet enregistrée");
+      onStructureSaved?.(saved);
+    } catch (error) {
+      // Refus du serveur (ex. 409 : unité qui porte des documents) : son message est explicite.
+      const { response, message } = error as { response?: { data?: { message?: string } }; message?: string };
+      toast.error(response?.data?.message || message || "Impossible d'enregistrer la structure");
+    } finally {
+      setSavingStructure(false);
+    }
+  };
+
+  // Modifications non enregistrées : prévenir avant de quitter la page.
+  const structureDirty = editor.changeCount > 0;
+  useEffect(() => {
+    if (!structureDirty) return;
+    blockNavigation("La structure a des modifications non enregistrées. Quitter sans enregistrer ?");
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      unblockNavigation();
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [structureDirty, blockNavigation, unblockNavigation]);
+
+  // Raccourcis clavier, inspirés de MS Project
+  useEffect(() => {
+    if (!editor.isEditing) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (renaming || pendingDelete || target.closest("input, select, textarea")) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      const run = (key: string) => {
+        const action = structureActions.find((a) => a.key === key);
+        if (!action?.enabled) return;
+        e.preventDefault();
+        action.run();
+      };
+
+      if (ctrl && e.key.toLowerCase() === "z") { e.preventDefault(); editor.undo(); return; }
+      if (ctrl && e.key.toLowerCase() === "y") { e.preventDefault(); editor.redo(); return; }
+      if (e.altKey && e.shiftKey) {
+        if (e.key === "ArrowRight") return run("indent");
+        if (e.key === "ArrowLeft") return run("outdent");
+        if (e.key === "ArrowUp") return run("up");
+        if (e.key === "ArrowDown") return run("down");
+      }
+      if (e.key === "Insert") return run(ctrl ? "add-child" : "add-sibling");
+      if (e.key === "Delete") return run("delete");
+      if (e.key === "F2") return run("rename");
+      if (e.key === "Escape") setSelectedId(null);
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey) {
+        const visible = filteredTasks.filter((t) => t.unitId);
+        const index = visible.findIndex((t) => t.unitId === selectedId);
+        const nextRow = visible[e.key === "ArrowUp" ? Math.max(0, index - 1) : Math.min(visible.length - 1, index + 1)];
+        if (nextRow?.unitId) { e.preventDefault(); setSelectedId(nextRow.unitId); }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // COLUMN VISIBILITY & FILTERS
@@ -915,10 +1040,10 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
 
   // Close menus on outside click
   useEffect(() => {
-    const handleClick = () => { setContextMenu(null); };
-    if (contextMenu) document.addEventListener("click", handleClick);
+    const handleClick = () => { setContextMenu(null); setRowMenu(null); };
+    if (contextMenu || rowMenu) document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, [contextMenu]);
+  }, [contextMenu, rowMenu]);
 
   // Scroll sync
   const syncingRef = useRef(false);
@@ -1101,9 +1226,9 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
 
     return (
       <div
-        onClick={() => isLivrable && !isCalculated && setEditingCell({ rowId: task.id, field })}
+        onClick={() => isLivrable && !isCalculated && !editor.isEditing && setEditingCell({ rowId: task.id, field })}
         style={{
-          cursor: isLivrable && !isCalculated ? "text" : "default",
+          cursor: isLivrable && !isCalculated && !editor.isEditing ? "text" : "default",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1149,6 +1274,19 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
 
         .msp-row:hover {
           background: var(--msp-hover) !important;
+        }
+
+        .msp-row-selected, .msp-row-selected:hover {
+          background: var(--msp-selected-bg) !important;
+          box-shadow: inset 3px 0 0 var(--accent);
+        }
+
+        .msp-tool:hover:not(:disabled), .msp-menu-item:hover:not(:disabled) {
+          background: var(--msp-hover) !important;
+        }
+
+        @media (max-width: 1280px) {
+          .msp-tool-label { display: none; }
         }
 
         .msp-gantt-row:hover {
@@ -1201,6 +1339,21 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
           border-bottom: 4px solid transparent;
         }
       `}</style>
+
+      {/* ─── Édition de la structure ──────────────── */}
+      {editor.isEditing && (
+        <StructureEditBar
+          actions={structureActions}
+          changeCount={editor.changeCount}
+          canUndo={editor.canUndo}
+          canRedo={editor.canRedo}
+          saving={savingStructure}
+          onUndo={editor.undo}
+          onRedo={editor.redo}
+          onCancel={closeStructureEdit}
+          onSave={saveStructure}
+        />
+      )}
 
       {/* ─── Toolbar ──────────────────────────────── */}
       {hasChanges && (
@@ -1262,6 +1415,22 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
             <Columns3 size={12} /> Colonnes
           </button>
 
+          {canEditStructure && !editor.isEditing && (
+            <button
+              onClick={startStructureEdit}
+              disabled={hasChanges}
+              title={hasChanges ? "Enregistrez d'abord les modifications des livrables" : "Ajouter, déplacer, décomposer ou supprimer des unités"}
+              style={{
+                display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
+                background: "transparent", border: "1px solid var(--msp-border)", borderRadius: 3,
+                color: "var(--msp-text)", fontSize: 10, fontWeight: 600,
+                cursor: hasChanges ? "not-allowed" : "pointer", opacity: hasChanges ? 0.5 : 1,
+              }}
+            >
+              <ListTree size={12} /> Modifier la structure
+            </button>
+          )}
+
 
           {levelFilter !== "all" && (
             <button
@@ -1290,7 +1459,9 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
           )}
         </div>
         <span style={{ fontSize: 10, color: "var(--msp-text-muted)" }}>
-          Clic droit sur en-tête = gérer les colonnes
+          {editor.isEditing
+            ? "Clic : sélectionner • double-clic ou F2 : renommer • clic droit : actions"
+            : "Clic droit sur en-tête = gérer les colonnes"}
         </span>
       </div>
 
@@ -1451,16 +1622,7 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
                         <button
                           onClick={() => {
                             if (expandedIds.size <= 1) {
-                              const allIds = new Set<string>();
-                              allIds.add("project-root");
-                              project.components.forEach((comp) => {
-                                allIds.add(`comp-${comp.id}`);
-                                comp.sousComposants.forEach((sc) => {
-                                  allIds.add(`sc-${comp.id}.${sc.id}`);
-                                  sc.activities.forEach((act) => allIds.add(act.id));
-                                });
-                              });
-                              setExpandedIds(allIds);
+                              setExpandedIds(new Set(["project-root", ...units.map((u) => u.id)]));
                             } else {
                               setExpandedIds(new Set(["project-root"]));
                             }
@@ -1534,20 +1696,11 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
                                     setLevelFilter(opt.val);
                                     // Auto-expand all parents up to the selected level
                                     if (opt.val !== "all" && opt.val !== "components") {
+                                      const depth = opt.val === "subcomponents" ? 1 : opt.val === "activities" ? 2 : 3;
                                       setExpandedIds(prev => {
                                         const next = new Set(prev);
                                         next.add("project-root");
-                                        project.components.forEach(comp => {
-                                          next.add(`comp-${comp.id}`);
-                                          if (opt.val === "activities" || opt.val === "livrables") {
-                                            comp.sousComposants.forEach(sc => {
-                                              next.add(`sc-${comp.id}.${sc.id}`);
-                                              if (opt.val === "livrables") {
-                                                sc.activities.forEach((act) => next.add(act.id));
-                                              }
-                                            });
-                                          }
-                                        });
+                                        units.filter((u) => u.ancestors.length < depth).forEach((u) => next.add(u.id));
                                         return next;
                                       });
                                     }
@@ -1618,11 +1771,20 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
                 const rowBg = isProject
                   ? "linear-gradient(90deg, rgba(26,82,118,0.08), rgba(26,82,118,0.03))"
                   : index % 2 === 0 ? "var(--msp-bg-row-even)" : "var(--msp-bg-row-odd)";
+                const isSelected = editor.isEditing && !!task.unitId && task.unitId === selectedId;
+                const isRenaming = !!task.unitId && renaming?.id === task.unitId;
 
                 return (
                   <div
                     key={task.id}
-                    className="msp-row"
+                    className={isSelected ? "msp-row msp-row-selected" : "msp-row"}
+                    onClick={() => editor.isEditing && setSelectedId(task.unitId ?? null)}
+                    onContextMenu={(e) => {
+                      if (!editor.isEditing || !task.unitId) return;
+                      e.preventDefault();
+                      setSelectedId(task.unitId);
+                      setRowMenu({ x: e.clientX, y: e.clientY });
+                    }}
                     style={{
                       display: "grid",
                       gridTemplateColumns: gridTemplate,
@@ -1677,17 +1839,67 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
                               <span style={{ width: 5, height: 5, borderRadius: "50%", flexShrink: 0, background: "var(--msp-text-muted)", display: "inline-block" }} />
                             )}
 
-                            <span 
-                              onClick={() => task.activityPath && onActivityClick?.(task.activityPath)}
-                              style={{ 
-                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", 
-                                fontSize: isProject ? 12.5 : task.type === "component" ? 12 : 11,
-                                cursor: task.activityPath ? "pointer" : "default",
-                                color: isProject ? MSP_PROJECT_COLOR : "inherit",
-                              }}
-                            >
-                              {task.nom}
-                            </span>
+                            {isRenaming && renaming ? (
+                              <input
+                                autoFocus
+                                value={renaming.value}
+                                onChange={(e) => setRenaming({ id: renaming.id, value: e.target.value })}
+                                onFocus={(e) => e.target.select()}
+                                onBlur={() => finishRename(true)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") finishRename(true);
+                                  if (e.key === "Escape") finishRename(false);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="msp-cell-input"
+                                style={{ flex: 1, minWidth: 0, height: ROW_HEIGHT - 6, padding: "0 4px", border: `2px solid ${MSP_TODAY_COLOR}`, outline: "none", fontSize: 11, fontFamily: "inherit" }}
+                              />
+                            ) : (
+                              <span
+                                onClick={() => !editor.isEditing && task.activityPath && onActivityClick?.(task.activityPath)}
+                                onDoubleClick={() => editor.isEditing && task.unitId && startRename(task.unitId)}
+                                title={!editor.isEditing && task.activityPath ? "Ouvrir la planification" : undefined}
+                                style={{
+                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                  fontSize: isProject ? 12.5 : task.type === "component" ? 12 : 11,
+                                  cursor: editor.isEditing ? "default" : task.activityPath ? "pointer" : "default",
+                                  color: isProject ? MSP_PROJECT_COLOR : "inherit",
+                                }}
+                              >
+                                {task.nom}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // Type : modifiable pour une unité fine tant qu'elle n'est pas planifiée
+                      if (col.id === "type") {
+                        const type = task.type === "activity" ? (task.activityType as ActivityType) : undefined;
+                        const locked = !!task.unitId && plannedIds.has(task.unitId);
+                        return (
+                          <div key={col.id} style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRight: borderStyle, padding: "0 4px", overflow: "hidden" }}>
+                            {type && editor.isEditing && !locked ? (
+                              <select
+                                value={type}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => editor.draft && task.unitId && commit(setUnitType(editor.draft, task.unitId, e.target.value as ActivityType))}
+                                className="msp-cell-input"
+                                style={{ width: "100%", height: ROW_HEIGHT - 6, fontSize: 10.5, border: "1px solid var(--msp-border)", borderRadius: 2 }}
+                              >
+                                {Object.entries(ACTIVITY_TYPE_LABELS).map(([value, label]) => (
+                                  <option key={value} value={value}>{label}</option>
+                                ))}
+                              </select>
+                            ) : type ? (
+                              <span
+                                title={editor.isEditing && locked ? "Planifiée : le type ne peut plus changer" : undefined}
+                                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                              >
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: ACTIVITY_COLORS[type] || MSP_BAR_BLUE }} />
+                                {ACTIVITY_TYPE_LABELS[type] ?? type}
+                              </span>
+                            ) : null}
                           </div>
                         );
                       }
@@ -1870,6 +2082,22 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
           </div>
         </div>
       </div>
+
+      {rowMenu && editor.isEditing && (
+        <StructureRowMenu x={rowMenu.x} y={rowMenu.y} actions={structureActions} onClose={() => setRowMenu(null)} />
+      )}
+
+      <ConfirmDialog
+        isOpen={!!pendingDelete}
+        title="Supprimer de la structure"
+        message={pendingDelete?.message ?? ""}
+        confirmLabel="Supprimer"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete && editor.draft && commit(removeUnit(editor.draft, pendingDelete.id))) setSelectedId(null);
+          setPendingDelete(null);
+        }}
+      />
     </div>
   );
 }
