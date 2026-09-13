@@ -25,6 +25,7 @@ import { toast } from "@/lib/toastStore";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getErrorMessage } from "@/services/api/client";
 import { downloadDocument, getDocumentObjectUrl } from "@/services/api/documentService";
+import { createFolder, deleteFolder, listFolders, type DocumentPhase, type Folder } from "@/services/api/folderService";
 import { getUserDirectory } from "@/lib/userStore";
 import { getCurrentUserId } from "@/lib/authStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -102,6 +103,8 @@ type DocData = {
   files: FileData[];
   lastModif?: string;
   lastModifBy?: string;
+  /** Dossier enregistré sur le serveur ; absent pour un dossier seulement déduit de ses documents. */
+  folderId?: string;
 };
 
 // Helper to derive folder status from its files
@@ -131,6 +134,30 @@ const todayStr = () =>
     month: "short",
     year: "numeric",
   });
+/**
+ * Ajoute aux dossiers déduits des documents ceux enregistrés sur le serveur :
+ * un dossier encore vide reste ainsi visible après rechargement.
+ */
+const mergeFolders = (groups: DocData[], folders: Folder[]): DocData[] => {
+  const merged = groups.map((group) => ({
+    ...group,
+    folderId: folders.find((f) => f.name === group.name)?._id,
+  }));
+  for (const folder of folders) {
+    if (merged.some((group) => group.name === folder.name)) continue;
+    merged.push({
+      name: folder.name,
+      type: "folder",
+      date: formatUploadDate(folder.createdAt),
+      status: "manquant",
+      files: [],
+      desc: "Aucun fichier",
+      folderId: folder._id,
+    });
+  }
+  return merged;
+};
+
 /** Documents du serveur regroupés par dossier, dans l'ordre de dépôt. */
 const groupTrackedByFolder = (docs: TrackedDocument[]): DocData[] => {
   const folderMap = new Map<string, FileData[]>();
@@ -418,16 +445,18 @@ export default function ProjectConfigPage() {
     if (!PROJECT.id) return;
     setIsLoadingDocs(true);
     try {
-      const [etudeTracked, passationTracked, executionTracked, trashed] = await Promise.all([
+      const [etudeTracked, passationTracked, executionTracked, trashed, folders] = await Promise.all([
         getTrackedDocumentsLatest(PROJECT.id, "etude", undefined, context),
         getTrackedDocumentsLatest(PROJECT.id, "passation", undefined, context),
         getTrackedDocumentsLatest(PROJECT.id, "execution", undefined, context),
         getTrashedDocuments(PROJECT.id),
+        listFolders(PROJECT.id, context),
       ]);
+      const foldersOf = (phase: DocumentPhase) => folders.filter((f) => f.phase === phase);
       setTrashedDocs(trashed);
-      setEtudeDocs(groupTrackedByFolder(etudeTracked));
-      setPassationDocs(groupTrackedByFolder(passationTracked));
-      setExecutionDocs(groupTrackedByFolder(executionTracked));
+      setEtudeDocs(mergeFolders(groupTrackedByFolder(etudeTracked), foldersOf("etude")));
+      setPassationDocs(mergeFolders(groupTrackedByFolder(passationTracked), foldersOf("passation")));
+      setExecutionDocs(mergeFolders(groupTrackedByFolder(executionTracked), foldersOf("execution")));
     } catch (error) {
       console.error("Erreur lors du chargement des documents:", error);
       toast.error("Erreur lors du chargement des documents");
@@ -544,20 +573,35 @@ export default function ProjectConfigPage() {
   // ── FILE UPLOAD & FOLDER HANDLER ──
   const handleCreateFolder = async () => {
     if (!createFolderModal || !newFolderName.trim()) return;
-    const [docs, setter] = getPhaseDocsAndSetter(createFolderModal.phase);
+    const [, setter] = getPhaseDocsAndSetter(createFolderModal.phase);
 
-    const newDoc: DocData = {
-      name: newFolderName.trim(),
-      type: "folder",
-      date: todayStr(),
-      status: "manquant",
-      files: [],
-      desc: "Aucun fichier",
-    };
-    setter([...docs, newDoc]);
-    setCreateFolderModal(null);
-    setNewFolderName("");
-    toast.success("Dossier créé");
+    try {
+      // Enregistré sur le serveur : un dossier vide n'existait jusqu'ici que
+      // dans le navigateur et disparaissait au rechargement.
+      const folder = await createFolder({
+        projectId: PROJECT.id,
+        phase: createFolderModal.phase as DocumentPhase,
+        context,
+        name: newFolderName.trim(),
+      });
+      setter((prev) => [
+        ...prev,
+        {
+          name: folder.name,
+          type: "folder",
+          date: todayStr(),
+          status: "manquant",
+          files: [],
+          desc: "Aucun fichier",
+          folderId: folder._id,
+        },
+      ]);
+      setCreateFolderModal(null);
+      setNewFolderName("");
+      toast.success("Dossier créé");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   };
 
   const handleUploadClick = (phase: string, docIdx: number) => {
@@ -721,11 +765,18 @@ export default function ProjectConfigPage() {
     setConfirmDeleteFolder({ phase, docIdx, name: docToDelete.name });
   };
 
-  const confirmDeleteFolder = () => {
-    if (confirmDeleteFolderState) {
-      const [docs, setter] = getPhaseDocsAndSetter(confirmDeleteFolderState.phase);
-      setter((prev) => prev.filter((_, idx) => idx !== confirmDeleteFolderState.docIdx));
-      toast.info(`Dossier supprimé : ${confirmDeleteFolderState.name}`);
+  const confirmDeleteFolder = async () => {
+    if (!confirmDeleteFolderState) return;
+    const { phase, docIdx, name } = confirmDeleteFolderState;
+    const [docs, setter] = getPhaseDocsAndSetter(phase);
+    const folderId = docs[docIdx]?.folderId;
+
+    try {
+      if (folderId) await deleteFolder(folderId);
+      setter((prev) => prev.filter((_, idx) => idx !== docIdx));
+      toast.info(`Dossier supprimé : ${name}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
     }
   };
 
