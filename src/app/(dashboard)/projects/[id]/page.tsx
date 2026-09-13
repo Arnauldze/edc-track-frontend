@@ -14,11 +14,16 @@ import { PROJECT_ROLE_LABELS, PROJECT_ROLE_COLORS, getGrantableRoles, isProjectR
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import AddMemberModal, { type MemberFormData } from "@/components/team/AddMemberModal";
+import { ChangeChefModal } from "@/components/team/ChangeChefModal";
+import { teamService } from "@/services/api/teamService";
+import { getErrorMessage } from "@/services/api/client";
 import { ProjectInfoCard } from "@/components/projects/ProjectInfoCard";
 import { ProjectTeamCard } from "@/components/projects/ProjectTeamCard";
+import { ComponentBudgetInput } from "@/components/projects/ComponentBudgetInput";
+import { allocationStatus, formatShare, round2, shareOf, toFCFA } from "@/lib/componentBudget";
 import { EditProjectInfoModal } from "@/components/projects/EditProjectInfoModal";
 import { usePermissions } from "@/hooks/usePermissions";
-import { CURRENCIES, DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
+import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 import { formatMoney } from "@/lib/utils";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 
@@ -53,7 +58,7 @@ export default function ProjectConfigPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = typeof params.id === "string" ? params.id : Array.isArray(params.id) ? params.id[0] : "";
-  
+
   // Navigation guard
   const { blockNavigation, unblockNavigation } = useNavigationGuard();
 
@@ -81,7 +86,6 @@ export default function ProjectConfigPage() {
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<string | null>(null);
   const [showStructureHelp, setShowStructureHelp] = useState(false);
-  const [showAllComponentWeights, setShowAllComponentWeights] = useState(false);
 
   // ── Delete project state ──
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -148,6 +152,7 @@ export default function ProjectConfigPage() {
   // Lignes d'équipe modifiables : rôle que l'utilisateur est autorisé à attribuer
   // (un chef de projet gère ses contributeurs ; l'admin gère tout).
   const grantableRoles = getGrantableRoles(isAdmin, roles);
+  const [showChangeChef, setShowChangeChef] = useState(false);
   const canManageAssignment = (role: string) => isProjectRole(role) && grantableRoles.includes(role);
 
   const reloadTeam = useCallback(async () => {
@@ -179,6 +184,14 @@ export default function ProjectConfigPage() {
     reloadTeam();
   }, [reloadTeam]);
 
+  // Un projet n'a qu'un chef ; plusieurs subsistent sur des données antérieures à la règle.
+  const currentChefs = teamAssignments
+    .filter((a) => a.projectRole === "chef_projet" && a.activeInProject)
+    .map((a) => {
+      const u = teamUsers.get(a.userId);
+      return { userId: a.userId, name: u ? `${u.firstName} ${u.lastName}` : "Utilisateur inconnu" };
+    });
+
   const openInviteModal = () => {
     setEditingAssignment(null);
     setShowAddModal(true);
@@ -188,7 +201,7 @@ export default function ProjectConfigPage() {
 
   // ── Auto-save local (localStorage) ──
   const DRAFT_KEY = `project-structure-draft-${projectId}`;
-  
+
   // Sauvegarder dans localStorage avec debounce
   useEffect(() => {
     if (isEditingStructure && hasChanges) {
@@ -215,7 +228,7 @@ export default function ProjectConfigPage() {
           const draftDate = new Date(draft.timestamp);
           const now = new Date();
           const diffMinutes = Math.floor((now.getTime() - draftDate.getTime()) / 60000);
-          
+
           if (diffMinutes < 60) { // Draft de moins d'1 heure
             const restore = confirm(
               `Une modification non enregistrée a été trouvée (${diffMinutes} minute(s) ago).\n\nVoulez-vous la restaurer ?`
@@ -281,7 +294,14 @@ export default function ProjectConfigPage() {
   const handleSaveStructure = async () => {
     console.log('💾 Début sauvegarde, components:', components);
     try {
-      const result = await updateProject(projectId, { components });
+      // La pondération enregistrée est la part du budget financé, déduite du montant.
+      const withWeights = components.map((c) => ({
+        ...c,
+        ponderation: hasProjectBudget
+          ? Math.min(100, round2(shareOf(toFCFA(c.budget, c.devise, exchangeRates), projectBudgetFCFA)))
+          : c.ponderation,
+      }));
+      const result = await updateProject(projectId, { components: withWeights });
       console.log('✅ Résultat sauvegarde:', result);
 
       // Recharger le projet depuis le backend pour s'assurer d'avoir les données à jour
@@ -338,19 +358,6 @@ export default function ProjectConfigPage() {
     setComponents(prev => prev.map((c, i) => i === idx ? { ...c, name } : c));
     markChanged();
   };
-  const updateComponentBudget = (idx: number, budget: string) => {
-    if (!isEditingStructure) return;
-    setComponents(prev => prev.map((c, i) => i === idx ? { ...c, budget: budget ? parseFloat(budget) : undefined } : c));
-    markChanged();
-  };
-
-  // Devise par composant
-  const updateComponentDevise = (idx: number, devise: string) => {
-    if (!isEditingStructure) return;
-    setComponents(prev => prev.map((c, i) => i === idx ? { ...c, devise } : c));
-    markChanged();
-  };
-
   // TypeActivite pour composantes et sous-composantes
   const updateComponentType = (idx: number, typeActivite: string) => {
     setComponents(prev => prev.map((c, i) => i === idx ? { ...c, typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' } : c));
@@ -556,23 +563,23 @@ export default function ProjectConfigPage() {
   const projectBudgetFCFA = project?.budget
     ? project.budget * (exchangeRates[project.devise || 'FCFA'] || 1)
     : 0;
+  // Référence des pourcentages : le budget financé. Sans financement, les parts
+  // se calculent sur le total réparti, faute de mieux, et l'écran le signale.
+  const hasProjectBudget = projectBudgetFCFA > 0;
   const budgetTotalFCFA = projectBudgetFCFA || allocatedBudgetFCFA;
-  const totalPonderation = budgetTotalFCFA > 0 ? (allocatedBudgetFCFA / budgetTotalFCFA) * 100 : 0;
+  const totalPonderation = shareOf(allocatedBudgetFCFA, budgetTotalFCFA);
   const remainingBudgetFCFA = Math.max(budgetTotalFCFA - allocatedBudgetFCFA, 0);
+  const status = hasProjectBudget ? allocationStatus(allocatedBudgetFCFA, projectBudgetFCFA) : "undefined";
+  const statusColor =
+    status === "balanced" ? "text-green-600" : status === "over" ? "text-red-500" : status === "under" ? "text-orange-600" : "text-[var(--text-secondary)]";
+  const statusBar =
+    status === "balanced" ? "bg-green-500" : status === "over" ? "bg-red-500" : status === "under" ? "bg-orange-500" : "bg-[var(--text-tertiary)]";
   const weightedComponents = components.map((component, index) => {
     const devise = component.devise || 'FCFA';
     const budget = component.budget || 0;
-    const budgetFCFA = budget * (exchangeRates[devise] || 1);
-    return {
-      component,
-      index,
-      devise,
-      budget,
-      budgetFCFA,
-      percentage: budgetTotalFCFA > 0 ? (budgetFCFA / budgetTotalFCFA) * 100 : 0,
-    };
+    const budgetFCFA = toFCFA(budget, devise, exchangeRates);
+    return { component, index, devise, budget, budgetFCFA, percentage: shareOf(budgetFCFA, budgetTotalFCFA) };
   });
-  const displayedWeightedComponents = showAllComponentWeights ? weightedComponents : weightedComponents.slice(0, 3);
   const usedExchangeRates = Object.entries(exchangeRates)
     .filter(([devise]) => devise !== 'FCFA' && budgetParDevise[devise])
     .map(([devise, rate]) => `1 ${devise} = ${rate.toLocaleString('fr-FR')} FCFA`)
@@ -745,14 +752,12 @@ export default function ProjectConfigPage() {
                 {/* En-tête fixe avec compteurs, hover info et bouton d'action */}
                 <div className="sticky -top-6 z-20 bg-[var(--bg-root)] py-2.5 border-b border-[var(--border-default)] flex flex-wrap items-center justify-between gap-3 shadow-xs">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] text-[var(--text-secondary)]">
-                      <strong className="text-[var(--text-primary)]">{components.length}</strong> composants
-                    </span>
-                    <span className="px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] text-[var(--text-secondary)]">
-                      <strong className="text-[var(--text-primary)]">{totalSC}</strong> sous-composants
-                    </span>
-                    <span className="px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] text-[var(--text-secondary)]">
-                      <strong className="text-[var(--text-primary)]">{totalActivities}</strong> activités
+                    <span className="text-[12px] text-[var(--text-secondary)]">
+                      <strong className="text-[var(--text-primary)]">{components.length}</strong> composant{components.length > 1 ? "s" : ""}
+                      <span className="mx-1.5 text-[var(--text-tertiary)]">·</span>
+                      <strong className="text-[var(--text-primary)]">{totalSC}</strong> sous-composant{totalSC > 1 ? "s" : ""}
+                      <span className="mx-1.5 text-[var(--text-tertiary)]">·</span>
+                      <strong className="text-[var(--text-primary)]">{totalActivities}</strong> activité{totalActivities > 1 ? "s" : ""}
                     </span>
 
                     {/* Types & navigation - Info sur hover */}
@@ -815,17 +820,16 @@ export default function ProjectConfigPage() {
                 </div>
 
                 {/* Arbre des composants */}
-                <div className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] p-4 space-y-3">
+                <div className="space-y-3">
                     {components.map((comp, ci) => (
-                      <div key={comp.id} className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] p-4">
+                      <div key={comp.id} className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3.5">
                         {/* Component header */}
-                        <div className="flex items-center gap-2">
-                          {/* Collapse toggle for component */}
+                        <div className="flex items-start gap-2">
                           {comp.sousComposants.length > 0 ? (
                             <button
                               type="button"
                               onClick={() => toggleComponent(ci)}
-                              className="p-0.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-all flex-shrink-0"
+                              className="mt-1 p-0.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-surface-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-all flex-shrink-0"
                               title={collapsedComponents.has(ci) ? "Déplier" : "Replier"}
                             >
                               <ChevronRight size={16} className={`transition-transform duration-200 ${collapsedComponents.has(ci) ? '' : 'rotate-90'}`} />
@@ -833,98 +837,79 @@ export default function ProjectConfigPage() {
                           ) : (
                             <div className="w-[20px] flex-shrink-0" />
                           )}
-                          <div className="w-7 h-7 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
+                          <div className="mt-0.5 w-7 h-7 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
 
-                          {/* MODE LECTURE */}
-                          {!isEditingStructure ? (
-                            <>
-                              <div className="flex-1 min-w-0 px-1 py-1">
-                                <span className="text-[14px] font-bold text-[var(--text-primary)]">{comp.name || "Sans nom"}</span>
-                              </div>
-
-                              {/* Budget et pondération calculée */}
-                              {comp.budget !== undefined && comp.budget !== null ? (
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-inset)] rounded-[var(--radius-sm)] border border-[var(--border-default)] flex-shrink-0">
-                                  <span className="text-[12px] font-bold text-[var(--text-primary)]">
-                                    {formatMoney(comp.budget, 2)} {comp.devise || 'FCFA'}
-                                  </span>
-                                  {budgetTotalFCFA > 0 && (
-                                    <span className="text-[11px] font-semibold text-green-600">
-                                      ({(() => {
-                                        const rate = exchangeRates[comp.devise || 'FCFA'] || 1;
-                                        const budgetFCFA = comp.budget * rate;
-                                        const percentage = (budgetFCFA / budgetTotalFCFA) * 100;
-                                        return percentage.toFixed(2);
-                                      })()}%)
-                                    </span>
-                                  )}
-                                </div>
+                          <div className="flex-1 min-w-0">
+                            {/* Ligne 1 : nom, type, actions */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {!isEditingStructure ? (
+                                <span className="flex-1 min-w-0 text-[14px] font-bold text-[var(--text-primary)] py-1 break-words">{comp.name || "Sans nom"}</span>
                               ) : (
-                                <div className="px-2 py-1 text-[10px] text-orange-600 bg-orange-50 rounded border border-orange-200">
-                                  Budget non défini
-                                </div>
+                                <input
+                                  type="text"
+                                  value={comp.name}
+                                  onChange={e => updateComponentName(ci, e.target.value)}
+                                  placeholder="Nom du composant..."
+                                  className="flex-1 min-w-[12rem] bg-transparent border-b-2 border-[var(--border-subtle)] hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors"
+                                />
                               )}
 
-                              {/* Type d'activité (si niveau le plus bas) */}
-                              {isComponentLowestLevel(comp) && comp.typeActivite && (
-                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${ACTIVITY_TYPES.find(t => t.id === comp.typeActivite)?.bgColor || ACTIVITY_TYPES[0].bgColor}`}>
-                                  <div className={`w-1.5 h-1.5 rounded-full ${ACTIVITY_TYPES.find(t => t.id === comp.typeActivite)?.color || ACTIVITY_TYPES[0].color}`} />
-                                  {ACTIVITY_TYPES.find(t => t.id === comp.typeActivite)?.label || "Travaux"}
+                              {isComponentLowestLevel(comp) && (
+                                !isEditingStructure ? (
+                                  comp.typeActivite && (
+                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${ACTIVITY_TYPES.find(t => t.id === comp.typeActivite)?.bgColor || ACTIVITY_TYPES[0].bgColor}`}>
+                                      <div className={`w-1.5 h-1.5 rounded-full ${ACTIVITY_TYPES.find(t => t.id === comp.typeActivite)?.color || ACTIVITY_TYPES[0].color}`} />
+                                      {ACTIVITY_TYPES.find(t => t.id === comp.typeActivite)?.label || "Travaux"}
+                                    </span>
+                                  )
+                                ) : (
+                                  <select value={comp.typeActivite || "travaux"} onChange={e => updateComponentType(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[11px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] cursor-pointer max-w-[11rem]">
+                                    {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
+                                  </select>
+                                )
+                              )}
+
+                              {collapsedComponents.has(ci) && comp.sousComposants.length > 0 && (
+                                <span className="text-[10px] font-semibold text-[var(--text-tertiary)] bg-[var(--bg-inset)] px-2 py-0.5 rounded-full">
+                                  {comp.sousComposants.length} SC · {comp.sousComposants.reduce((sum, sc) => sum + sc.activities.length, 0)} Act.
                                 </span>
                               )}
-                            </>
-                          ) : (
-                            /* MODE ÉDITION */
-                            <>
-                              <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '200px' }} />
 
-                              {/* Budget + Devise */}
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                <div className="relative w-[140px]">
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={comp.budget ? formatMoney(comp.budget, 2) : ''}
-                                    onChange={e => {
-                                      const raw = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
-                                      updateComponentBudget(ci, raw);
-                                    }}
-                                    placeholder="0,00"
-                                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[11px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                  />
+                              {isEditingStructure && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button type="button" onClick={() => demoteComponent(ci)} disabled={ci === 0} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
+                                  <button type="button" onClick={() => removeComponent(ci)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={16} /></button>
                                 </div>
-                                <select value={comp.devise || "FCFA"} onChange={e => updateComponentDevise(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] cursor-pointer w-[75px] flex-shrink-0">
-                                  {CURRENCIES.map(curr => (<option key={curr.code} value={curr.code}>{curr.code}</option>))}
-                                </select>
-                              </div>
-
-                              {/* Pondération calculée en temps réel */}
-                              <div className="px-2.5 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-surface-hover)] text-[11px] font-bold text-[var(--text-primary)] whitespace-nowrap flex-shrink-0">
-                                {budgetTotalFCFA > 0 && comp.budget ? (() => {
-                                  const rate = exchangeRates[comp.devise || 'FCFA'] || 1;
-                                  return ((comp.budget * rate / budgetTotalFCFA) * 100).toFixed(2);
-                                })() : '0.00'}%
-                              </div>
-                              {/* Type d'activité (si niveau le plus bas) */}
-                              {isComponentLowestLevel(comp) && (
-                                <select value={comp.typeActivite || "travaux"} onChange={e => updateComponentType(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] cursor-pointer w-[140px] flex-shrink-0">
-                                  {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
-                                </select>
                               )}
-                              {/* Boutons d'action — ordre uniforme : (monter) → (descendre) → (supprimer), gap-2 = 8px, icônes 16px */}
-                              <div className="flex items-center gap-2 flex-shrink-0 ml-1 border-l border-[var(--border-subtle)] pl-2">
-                                <button type="button" onClick={() => demoteComponent(ci)} disabled={ci === 0} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
-                                <button type="button" onClick={() => removeComponent(ci)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={16} /></button>
-                              </div>
-                            </>
-                          )}
+                            </div>
 
-                          {/* Collapsed count badge */}
-                          {collapsedComponents.has(ci) && comp.sousComposants.length > 0 && (
-                            <span className="text-[9px] font-bold text-[var(--text-tertiary)] bg-[var(--bg-inset)] px-2 py-0.5 rounded-full border border-[var(--border-default)] flex-shrink-0">
-                              {comp.sousComposants.length} SC · {comp.sousComposants.reduce((s, sc) => s + sc.activities.length, 0)} Act.
-                            </span>
-                          )}
+                            {/* Ligne 2 : budget — montant ou pourcentage */}
+                            <div className="mt-1.5">
+                              {isEditingStructure ? (
+                                <ComponentBudgetInput
+                                  budget={comp.budget}
+                                  devise={comp.devise}
+                                  referenceFCFA={projectBudgetFCFA}
+                                  rates={exchangeRates}
+                                  onChange={({ budget, devise }) => {
+                                    setComponents(prev => prev.map((c, i) => i === ci ? { ...c, budget, devise } : c));
+                                    markChanged();
+                                  }}
+                                />
+                              ) : comp.budget ? (
+                                <span className="text-[12px] text-[var(--text-secondary)] tabular-nums">
+                                  <span className="font-semibold text-[var(--text-primary)]">{formatMoney(comp.budget, 2)} {comp.devise || 'FCFA'}</span>
+                                  {budgetTotalFCFA > 0 && (
+                                    <span className="ml-2 text-[var(--text-tertiary)]">
+                                      {formatShare(shareOf(toFCFA(comp.budget, comp.devise, exchangeRates), budgetTotalFCFA))} du budget
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-medium text-amber-600">Budget non défini</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
                         {/* Sous-composants */}
@@ -998,7 +983,7 @@ export default function ProjectConfigPage() {
                                       const actType = getActivityType(act);
                                       const typeInfo = ACTIVITY_TYPES.find(t => t.id === actType) || ACTIVITY_TYPES[0];
                                       return (
-                                        <div key={ai} className="flex items-center gap-1.5 py-0.5 group">
+                                        <div key={ai} className="flex flex-wrap items-center gap-1.5 py-0.5 group">
                                           <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${typeInfo.color}`} />
 
                                           {/* MODE LECTURE */}
@@ -1044,7 +1029,7 @@ export default function ProjectConfigPage() {
 
                                     {/* Add activity with type dropdown (uniquement en mode édition) */}
                                     {isEditingStructure && (
-                                      <div className="flex items-center gap-1.5 mt-1 py-1">
+                                      <div className="flex flex-wrap items-center gap-1.5 mt-1 py-1">
                                         <button type="button" onClick={() => addActivity(ci, si, "travaux")} className="flex items-center gap-1 text-[10px] font-medium text-[var(--accent)] hover:underline"><Plus size={10} /> Activité</button>
                                         <span className="text-[var(--text-tertiary)] text-[9px]">—</span>
                                         {ACTIVITY_TYPES.map(t => (
@@ -1080,120 +1065,76 @@ export default function ProjectConfigPage() {
                   </div>
                 </div>
 
-              {/* SIDEBAR (Budget & Pondération Totale & Répartition) */}
-              <aside className="order-2 xl:order-2 xl:sticky xl:top-6 xl:max-h-[calc(100vh-6rem)] flex flex-col gap-2.5">
-                {/* CARTE 1 : Budget total — Disposition horizontale (conforme à la maquette) */}
-                <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-[var(--radius-lg)] p-3.5 flex-shrink-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-bold text-green-700 dark:text-green-400 uppercase tracking-wider">
-                        Budget total
-                      </div>
-                      <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5 truncate">
-                        {usedExchangeRates ? usedExchangeRates : 'Montant de référence'}
-                      </div>
-                    </div>
-                    <div className="text-[17px] font-bold tracking-tight text-green-700 dark:text-green-400 whitespace-nowrap flex-shrink-0">
-                      {formatMoney(budgetTotalFCFA, 2)} FCFA
-                    </div>
+              {/* SIDEBAR : synthèse budgétaire */}
+              <aside className="order-2 xl:sticky xl:top-6 xl:max-h-[calc(100vh-6rem)] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] overflow-hidden">
+                {/* Budget financé */}
+                <div className="px-4 py-3.5 border-b border-[var(--border-subtle)]">
+                  <div className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">Budget total</div>
+                  <div className="mt-1 text-[18px] font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
+                    {formatMoney(budgetTotalFCFA, 2)} FCFA
+                  </div>
+                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">
+                    {!hasProjectBudget
+                      ? "Financement non renseigné : total des composants"
+                      : usedExchangeRates || "Montant financé du projet"}
                   </div>
                 </div>
 
-                {/* CARTE 2 : Pondération totale */}
-                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] shadow-sm flex-shrink-0 p-3.5">
-                  <div className="space-y-1.5">
-                    {/* Ligne 1 : Titre + % */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-                        Pondération totale
-                      </span>
-                      <span className={`text-xl font-bold ${Math.abs(totalPonderation - 100) < 0.01 ? 'text-green-600' : 'text-red-500'}`}>
-                        {totalPonderation.toFixed(2)}%
-                      </span>
-                    </div>
-
-                    {/* Ligne 2 : Barre */}
-                    <div className="h-1.5 rounded-full bg-[var(--bg-inset)] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          totalPonderation > 100 ? 'bg-red-500' : totalPonderation === 100 ? 'bg-green-500' : 'bg-orange-500'
-                        }`}
-                        style={{ width: `${Math.min(totalPonderation, 100)}%` }}
-                      />
-                    </div>
-
-                    {/* Ligne 3 : Montant réparti / Budget total */}
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-[var(--text-primary)]">
-                        {formatMoney(allocatedBudgetFCFA, 2)} FCFA
-                      </span>
-                      <span className="text-[var(--text-tertiary)] font-medium">
-                        / {formatMoney(budgetTotalFCFA, 2)} FCFA
-                      </span>
-                    </div>
-
-                    {/* Ligne 4 : Alerte */}
-                    {remainingBudgetFCFA > 0 ? (
-                      <div className="text-[11px] font-medium text-red-500 flex items-center gap-1.5 pt-0.5">
-                        <AlertCircle size={12} className="flex-shrink-0 text-red-500" />
-                        <span>
-                          Reste <strong>{formatMoney(remainingBudgetFCFA, 2)} FCFA</strong> à affecter ({Math.max(0, 100 - totalPonderation).toFixed(2)}%)
-                        </span>
-                      </div>
-                    ) : totalPonderation > 100 ? (
-                      <div className="text-[11px] font-medium text-red-500 flex items-center gap-1.5 pt-0.5">
-                        <AlertCircle size={12} className="flex-shrink-0 text-red-500" />
-                        <span>
-                          Dépassement de <strong>{formatMoney(allocatedBudgetFCFA - budgetTotalFCFA, 2)} FCFA</strong> ({(totalPonderation - 100).toFixed(2)}%)
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="text-[11px] font-medium text-green-600 flex items-center gap-1.5 pt-0.5">
-                        <span>✓ Budget équilibré (100%)</span>
-                      </div>
+                {/* Répartition globale */}
+                <div className="px-4 py-3.5 border-b border-[var(--border-subtle)] space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">Pondération totale</span>
+                    <span className={`text-lg font-bold tabular-nums ${statusColor}`}>{formatShare(totalPonderation)}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-[var(--bg-inset)] overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-300 ${statusBar}`} style={{ width: `${Math.min(totalPonderation, 100)}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] tabular-nums">
+                    <span className="font-semibold text-[var(--text-primary)]">{formatMoney(allocatedBudgetFCFA, 2)} FCFA</span>
+                    <span className="text-[var(--text-tertiary)]">/ {formatMoney(budgetTotalFCFA, 2)} FCFA</span>
+                  </div>
+                  <div className={`text-[11px] font-medium flex items-start gap-1.5 ${statusColor}`}>
+                    {status === "balanced" && <span>✓ Budget entièrement réparti</span>}
+                    {status === "under" && (
+                      <>
+                        <AlertCircle size={12} className="flex-shrink-0 mt-px" />
+                        <span>Reste <strong>{formatMoney(remainingBudgetFCFA, 2)} FCFA</strong> à répartir ({formatShare(100 - totalPonderation)})</span>
+                      </>
                     )}
+                    {status === "over" && (
+                      <>
+                        <AlertCircle size={12} className="flex-shrink-0 mt-px" />
+                        <span>Dépassement de <strong>{formatMoney(allocatedBudgetFCFA - budgetTotalFCFA, 2)} FCFA</strong> ({formatShare(totalPonderation - 100)})</span>
+                      </>
+                    )}
+                    {status === "undefined" && <span>Renseignez le financement pour contrôler la répartition.</span>}
                   </div>
                 </div>
 
-                {/* CARTE 3 : Répartition par composante */}
-                <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] shadow-sm flex flex-col min-h-0 flex-1 p-3.5">
-                  <div className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-2.5 flex-shrink-0">
-                    Répartition par composante
-                  </div>
-
-                  {/* Liste scrollable */}
-                  <div className="overflow-y-auto flex-1 min-h-0 space-y-2 pr-1">
+                {/* Par composant */}
+                <div className="px-4 py-3.5 flex flex-col min-h-0 flex-1">
+                  <div className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-2.5">Répartition par composante</div>
+                  <div className="overflow-y-auto min-h-0 space-y-2.5 pr-1">
                     {weightedComponents.map(({ component, index, budget, devise, percentage }) => (
-                      <div key={component.id} className="pb-2 border-b border-[var(--border-subtle)] last:border-b-0 last:pb-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span className={`w-6 h-5 flex items-center justify-center rounded-[var(--radius-sm)] text-[9px] font-bold flex-shrink-0 ${budget > 0 ? 'bg-blue-500/15 text-blue-500' : 'bg-red-500/10 text-red-500'}`}>
-                              C{index + 1}
-                            </span>
-                            <span className={`truncate text-[12px] font-semibold ${budget > 0 ? 'text-[var(--text-primary)]' : 'text-red-500'}`}>
-                              {component.name || 'Sans nom'}
-                            </span>
-                          </div>
-                          <span className={`text-[12px] font-bold flex-shrink-0 ${budget > 0 ? 'text-[var(--text-primary)]' : 'text-red-500'}`}>
-                            {percentage.toFixed(2)}%
+                      <div key={component.id}>
+                        <div className="flex items-center justify-between gap-2 text-[12px]">
+                          <span className={`truncate font-semibold ${budget > 0 ? 'text-[var(--text-primary)]' : 'text-amber-600'}`}>
+                            <span className="text-[10px] font-bold text-blue-500 mr-1.5">C{index + 1}</span>
+                            {component.name || 'Sans nom'}
                           </span>
+                          <span className="font-bold tabular-nums flex-shrink-0 text-[var(--text-primary)]">{formatShare(percentage)}</span>
                         </div>
-                        <div className={`mt-0.5 text-[11px] ${budget > 0 ? 'text-[var(--text-tertiary)]' : 'text-red-500'}`}>
-                          {budget > 0 ? `${formatMoney(budget, 2)} ${devise}` : '0,00 FCFA — non défini'}
-                        </div>
-                        <div className="mt-1 h-1 rounded-full bg-[var(--bg-inset)] overflow-hidden">
-                          <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.min(percentage, 100)}%` }} />
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex-1 h-1 rounded-full bg-[var(--bg-inset)] overflow-hidden">
+                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.min(percentage, 100)}%` }} />
+                          </div>
+                          <span className={`text-[10px] tabular-nums flex-shrink-0 ${budget > 0 ? 'text-[var(--text-tertiary)]' : 'text-amber-600'}`}>
+                            {budget > 0 ? `${formatMoney(budget, 2)} ${devise}` : 'non défini'}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
-
-                  {/* Indicateur de défilement */}
-                  {weightedComponents.length > 4 && (
-                    <div className="pt-2 text-[10px] text-center text-[var(--text-tertiary)] flex items-center justify-center gap-1 font-medium border-t border-[var(--border-subtle)] flex-shrink-0 mt-1">
-                      <span>↕</span> défiler pour voir les {weightedComponents.length - 4} restantes
-                    </div>
-                  )}
                 </div>
               </aside>
             </div>
@@ -1219,16 +1160,36 @@ export default function ProjectConfigPage() {
                 />
               </div>
 
-              {can("team:add") && (
-                <button
-                  onClick={openInviteModal}
-                  className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
-                >
-                  <Plus size={16} />
-                  Ajouter un membre
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {can("team:edit") && grantableRoles.includes("chef_projet") && (
+                  <button
+                    onClick={() => setShowChangeChef(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] rounded-[var(--radius-md)] text-sm font-semibold hover:bg-[var(--bg-surface-hover)] transition-colors"
+                  >
+                    Changer le chef de projet
+                  </button>
+                )}
+                {can("team:add") && (
+                  <button
+                    onClick={openInviteModal}
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                  >
+                    <Plus size={16} />
+                    Ajouter un membre
+                  </button>
+                )}
+              </div>
             </div>
+
+            {currentChefs.length > 1 && (
+              <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>
+                  Ce projet a {currentChefs.length} chefs de projet ({currentChefs.map((c) => c.name).join(", ")}).
+                  Un projet n&apos;en a qu&apos;un : désignez-le avec « Changer le chef de projet ».
+                </span>
+              </div>
+            )}
 
             {/* Team table */}
             <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden shadow-sm">
@@ -1377,8 +1338,18 @@ export default function ProjectConfigPage() {
           }
 
           try {
-            if (editingAssignment) {
-              await removeTeamAssignment(editingAssignment._id);
+            if (editingAssignment && editingAssignment.userId === data.userId) {
+              // Modification sur place. L'ancienne méthode (supprimer puis
+              // recréer) retirait le membre si la recréation était refusée.
+              await teamService.update(editingAssignment._id, {
+                projectRole: data.projectRole,
+                level: data.level,
+                entityId: data.entityId,
+                entityName: data.entityName,
+              });
+              toast.success("Affectation modifiée");
+            } else if (editingAssignment) {
+              // Autre personne : l'ajouter d'abord, retirer l'ancienne ensuite.
               await addTeamAssignment({
                 projectId,
                 userId: data.userId,
@@ -1387,6 +1358,7 @@ export default function ProjectConfigPage() {
                 entityId: data.entityId,
                 entityName: data.entityName,
               });
+              await removeTeamAssignment(editingAssignment._id);
               toast.success("Affectation modifiée");
             } else {
               await addTeamAssignment({
@@ -1407,12 +1379,21 @@ export default function ProjectConfigPage() {
             setEditingAssignment(null);
           } catch (error) {
             console.error('Error saving team assignment:', error);
-            toast.error("Erreur lors de l'enregistrement");
+            toast.error(getErrorMessage(error));
           }
         }}
         projectId={projectId}
         project={project}
         editingAssignment={editingAssignment}
+        currentChef={currentChefs[0] ?? null}
+      />
+
+      <ChangeChefModal
+        isOpen={showChangeChef}
+        projectId={projectId}
+        currentChefs={currentChefs}
+        onClose={() => setShowChangeChef(false)}
+        onChanged={reloadTeam}
       />
 
       {/* Modal de confirmation de suppression de membre */}

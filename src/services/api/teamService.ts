@@ -30,6 +30,15 @@ export interface CreateTeamAssignmentDto {
   assignedBy?: string;
 }
 
+export type PreviousChefOutcome = 'contributeur' | 'retire';
+
+export interface UpdateTeamAssignmentDto {
+  projectRole?: ProjectRole;
+  level?: 'project' | 'component' | 'subcomponent' | 'activity';
+  entityId?: string;
+  entityName?: string;
+}
+
 export const teamService = {
   /**
    * Assign member to project
@@ -67,6 +76,21 @@ export const teamService = {
       `/team/${id}/deactivate`
     );
     return response.data.data!;
+  },
+
+  /**
+   * Modifie une affectation (rôle, niveau, entité) sans la recréer.
+   */
+  async update(id: string, data: UpdateTeamAssignmentDto): Promise<TeamAssignment> {
+    const response = await apiClient.patch<ApiResponse<TeamAssignment>>(`/team/${id}`, data);
+    return response.data.data!;
+  },
+
+  /**
+   * Désigne le chef de projet ; l'ancien reste contributeur ou est retiré.
+   */
+  async changeChef(projectId: string, userId: string, previousChef: PreviousChefOutcome): Promise<void> {
+    await apiClient.post(`/team/project/${projectId}/chef`, { userId, previousChef });
   },
 
   /**

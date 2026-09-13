@@ -12,6 +12,8 @@ import { FinancementEditor } from "@/components/financing/FinancementEditor";
 import { computeFinancementPreview, emptyFinancement, financementToPayload, validateFinancement, type FinancementFormValue } from "@/lib/financement";
 import { CAMEROON_DATA, CITY_COORDS, REGIONS } from "@/lib/cameroonGeo";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { ComponentBudgetInput } from "@/components/projects/ComponentBudgetInput";
+import { allocationStatus, formatShare, round2, shareOf, toFCFA } from "@/lib/componentBudget";
 
 type ConfirmState = {
   type: "component" | "subcomponent" | "activity";
@@ -297,11 +299,11 @@ export default function NewProjectPage() {
     const [components, setComponents] = useState<ComponentData[]>([
         { id: "c1", name: "Barrage", budget: 0, devise: "FCFA", ponderation: 0, sousComposants: [{ id: "sc1", name: "Fondations", activities: [{ name: "Fouilles", typeActivite: "travaux" }, { name: "Béton de propreté", typeActivite: "travaux" }] }] },
     ]);
-    
+
     // États pour gérer le pliage/dépliage dans l'arborescence (Step 5)
     const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
     const [expandedSousComposants, setExpandedSousComposants] = useState<Set<string>>(new Set());
-    
+
     // Initialiser tous les éléments comme dépliés par défaut
     useEffect(() => {
         const allCompIds = new Set(components.map(c => c.id));
@@ -309,7 +311,7 @@ export default function NewProjectPage() {
         setExpandedComponents(allCompIds);
         setExpandedSousComposants(allScIds);
     }, [components]);
-    
+
     const toggleComponent = (compId: string) => {
         setExpandedComponents(prev => {
             const newSet = new Set(prev);
@@ -321,7 +323,7 @@ export default function NewProjectPage() {
             return newSet;
         });
     };
-    
+
     const toggleSousComposant = (scId: string) => {
         setExpandedSousComposants(prev => {
             const newSet = new Set(prev);
@@ -356,9 +358,9 @@ export default function NewProjectPage() {
             if (i !== compIdx) return c;
             // Quand on ajoute une sous-composante, retirer le typeActivite de la composante
             const { typeActivite, ...compWithoutType } = c;
-            return { 
-                ...compWithoutType, 
-                sousComposants: [...c.sousComposants, { id: `sc${Date.now()}`, name: "", activities: [] }] 
+            return {
+                ...compWithoutType,
+                sousComposants: [...c.sousComposants, { id: `sc${Date.now()}`, name: "", activities: [] }]
             };
         }));
     };
@@ -429,23 +431,12 @@ export default function NewProjectPage() {
         });
     };
 
-    // Budget par composant
-    const updateComponentBudget = (idx: number, budget: string) => {
-        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, budget: budget ? parseFloat(budget) : undefined } : c));
+    // Budget d'un composant : montant ou pourcentage, l'un déduit de l'autre.
+    // La pondération était saisie à part, sans lien avec le montant ; la fiche
+    // projet la calculait à partir du montant et affichait donc une autre valeur.
+    const updateComponentBudget = (idx: number, value: { budget?: number; devise: string }) => {
+        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, budget: value.budget, devise: value.devise } : c));
     };
-
-    // Devise par composant
-    const updateComponentDevise = (idx: number, devise: string) => {
-        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, devise } : c));
-    };
-
-    // Pondération par composant
-    const updateComponentPonderation = (idx: number, ponderation: string) => {
-        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, ponderation: ponderation ? parseFloat(ponderation) : undefined } : c));
-    };
-
-    // Calculer le total des pondérations
-    const totalPonderation = components.reduce((sum, c) => sum + (c.ponderation || 0), 0);
 
     // Calculer le budget total par devise
     const budgetParDevise = components.reduce((acc, c) => {
@@ -463,6 +454,10 @@ export default function NewProjectPage() {
         }
         return sum;
     }, 0);
+
+    // Pondération totale : part du budget financé (étape 3) couverte par les composants.
+    const totalPonderation = shareOf(budgetTotalFCFA, financementPreview.total);
+    const allocation = allocationStatus(budgetTotalFCFA, financementPreview.total);
 
     // TypeActivite pour composantes et sous-composantes
     const updateComponentType = (idx: number, typeActivite: string) => {
@@ -589,6 +584,11 @@ export default function NewProjectPage() {
                     id: comp.id,
                     name: comp.name,
                     budget: comp.budget ? parseFloat(comp.budget.toString()) : undefined,
+                    // La devise n'était pas envoyée : un budget en EUR était enregistré en FCFA.
+                    devise: comp.devise || "FCFA",
+                    ponderation: financementPreview.total > 0
+                        ? Math.min(100, round2(shareOf(toFCFA(comp.budget, comp.devise, financement.tauxChange), financementPreview.total)))
+                        : undefined,
                     typeActivite: comp.typeActivite,
                     sousComposants: comp.sousComposants.map(sc => ({
                         id: sc.id,
@@ -784,14 +784,18 @@ export default function NewProjectPage() {
                                 {/* Total pondération */}
                                 <div className="mt-3 pt-3 border-t border-green-500/20 flex items-center justify-between">
                                     <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Total des pondérations :</span>
-                                    <span className={`text-[13px] font-bold ${totalPonderation === 100 ? 'text-green-600' : totalPonderation > 100 ? 'text-red-600' : 'text-orange-600'}`}>
-                                        {totalPonderation.toFixed(2)}%
-                                        {totalPonderation === 100 && <CheckCircle2 size={14} className="inline ml-1" />}
+                                    <span className={`text-[13px] font-bold ${allocation === 'balanced' ? 'text-green-600' : allocation === 'over' ? 'text-red-600' : 'text-orange-600'}`}>
+                                        {allocation === 'undefined' ? '—' : formatShare(totalPonderation)}
+                                        {allocation === 'balanced' && <CheckCircle2 size={14} className="inline ml-1" />}
                                     </span>
                                 </div>
-                                {totalPonderation !== 100 && (
+                                {allocation !== 'balanced' && (
                                     <div className="mt-2 text-[10px] text-orange-600 dark:text-orange-400">
-                                        ⚠️ Les pondérations doivent totaliser 100%
+                                        {allocation === 'undefined'
+                                            ? "Renseignez le financement (étape 3) pour calculer les pondérations."
+                                            : allocation === 'over'
+                                                ? `Les composants dépassent le budget financé de ${formatShare(totalPonderation - 100)}.`
+                                                : `Il reste ${formatShare(100 - totalPonderation)} du budget financé à répartir.`}
                                     </div>
                                 )}
                             </div>
@@ -806,29 +810,13 @@ export default function NewProjectPage() {
                         </div>
 
                         {/* ── Liste des composants ── */}
-                        <div className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] p-4 space-y-3">
+                        <div className="space-y-3">
                             {components.map((comp, ci) => (
-                                <div key={comp.id} className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] p-4">
+                                <div key={comp.id} className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3.5">
                                     {/* ── Composant : Nom + Budget + Devise + Pondération + TypeActivite (si niveau le plus bas) + Actions ── */}
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <div className="w-7 h-7 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
-                                        <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '200px' }} />
-                                        
-                                        {/* Budget + Devise */}
-                                        <div className="flex items-center gap-1 flex-shrink-0">
-                                            <div className="relative w-[120px]">
-                                                <input type="number" value={comp.budget || ""} onChange={e => updateComponentBudget(ci, e.target.value)} placeholder="Budget" className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[11px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors" />
-                                            </div>
-                                            <select value={comp.devise || "FCFA"} onChange={e => updateComponentDevise(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] cursor-pointer w-[75px] flex-shrink-0">
-                                                {CURRENCIES.map(curr => (<option key={curr.code} value={curr.code}>{curr.code}</option>))}
-                                            </select>
-                                        </div>
-
-                                        {/* Pondération */}
-                                        <div className="relative w-[80px] flex-shrink-0">
-                                            <input type="number" min="0" max="100" step="0.01" value={comp.ponderation || ""} onChange={e => updateComponentPonderation(ci, e.target.value)} placeholder="0" className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[11px] text-[var(--text-primary)] pr-6 focus:outline-none focus:border-[var(--accent)] transition-colors" />
-                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-[var(--text-tertiary)] font-bold">%</span>
-                                        </div>
+                                        <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '12rem' }} />
 
                                         {/* Type d'activité (si niveau le plus bas) */}
                                         {isComponentLowestLevel(comp) && (
@@ -840,6 +828,17 @@ export default function NewProjectPage() {
                                         <div className="flex items-center gap-1 flex-shrink-0 ml-1 border-l border-[var(--border-subtle)] pl-2">
                                             <button type="button" onClick={() => demoteComponent(ci)} disabled={ci === 0} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
                                             <button type="button" onClick={() => removeComponent(ci)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={14} /></button>
+                                        </div>
+
+                                        {/* Budget : montant ou pourcentage — ligne dédiée, pour ne jamais déborder */}
+                                        <div className="basis-full pl-9">
+                                            <ComponentBudgetInput
+                                                budget={comp.budget}
+                                                devise={comp.devise}
+                                                referenceFCFA={financementPreview.total}
+                                                rates={financement.tauxChange}
+                                                onChange={value => updateComponentBudget(ci, value)}
+                                            />
                                         </div>
                                     </div>
 
@@ -938,7 +937,7 @@ export default function NewProjectPage() {
                                                     </button>
                                                 )}
                                                 {comp.sousComposants.length === 0 && <div className="w-5" />}
-                                                
+
                                                 <div className="w-6 h-6 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
                                                 <span className="text-[14px] font-bold text-[var(--text-primary)]">
                                                     {comp.name || `Composant ${ci + 1}`}
@@ -949,7 +948,7 @@ export default function NewProjectPage() {
                                                     </span>
                                                 )}
                                             </div>
-                                            
+
                                             {isCompExpanded && comp.sousComposants.length > 0 && (
                                                 <ul className="mt-2 ml-3 pl-4 border-l-2 border-[var(--border-subtle)] space-y-3">
                                                     {comp.sousComposants.map((sc, si) => {
@@ -975,7 +974,7 @@ export default function NewProjectPage() {
                                                                         </button>
                                                                     )}
                                                                     {sc.activities.length === 0 && <div className="w-4" />}
-                                                                    
+
                                                                     <div className="w-5 h-5 bg-amber-500/15 text-amber-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
                                                                     <span className="text-[13px] font-semibold text-[var(--text-secondary)]">
                                                                         {sc.name || `Sous-composant ${si + 1}`}
@@ -986,7 +985,7 @@ export default function NewProjectPage() {
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                
+
                                                                 {isScExpanded && sc.activities.length > 0 && (
                                                                     <ul className="mt-2 ml-2 pl-4 border-l border-[var(--border-subtle)] space-y-1.5">
                                                                         {sc.activities.map((act, ai) => {
@@ -1046,7 +1045,7 @@ export default function NewProjectPage() {
                             <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-3 border border-[var(--border-default)]">
                                 <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Financement</div>
                                 <div className="text-[13px] font-semibold text-[var(--text-primary)]">
-                                    {financement.type === "MOP" 
+                                    {financement.type === "MOP"
                                         ? `MOP — ${financement.bailleurs.length > 0 ? financement.bailleurs.map(b => b.nom).join(", ") : "—"}${financement.budgetNational.enabled ? " + Budget National" : ""}`
                                         : `PPP — ${financement.partiesPubliques.length} public, ${financement.partiesPrivees.length} privé`
                                     }

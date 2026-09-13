@@ -20,6 +20,8 @@ interface AddMemberModalProps {
   projectId: string;
   project: any;
   editingAssignment?: any;
+  /** Chef en place : le rôle ne peut pas être attribué à quelqu'un d'autre. */
+  currentChef?: { userId: string; name: string } | null;
 }
 
 export interface MemberFormData {
@@ -39,6 +41,7 @@ export default function AddMemberModal({
   projectId,
   project,
   editingAssignment,
+  currentChef,
 }: AddMemberModalProps) {
   const { isAdmin, isChefProjet, roles } = usePermissions(projectId);
   const [allUsers, setAllUsers] = useState<DirectoryUser[]>([]);
@@ -259,10 +262,14 @@ export default function AddMemberModal({
               {assignableRoles.map((role) => {
                 const isSelected = formData.projectRole === role;
                 const colors = PROJECT_ROLE_COLORS[role];
+                // Un seul chef : le rôle est pris, sauf si l'on modifie justement l'affectation du chef.
+                const chefTaken =
+                  role === "chef_projet" && !!currentChef && editingAssignment?.userId !== currentChef.userId;
                 return (
                   <label
                     key={role}
                     className={`
+                      ${chefTaken ? "opacity-60 cursor-not-allowed" : ""}
                       flex items-start gap-3 p-3.5 rounded-[var(--radius-md)] cursor-pointer transition-all duration-150 border
                       ${isSelected
                         ? `${colors.bg} ${colors.border} ring-1 ring-${colors.text.replace('text-', '')}/30`
@@ -275,7 +282,15 @@ export default function AddMemberModal({
                       name="projectRole"
                       value={role}
                       checked={isSelected}
-                      onChange={() => setFormData({ ...formData, projectRole: role })}
+                      disabled={chefTaken}
+                      onChange={() =>
+                        setFormData(
+                          role === "chef_projet"
+                            ? // Le chef gère tout le projet : affectation au niveau projet.
+                              { ...formData, projectRole: role, level: "project", entityId: "", entityName: "", selectedComponent: "", selectedSubcomponent: "" }
+                            : { ...formData, projectRole: role },
+                        )
+                      }
                       className="mt-0.5 w-4 h-4 text-[var(--accent)] focus:ring-[var(--accent)]"
                     />
                     <div className="flex-1">
@@ -285,6 +300,11 @@ export default function AddMemberModal({
                       <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
                         {PROJECT_ROLE_DESCRIPTIONS[role]}
                       </div>
+                      {chefTaken && (
+                        <div className="text-xs text-amber-600 mt-1">
+                          Déjà attribué à {currentChef?.name}. Utilisez « Changer le chef de projet » dans l&apos;onglet Équipe.
+                        </div>
+                      )}
                     </div>
                   </label>
                 );
@@ -295,7 +315,7 @@ export default function AddMemberModal({
             <div className="mt-3 p-3 bg-blue-500/5 border border-blue-500/20 rounded-[var(--radius-md)] flex items-start gap-2">
               <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-blue-600 dark:text-blue-400">
-                Les droits d'accès sont automatiquement attribués selon le rôle sélectionné. 
+                Les droits d'accès sont automatiquement attribués selon le rôle sélectionné.
                 Pas besoin de configuration supplémentaire.
               </p>
             </div>
@@ -315,6 +335,8 @@ export default function AddMemberModal({
             </label>
             <select
               value={formData.level}
+              disabled={formData.projectRole === "chef_projet"}
+              title={formData.projectRole === "chef_projet" ? "Le chef de projet est affecté au projet entier" : undefined}
               onChange={(e) =>
                 setFormData({
                   ...formData,
