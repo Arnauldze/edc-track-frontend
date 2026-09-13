@@ -6,6 +6,7 @@ import type { Project } from "@/lib/projectStore";
 import type { Planning, Livrable } from "@/services/api/planningService";
 import { planningService } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
+import { findUnit } from "@/lib/structureUnits";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -364,9 +365,9 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
         comp.sousComposants.forEach((sc) => {
           const hasAct = sc.activities && sc.activities.length > 0;
           if (!hasAct) {
-            allLeafPaths.push(`${comp.id}.${sc.id}`);
+            allLeafPaths.push(sc.id);
           } else {
-            sc.activities.forEach((_, idx) => allLeafPaths.push(`${comp.id}.${sc.id}.A${idx + 1}`));
+            sc.activities.forEach((act) => allLeafPaths.push(act.id));
           }
         });
       }
@@ -454,9 +455,9 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
         comp.sousComposants.forEach((sc) => {
           const hasAct = sc.activities && sc.activities.length > 0;
           if (!hasAct) {
-            leafPaths.push(`${compId}.${sc.id}`);
+            leafPaths.push(sc.id);
           } else {
-            sc.activities.forEach((_, idx) => leafPaths.push(`${compId}.${sc.id}.A${idx + 1}`));
+            sc.activities.forEach((act) => leafPaths.push(act.id));
           }
         });
 
@@ -480,7 +481,7 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
 
           if (!hasAct) {
             // Sous-composant sans activités = activité
-            const activityPath = `${compId}.${sc.id}`;
+            const activityPath = sc.id;
             const planning = findPlanning(activityPath);
             const livrables = modifiedLivrables.get(activityPath) || planning?.livrables || [];
 
@@ -527,7 +528,7 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
             }
           } else {
             // Sous-composant avec activités
-            const scLeafPaths = sc.activities.map((_, idx) => `${compId}.${sc.id}.A${idx + 1}`);
+            const scLeafPaths = sc.activities.map((act) => act.id);
 
             rows.push({
               id: scNodeId,
@@ -544,7 +545,7 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
             if (!expandedIds.has(scNodeId)) return;
 
             sc.activities.forEach((act, actIdx) => {
-              const activityPath = `${compId}.${sc.id}.A${actIdx + 1}`;
+              const activityPath = act.id;
               const actName = typeof act === "string" ? act : act.name;
               const actType = typeof act === "string" ? "travaux" : act.typeActivite;
               const planning = findPlanning(activityPath);
@@ -685,22 +686,17 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
     
     setExpandedIds(prev => {
       const next = new Set(prev);
-      const parts = focusedActivityPath.split('.');
-      
-      if (parts.length >= 1) {
-        // Expand the component node
-        next.add(`comp-${parts[0]}`);
-      }
-      if (parts.length >= 2) {
-        // Expand the subcomponent node
-        next.add(`sc-${parts[0]}.${parts[1]}`);
-      }
+      // Déplier les parents de l'unité : composant, puis sous-composant
+      const [compId, scId] = findUnit(project.components, focusedActivityPath)?.ancestors ?? [];
+      next.add("project-root");
+      if (compId) next.add(`comp-${compId}`);
+      if (compId && scId) next.add(`sc-${compId}.${scId}`);
       // Expand the activity itself (to show its livrables)
       next.add(focusedActivityPath);
       
       return next;
     });
-  }, [focusedActivityPath, plannings]);
+  }, [focusedActivityPath, plannings, project.components]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // COMPUTED DAYS & WEEKS
@@ -1461,9 +1457,7 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
                                 allIds.add(`comp-${comp.id}`);
                                 comp.sousComposants.forEach((sc) => {
                                   allIds.add(`sc-${comp.id}.${sc.id}`);
-                                  sc.activities.forEach((_, actIdx) => {
-                                    allIds.add(`${comp.id}.${sc.id}.A${actIdx + 1}`);
-                                  });
+                                  sc.activities.forEach((act) => allIds.add(act.id));
                                 });
                               });
                               setExpandedIds(allIds);
@@ -1549,9 +1543,7 @@ export function MSProjectViewV2({ project, plannings, onRefresh, onActivityClick
                                             comp.sousComposants.forEach(sc => {
                                               next.add(`sc-${comp.id}.${sc.id}`);
                                               if (opt.val === "livrables") {
-                                                sc.activities.forEach((_, actIdx) => {
-                                                  next.add(`${comp.id}.${sc.id}.A${actIdx + 1}`);
-                                                });
+                                                sc.activities.forEach((act) => next.add(act.id));
                                               }
                                             });
                                           }

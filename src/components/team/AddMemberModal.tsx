@@ -448,9 +448,7 @@ export default function AddMemberModal({
                 onChange={(e) => {
                   const comp = project?.components.find((c: any) => c.id === formData.selectedComponent);
                   const sc = comp?.sousComposants.find((s: any) => s.id === formData.selectedSubcomponent);
-                  const actIndex = sc?.activities.findIndex((_: any, idx: number) => `${sc.id}-act-${idx}` === e.target.value);
-                  const actObj = actIndex !== undefined && actIndex >= 0 ? sc?.activities[actIndex] : undefined;
-                  const actName = actObj ? (typeof actObj === 'string' ? actObj : actObj.name) : "";
+                  const actName = sc?.activities.find((a: { id: string }) => a.id === e.target.value)?.name ?? "";
                   setFormData({
                     ...formData,
                     entityId: e.target.value,
@@ -464,15 +462,11 @@ export default function AddMemberModal({
                 {project?.components
                   .find((c: any) => c.id === formData.selectedComponent)
                   ?.sousComposants.find((s: any) => s.id === formData.selectedSubcomponent)
-                  ?.activities.map((act: any, idx: number) => {
-                    const actId = `${formData.selectedSubcomponent}-act-${idx}`;
-                    const actName = typeof act === 'string' ? act : act.name;
-                    return (
-                      <option key={actId} value={actId}>
-                        {actName}
-                      </option>
-                    );
-                  })}
+                  ?.activities.map((act: { id: string; name: string }) => (
+                    <option key={act.id} value={act.id}>
+                      {act.name}
+                    </option>
+                  ))}
               </select>
             </div>
           )}

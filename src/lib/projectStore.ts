@@ -131,7 +131,7 @@ export type ActivityDef = Activity;
 // ══════════════════════════════════════════════════════════════
 
 export interface LeafActivity {
-  /** Chemin unique : "c1" | "c1.sc1" | "c1.sc1.A1" */
+  /** Identifiant de l'unité planifiable (clé de sa planification) — voir lib/structureUnits.ts */
   path: string;
   /** Nom affiché */
   name: string;
@@ -180,7 +180,7 @@ export function getLeafActivities(project: Project): LeafActivity[] {
         if (!hasAct) {
           // ── Niveau 2 : Sous-composant sans activités = activité ──
           leaves.push({
-            path: `${comp.id}.${sc.id}`,
+            path: sc.id,
             name: sc.name,
             type: sc.typeActivite || 'travaux',
             depth: 'subcomponent',
@@ -191,11 +191,11 @@ export function getLeafActivities(project: Project): LeafActivity[] {
           });
         } else {
           // ── Niveau 3 : Activités explicites ──
-          sc.activities.forEach((act, idx) => {
-            const actName = typeof act === 'string' ? act : act.name;
-            const actType = typeof act === 'string' ? 'travaux' : act.typeActivite;
+          sc.activities.forEach((act) => {
+            const actName = act.name;
+            const actType = act.typeActivite;
             leaves.push({
-              path: `${comp.id}.${sc.id}.A${idx + 1}`,
+              path: act.id,
               name: actName,
               type: actType,
               depth: 'activity',

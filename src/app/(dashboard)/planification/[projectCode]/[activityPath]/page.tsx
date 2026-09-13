@@ -115,35 +115,10 @@ export default function ActivityPlanningPage() {
     }
   }
 
+  /** L'unité planifiée est désignée par son identifiant ; seule une unité fine se planifie. */
   function findActivityByPath(proj: Project, path: string) {
-    // Utiliser getLeafActivities pour trouver la feuille correspondante
-    const leaves = getLeafActivities(proj);
-    const leaf = leaves.find((l) => l.path === path);
-    if (leaf) {
-      return {
-        name: leaf.name,
-        type: leaf.type as any,
-      };
-    }
-
-    // Fallback : parsing manuel pour le cas 3 niveaux
-    const parts = path.split(".");
-    if (parts.length >= 3) {
-      const [compId, scId, actId] = parts;
-      const comp = proj.components.find((c) => c.id === compId);
-      if (!comp) return null;
-      const sc = comp.sousComposants.find((s) => s.id === scId);
-      if (!sc) return null;
-      const actIndex = parseInt(actId.replace("A", "")) - 1;
-      const act = sc.activities[actIndex];
-      if (!act) return null;
-      return {
-        name: typeof act === "string" ? act : act.name,
-        type: (typeof act === "string" ? "travaux" : act.typeActivite) as any,
-      };
-    }
-
-    return null;
+    const leaf = getLeafActivities(proj).find((l) => l.path === path);
+    return leaf ? { name: leaf.name, type: leaf.type as any } : null;
   }
 
   function populateFormFromPlanning(p: Planning) {

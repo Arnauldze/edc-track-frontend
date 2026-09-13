@@ -25,6 +25,8 @@ import { allocationStatus, formatShare, round2, shareOf, toFCFA } from "@/lib/co
 import { EditProjectInfoModal } from "@/components/projects/EditProjectInfoModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
+import { newUnitId } from "@/lib/structureUnits";
+import { canIndent, indentUnit, outdentUnit } from "@/lib/structureOps";
 import { formatMoney } from "@/lib/utils";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 
@@ -347,7 +349,7 @@ export default function ProjectConfigPage() {
   const addComponent = () => {
     if (!isEditingStructure) return;
     // Nouvelle composante sans sous-composantes = niveau le plus bas, donc ajouter typeActivite
-    setComponents(prev => [...prev, { id: `c${Date.now()}`, name: "", sousComposants: [], typeActivite: "travaux" }]);
+    setComponents(prev => [...prev, { id: newUnitId("component"), name: "", sousComposants: [], typeActivite: "travaux" }]);
     markChanged();
   };
   const removeComponent = (idx: number) => {
@@ -383,7 +385,7 @@ export default function ProjectConfigPage() {
       const { typeActivite, ...compWithoutType } = c;
       return {
         ...compWithoutType,
-        sousComposants: [...c.sousComposants, { id: `sc${Date.now()}`, name: "", activities: [] }]
+        sousComposants: [...c.sousComposants, { id: newUnitId("subcomponent"), name: "", activities: [] }]
       };
     }));
     markChanged();
@@ -412,7 +414,7 @@ export default function ProjectConfigPage() {
     markChanged();
   };
   const addActivity = (compIdx: number, scIdx: number, typeActivite: string = "travaux") => {
-    const newAct = { name: "", typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' };
+    const newAct = { id: newUnitId("activity"), name: "", typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' };
     setComponents(prev => prev.map((c, ci) => {
       if (ci !== compIdx) return c;
       return {
@@ -470,68 +472,26 @@ export default function ProjectConfigPage() {
   };
 
   // ═══ Promotion / Rétrogradation ═══
+  // Une unité garde son identifiant en changeant de niveau : sa planification,
+  // ses documents et ses affectations la suivent (voir lib/structureOps.ts).
   const demoteComponent = (ci: number) => {
-    if (ci <= 0) return;
-    setComponents(prev => {
-      const comp = prev[ci];
-      const newSC: SousComposant = { id: `sc${Date.now()}`, name: comp.name, activities: comp.sousComposants.flatMap(sc => sc.activities.length > 0 ? sc.activities : [{ name: sc.name, typeActivite: "travaux" as const }]) };
-      const result = prev.filter((_, i) => i !== ci);
-      result[ci - 1] = { ...result[ci - 1], sousComposants: [...result[ci - 1].sousComposants, newSC] };
-      return result;
-    });
+    setComponents(prev => indentUnit(prev, prev[ci].id, exchangeRates));
     markChanged();
   };
 
   const promoteSC = (ci: number, si: number) => {
-    setComponents(prev => {
-      const comp = prev[ci];
-      const sc = comp.sousComposants[si];
-      const newComp: Component = { id: `c${Date.now()}`, name: sc.name, sousComposants: [] };
-      if (sc.activities.length > 0) {
-        newComp.sousComposants = sc.activities.map((a, idx) => ({ id: `sc${Date.now() + idx + 1}`, name: getActivityName(a), activities: [] }));
-      }
-      const updatedComp = { ...comp, sousComposants: comp.sousComposants.filter((_, j) => j !== si) };
-      const result = [...prev];
-      result[ci] = updatedComp;
-      result.splice(ci + 1, 0, newComp);
-      return result;
-    });
+    setComponents(prev => outdentUnit(prev, prev[ci].sousComposants[si].id));
     markChanged();
   };
 
   const demoteSC = (ci: number, si: number) => {
-    if (si <= 0) return;
-    setComponents(prev => prev.map((c, i) => {
-      if (i !== ci) return c;
-      const sc = c.sousComposants[si];
-      const updatedSCs = c.sousComposants.filter((_, j) => j !== si);
-      const prevSCIdx = si - 1;
-      updatedSCs[prevSCIdx] = {
-        ...updatedSCs[prevSCIdx],
-        activities: [...updatedSCs[prevSCIdx].activities, { name: sc.name, typeActivite: "travaux" }, ...sc.activities],
-      };
-      return { ...c, sousComposants: updatedSCs };
-    }));
+    setComponents(prev => indentUnit(prev, prev[ci].sousComposants[si].id));
     markChanged();
   };
 
   const promoteActivity = (ci: number, si: number, ai: number) => {
-    setComponents(prev => prev.map((c, i) => {
-      if (i !== ci) return c;
-      const actName = getActivityName(c.sousComposants[si].activities[ai]);
-      const newSC: SousComposant = { id: `sc${Date.now()}`, name: actName, activities: [] };
-      const updatedSC = c.sousComposants.map((sc, j) => j === si ? { ...sc, activities: sc.activities.filter((_, k) => k !== ai) } : sc);
-      updatedSC.splice(si + 1, 0, newSC);
-      return { ...c, sousComposants: updatedSC };
-    }));
+    setComponents(prev => outdentUnit(prev, prev[ci].sousComposants[si].activities[ai].id));
     markChanged();
-  };
-
-  // ── Save ──
-  const handleSave = () => {
-    updateProject(projectId, { components });
-    setHasChanges(false);
-    toast.success("Structure du projet mise à jour");
   };
 
   // ── Delete ──
@@ -890,7 +850,7 @@ export default function ProjectConfigPage() {
 
                               {isEditingStructure && (
                                 <div className="flex items-center gap-1 flex-shrink-0">
-                                  <button type="button" onClick={() => demoteComponent(ci)} disabled={ci === 0} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
+                                  <button type="button" onClick={() => demoteComponent(ci)} disabled={!canIndent(components, comp.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
                                   <button type="button" onClick={() => removeComponent(ci)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={16} /></button>
                                 </div>
                               )}
@@ -974,7 +934,7 @@ export default function ProjectConfigPage() {
                                       {/* Boutons d'action — ordre uniforme : (monter) → (descendre) → (supprimer), gap-2 = 8px, icônes 16px */}
                                       <div className="flex items-center gap-2 flex-shrink-0 border-l border-[var(--border-subtle)] pl-2">
                                         <button type="button" onClick={() => promoteSC(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-green-500/10 text-green-500 transition-all" title="Transformer en Composant"><ChevronUp size={16} /></button>
-                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={si === 0} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={16} /></button>
+                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={!canIndent(components, sc.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={16} /></button>
                                         <button type="button" onClick={() => removeSousComposant(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={16} /></button>
                                       </div>
                                     </>
