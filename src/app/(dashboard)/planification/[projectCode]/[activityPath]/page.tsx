@@ -1,24 +1,39 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+// ══════════════════════════════════════════════════════════════
+// PLANIFICATION D'UNE ACTIVITÉ
+//
+// Trois niveaux :
+//   1. l'activité : identité et données communes (T0, budget, responsable) ;
+//   2. ses phases : étude, passation, exécution — état, dates, frise ;
+//   3. la phase ouverte : son tableau de planification.
+// Les phases ont des dates indépendantes. Un seul enregistrement couvre
+// l'activité entière.
+// ══════════════════════════════════════════════════════════════
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Briefcase, ChevronDown, ChevronLeft, ChevronUp, FileText, Hammer, Save, Settings, Trash2, User } from "lucide-react";
+import { BarChart3, Briefcase, ChevronLeft, FileText, Hammer, Plus, Save, Trash2, User, X } from "lucide-react";
 import { getProjectById, getLeafActivities, type Project } from "@/lib/projectStore";
 import { planningService, type CreatePlanningDto, type Livrable, type Planning, type UpdatePlanningDto } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
 import { PlanningFormEtude, nouveauLivrable } from "@/components/planning/PlanningFormEtude";
 import { PlanningFormPassation } from "@/components/planning/PlanningFormPassation";
 import { PlanningFormExecution } from "@/components/planning/PlanningFormExecution";
-import { BudgetMultiDevise } from "@/components/planning/BudgetMultiDevise";
+import { ActivityGeneralStrip } from "@/components/planning/ActivityGeneralStrip";
+import { ActivityPhaseBar, type PhaseSummary } from "@/components/planning/ActivityPhaseBar";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 import { findUnit, listUnits } from "@/lib/structureUnits";
 import { wbsNumbers } from "@/lib/structureOps";
 import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
+import { PHASE_LABELS, PHASE_ORDER, periodeDesLignes, type PhaseKey } from "@/lib/phaseTimeline";
 import { toFCFA } from "@/lib/componentBudget";
-import { DEFAULT_EXCHANGE_RATES, formatCurrency } from "@/lib/helpers/currencyHelpers";
+import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 
 type ActivityType = "travaux" | "fourniture" | "services" | "etudes" | "pi";
+type Budget = { devise: string; montant: number; pourcentage?: number };
 
 const ACTIVITY_TYPES: Record<ActivityType, { label: string; icon: typeof Hammer; gradient: string }> = {
   travaux: { label: "Travaux", icon: Hammer, gradient: "from-blue-500 to-blue-600" },
@@ -27,6 +42,8 @@ const ACTIVITY_TYPES: Record<ActivityType, { label: string; icon: typeof Hammer;
   etudes: { label: "Études", icon: FileText, gradient: "from-purple-500 to-purple-600" },
   pi: { label: "Prestations intellectuelles", icon: FileText, gradient: "from-rose-500 to-rose-600" },
 };
+
+const BUDGET_VIDE: Budget[] = [{ devise: "FCFA", montant: 0, pourcentage: 100 }];
 
 /** Champs d'un livrable acceptés par l'API (les champs inconnus sont refusés). */
 function livrablePourApi(l: Livrable): Livrable {
@@ -55,6 +72,8 @@ function messageApi(error: unknown, parDefaut: string): string {
   return message || parDefaut;
 }
 
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+
 export default function ActivityPlanningPage() {
   const params = useParams();
   const router = useRouter();
@@ -63,91 +82,137 @@ export default function ActivityPlanningPage() {
 
   const { can, loading: permissionsLoading } = usePermissions(projectCode);
   const readOnly = permissionsLoading || !can("planning:edit");
+  const { blockNavigation, unblockNavigation } = useNavigationGuard();
 
   const [project, setProject] = useState<Project | null>(null);
   const [planning, setPlanning] = useState<Planning | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showConfig, setShowConfig] = useState(true);
+  const [selected, setSelected] = useState<PhaseKey>("etude");
 
   const [activityName, setActivityName] = useState("");
   const [activityType, setActivityType] = useState<ActivityType>("travaux");
 
+  // Phases prévues
   const [hasEtudePrealable, setHasEtudePrealable] = useState(false);
   const [hasPassation, setHasPassation] = useState(false);
   const [hasExecution, setHasExecution] = useState(false);
 
-  // Informations communes à l'activité
-  const [budgetInitial, setBudgetInitial] = useState<Array<{ devise: string; montant: number; pourcentage?: number }>>([
-    { devise: "FCFA", montant: 0, pourcentage: 100 },
-  ]);
+  // Données communes à l'activité
+  const [budgetInitial, setBudgetInitial] = useState<Budget[]>(BUDGET_VIDE);
   const [dateT0, setDateT0] = useState("");
   const [responsablePrincipal, setResponsablePrincipal] = useState("");
 
-  // Phases
+  // Données des phases
   const [livrables, setLivrables] = useState<Livrable[]>([nouveauLivrable("R1")]);
   const [passationData, setPassationData] = useState<any>(null);
   const [executionData, setExecutionData] = useState<any>(null);
 
   const isEditMode = planning !== null;
+  const actives: Record<PhaseKey, boolean> = { etude: hasEtudePrealable, passation: hasPassation, execution: hasExecution };
+  const setActive: Record<PhaseKey, (v: boolean) => void> = {
+    etude: setHasEtudePrealable,
+    passation: setHasPassation,
+    execution: setHasExecution,
+  };
 
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectCode, activityPath]);
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      const proj = await getProjectById(projectCode);
-      if (!proj) {
-        toast.error("Projet introuvable");
-        router.push("/planification");
-        return;
-      }
-      setProject(proj);
-
-      const leaf = getLeafActivities(proj).find((l) => l.path === activityPath);
-      if (leaf) {
-        setActivityName(leaf.name);
-        setActivityType(leaf.type as ActivityType);
-      }
-
-      try {
-        const existing = await planningService.getOne(projectCode, activityPath);
-        setPlanning(existing);
-        setShowConfig(false);
-        populateFormFromPlanning(existing);
-      } catch {
-        // 404 : pas encore de planification, mode création
-        setPlanning(null);
-      }
-    } catch (error) {
-      console.error("Erreur chargement:", error);
-      toast.error("Erreur lors du chargement");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function populateFormFromPlanning(p: Planning) {
+  /** @param ouvrirPremierePhase au chargement, ouvrir la première phase prévue ; après un enregistrement, garder la phase ouverte. */
+  function populateFormFromPlanning(p: Planning, ouvrirPremierePhase = true) {
     setHasEtudePrealable(!!p.hasEtudePrealable);
     setHasPassation(!!p.hasPassation);
     setHasExecution(!!p.hasExecution);
-    setBudgetInitial(p.budgetInitial?.length ? p.budgetInitial : [{ devise: "FCFA", montant: 0, pourcentage: 100 }]);
+    setBudgetInitial(p.budgetInitial?.length ? p.budgetInitial : BUDGET_VIDE);
     setDateT0(toDay(p.dateDebutInitiale as unknown as string) ?? "");
     setResponsablePrincipal(p.responsablePrincipal || "");
-    if (p.livrables?.length) setLivrables(p.livrables);
-    if (p.hasPassation) setPassationData({ typePassation: p.typePassation || "", etapesPassation: p.etapesPassation || [] });
-    if (p.tachesExecution?.length) setExecutionData({ tachesExecution: p.tachesExecution });
+    setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
+    setPassationData(p.hasPassation ? { typePassation: p.typePassation || "", etapesPassation: p.etapesPassation || [] } : null);
+    setExecutionData(p.tachesExecution?.length ? { tachesExecution: p.tachesExecution } : null);
+    const premiere = PHASE_ORDER.find((k) => ({ etude: p.hasEtudePrealable, passation: p.hasPassation, execution: p.hasExecution })[k]);
+    if (premiere && ouvrirPremierePhase) setSelected(premiere);
   }
+
+  // ── Modifications non enregistrées ──
+  // Chaque partie est comparée à son état au dernier chargement ou enregistrement.
+  const sections = useMemo(
+    () => ({
+      general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal }),
+      etude: JSON.stringify(hasEtudePrealable ? livrables.map(livrablePourApi) : null),
+      passation: JSON.stringify(hasPassation ? passationData : null),
+      execution: JSON.stringify(hasExecution ? executionData : null),
+    }),
+    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, livrables, hasPassation, passationData, hasExecution, executionData],
+  );
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
+  const [reference, setReference] = useState<typeof sections | null>(null);
+
+  /** Prend l'état courant comme référence, une fois les formulaires montés et synchronisés. */
+  const figerReference = useCallback(() => {
+    setTimeout(() => setReference(sectionsRef.current), 200);
+  }, []);
+
+  const modifiees = {
+    general: !!reference && reference.general !== sections.general,
+    etude: !!reference && reference.etude !== sections.etude,
+    passation: !!reference && reference.passation !== sections.passation,
+    execution: !!reference && reference.execution !== sections.execution,
+  };
+  const dirty = !isEditMode || Object.values(modifiees).some(Boolean);
+  const aDesModifications = !!reference && Object.values(modifiees).some(Boolean);
+
+  useEffect(() => {
+    if (!aDesModifications || readOnly) return;
+    blockNavigation("La planification a des modifications non enregistrées. Quitter sans enregistrer ?");
+    const avantDeQuitter = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", avantDeQuitter);
+    return () => {
+      unblockNavigation();
+      window.removeEventListener("beforeunload", avantDeQuitter);
+    };
+  }, [aDesModifications, readOnly, blockNavigation, unblockNavigation]);
+
+  // ── Chargement ──
+  async function chargerPlanification(): Promise<Planning | null> {
+    try {
+      return await planningService.getOne(projectCode, activityPath);
+    } catch {
+      return null; // 404 : pas encore de planification
+    }
+  }
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const proj = await getProjectById(projectCode);
+        if (!proj) {
+          toast.error("Projet introuvable");
+          router.push("/planification");
+          return;
+        }
+        setProject(proj);
+        const leaf = getLeafActivities(proj).find((l) => l.path === activityPath);
+        if (leaf) {
+          setActivityName(leaf.name);
+          setActivityType(leaf.type as ActivityType);
+        }
+        const existante = await chargerPlanification();
+        setPlanning(existante);
+        if (existante) populateFormFromPlanning(existante);
+      } catch (error) {
+        console.error("Erreur chargement:", error);
+        toast.error("Erreur lors du chargement");
+      } finally {
+        setLoading(false);
+        figerReference();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectCode, activityPath]);
 
   // ── Informations dérivées ──
   const rates = (project?.financement?.tauxChange as Record<string, number> | undefined) ?? DEFAULT_EXCHANGE_RATES;
-  const budgetTotalFCFA = useMemo(
-    () => budgetInitial.reduce((sum, b) => sum + toFCFA(b.montant, b.devise, rates), 0),
-    [budgetInitial, rates],
-  );
+  const budgetTotalFCFA = useMemo(() => budgetInitial.reduce((sum, b) => sum + toFCFA(b.montant, b.devise, rates), 0), [budgetInitial, rates]);
   const unit = useMemo(() => (project ? findUnit(project.components, activityPath) : undefined), [project, activityPath]);
   const numero = useMemo(() => (project ? wbsNumbers(project.components).get(activityPath) : undefined), [project, activityPath]);
   const chemin = useMemo(() => {
@@ -156,33 +221,61 @@ export default function ActivityPlanningPage() {
     return unit.ancestors.map((id) => units.find((u) => u.id === id)?.name).filter(Boolean) as string[];
   }, [project, unit]);
 
+  const calendrierEtude = useMemo(() => calculerCalendrierEtude(livrables, dateT0), [livrables, dateT0]);
+  const problemesEtude = useMemo(() => [...new Set(calendrierEtude.problemes.map((p) => p.message))], [calendrierEtude]);
+
+  const phases: PhaseSummary[] = useMemo(() => {
+    const lignesPassation: object[] = passationData?.lignesPassation ?? passationData?.etapesPassation ?? [];
+    const taches: Array<{ designation?: string }> = executionData?.tachesExecution ?? [];
+    const livrablesNommes = livrables.filter((l) => l.intitule?.trim()).length;
+    const marches = lignesPassation.filter((l) => Object.values(l).some((v) => typeof v === "string" && v.trim() && v !== "1")).length;
+    const tachesNommees = taches.filter((t) => t.designation?.trim()).length;
+
+    const resume = (key: PhaseKey, contenu: number, mot: string, periode = periodeDesLignes(key === "passation" ? lignesPassation : taches)) => {
+      const base = { key, active: actives[key], periode, dirty: modifiees[key] };
+      if (!actives[key]) return { ...base, tone: "off" as const, status: "Non prévue" };
+      if (contenu === 0) return { ...base, tone: "todo" as const, status: "À planifier" };
+      return { ...base, tone: "ok" as const, status: pluriel(contenu, mot) };
+    };
+
+    const etude = resume("etude", livrablesNommes, "livrable", { debut: calendrierEtude.debut, fin: calendrierEtude.fin });
+    return [
+      hasEtudePrealable && problemesEtude.length
+        ? { ...etude, tone: "warn" as const, status: `${pluriel(problemesEtude.length, "problème")} à corriger` }
+        : etude,
+      resume("passation", marches, "marché"),
+      resume("execution", tachesNommees, "tâche"),
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livrables, calendrierEtude, problemesEtude, passationData, executionData, hasEtudePrealable, hasPassation, hasExecution, sections, reference]);
+
+  // ── Phases ──
+  const retirerPhase = (key: PhaseKey) => {
+    const contenu = phases.find((p) => p.key === key)?.tone !== "todo";
+    if (contenu && !confirm(`Retirer la phase « ${PHASE_LABELS[key]} » ? Ses données ne seront plus enregistrées.`)) return;
+    setActive[key](false);
+  };
+
+  // ── Enregistrement ──
   async function handleSave() {
     if (!hasEtudePrealable && !hasPassation && !hasExecution) {
-      toast.error("Sélectionnez au moins une phase à planifier");
+      toast.error("Planifiez au moins une phase");
       return;
     }
     if (budgetInitial.every((b) => !b.montant)) {
-      toast.error("Veuillez saisir un budget");
+      toast.error("Renseignez le budget de l'activité");
       return;
     }
-
-    if (hasEtudePrealable) {
-      const problemes = [...new Set(calculerCalendrierEtude(livrables, dateT0).problemes.map((p) => p.message))];
-      if (problemes.length) {
-        toast.error(`Étude : ${problemes[0]}${problemes.length > 1 ? ` (+${problemes.length - 1} autre${problemes.length > 2 ? "s" : ""})` : ""}`);
-        return;
-      }
+    if (hasEtudePrealable && problemesEtude.length) {
+      setSelected("etude");
+      toast.error(`Étude : ${problemesEtude[0]}${problemesEtude.length > 1 ? ` (+${problemesEtude.length - 1})` : ""}`);
+      return;
     }
 
     setSaving(true);
     try {
       const cleanDates = (arr: any[]) =>
-        arr.map((item) => ({
-          ...item,
-          dateDebut: item.dateDebut || undefined,
-          dateFin: item.dateFin || undefined,
-          dateEcheance: item.dateEcheance || undefined,
-        }));
+        arr.map((item) => ({ ...item, dateDebut: item.dateDebut || undefined, dateFin: item.dateFin || undefined, dateEcheance: item.dateEcheance || undefined }));
 
       const data = {
         activityName,
@@ -194,7 +287,7 @@ export default function ActivityPlanningPage() {
         budgetInitialTotal: Math.round(budgetTotalFCFA),
         dateDebutInitiale: dateT0 || undefined,
         responsablePrincipal: responsablePrincipal || undefined,
-        // Une phase désactivée n'emporte pas ses données
+        // Une phase retirée n'emporte pas ses données
         livrables: hasEtudePrealable ? livrables.map(livrablePourApi) : [],
         ...(hasPassation && passationData
           ? { typePassation: passationData.typePassation, etapesPassation: cleanDates(passationData.etapesPassation || []) }
@@ -204,12 +297,16 @@ export default function ActivityPlanningPage() {
 
       if (isEditMode) {
         await planningService.update(projectCode, activityPath, data as unknown as UpdatePlanningDto);
-        toast.success("Planification mise à jour");
       } else {
         await planningService.create({ ...data, projectCode, activityPath } as unknown as CreatePlanningDto);
-        toast.success("Planification créée");
       }
-      router.push(`/planification/${projectCode}?activity=${encodeURIComponent(activityPath)}&t=${Date.now()}`);
+      toast.success(isEditMode ? "Planification enregistrée" : "Planification créée");
+
+      // On reste sur la page, avec la version calculée par le serveur.
+      const enregistree = await chargerPlanification();
+      setPlanning(enregistree);
+      if (enregistree) populateFormFromPlanning(enregistree, false);
+      figerReference();
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
       toast.error(messageApi(error, "Erreur lors de l'enregistrement"));
@@ -219,9 +316,10 @@ export default function ActivityPlanningPage() {
   }
 
   async function handleDelete() {
-    if (!confirm("Supprimer cette planification ?")) return;
+    if (!confirm("Supprimer toute la planification de cette activité ?")) return;
     try {
       await planningService.delete(projectCode, activityPath);
+      unblockNavigation();
       toast.success("Planification supprimée");
       router.push(`/planification/${projectCode}`);
     } catch (error) {
@@ -252,19 +350,12 @@ export default function ActivityPlanningPage() {
 
   const typeInfo = ACTIVITY_TYPES[activityType] ?? ACTIVITY_TYPES.travaux;
   const ActivityIcon = typeInfo.icon;
-  const inputClass =
-    "w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:text-[var(--text-secondary)]";
-
-  const phases = [
-    { key: "etude", label: "Étude préalable", active: hasEtudePrealable, toggle: setHasEtudePrealable, on: "border-blue-500 bg-blue-50 dark:bg-blue-950/30", text: "text-blue-700 dark:text-blue-400", track: "bg-blue-500" },
-    { key: "passation", label: "Passation", active: hasPassation, toggle: setHasPassation, on: "border-green-500 bg-green-50 dark:bg-green-950/30", text: "text-green-700 dark:text-green-400", track: "bg-green-500" },
-    { key: "execution", label: "Exécution", active: hasExecution, toggle: setHasExecution, on: "border-purple-500 bg-purple-50 dark:bg-purple-950/30", text: "text-purple-700 dark:text-purple-400", track: "bg-purple-500" },
-  ];
+  const phaseOuverte = phases.find((p) => p.key === selected)!;
 
   return (
     <div className="flex flex-col h-full">
-      {/* EN-TÊTE */}
-      <div className="bg-[var(--bg-surface)] border-b border-[var(--border-default)] px-8 pt-5 pb-4 flex-shrink-0">
+      {/* ── 1. L'activité ── */}
+      <div className="bg-[var(--bg-surface)] border-b border-[var(--border-default)] px-8 pt-5 pb-3 flex-shrink-0">
         <Link href={`/planification/${projectCode}`} className="inline-flex items-center gap-1.5 mb-3 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--accent)]">
           <ChevronLeft size={14} /> Retour au projet
         </Link>
@@ -276,9 +367,7 @@ export default function ActivityPlanningPage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2.5 tracking-tight">
-                {numero && (
-                  <span className="px-2 py-0.5 rounded-[var(--radius-sm)] text-[11px] bg-[var(--bg-inset)] text-[var(--text-tertiary)] font-bold">{numero}</span>
-                )}
+                {numero && <span className="px-2 py-0.5 rounded-[var(--radius-sm)] text-[11px] bg-[var(--bg-inset)] text-[var(--text-tertiary)] font-bold">{numero}</span>}
                 <span className="truncate">{activityName}</span>
               </h1>
               <div className="text-[11px] text-[var(--text-secondary)] font-medium mt-0.5 truncate">
@@ -288,129 +377,94 @@ export default function ActivityPlanningPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href={`/planification/${projectCode}`} className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-inset)] text-[var(--text-secondary)] rounded-[var(--radius-md)] text-sm font-semibold hover:bg-[var(--bg-surface-hover)]">
+            <Link href={`/planification/${projectCode}?activity=${encodeURIComponent(activityPath)}`} className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-inset)] text-[var(--text-secondary)] rounded-[var(--radius-md)] text-sm font-semibold hover:bg-[var(--bg-surface-hover)]">
               <BarChart3 size={16} /> Voir le Gantt
             </Link>
             {!readOnly && isEditMode && (
-              <button onClick={handleDelete} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-600 rounded-[var(--radius-md)] text-sm font-semibold hover:bg-red-500/20">
-                <Trash2 size={16} /> Supprimer
+              <button onClick={handleDelete} title="Supprimer toute la planification" className="flex items-center gap-2 px-3 py-2 bg-red-500/10 text-red-600 rounded-[var(--radius-md)] text-sm font-semibold hover:bg-red-500/20">
+                <Trash2 size={16} />
               </button>
             )}
             {!readOnly && (
-              <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-[var(--radius-md)] text-sm font-semibold hover:bg-green-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                <Save size={16} /> {saving ? "Enregistrement..." : isEditMode ? "Mettre à jour" : "Créer"}
+              <button
+                onClick={handleSave}
+                disabled={saving || !dirty}
+                className="relative flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-[var(--radius-md)] text-sm font-semibold hover:bg-green-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save size={16} /> {saving ? "Enregistrement..." : "Enregistrer"}
+                {aDesModifications && !saving && <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-[var(--bg-surface)]" title="Modifications non enregistrées" />}
               </button>
             )}
           </div>
         </div>
+
+        <div className="mt-2 -ml-2.5 flex items-center gap-2">
+          <ActivityGeneralStrip
+            dateT0={dateT0}
+            onDateT0={setDateT0}
+            budgets={budgetInitial}
+            onBudgets={setBudgetInitial}
+            budgetTotalFCFA={budgetTotalFCFA}
+            responsable={responsablePrincipal}
+            onResponsable={setResponsablePrincipal}
+            readOnly={readOnly}
+          />
+          {modifiees.general && <span className="w-2 h-2 rounded-full bg-amber-500" title="Modifications non enregistrées" />}
+          {readOnly && !permissionsLoading && <span className="ml-auto text-[11px] text-[var(--text-tertiary)]">Consultation : seul le chef de projet modifie la planification.</span>}
+        </div>
       </div>
 
-      {/* CONTENU */}
-      <div className={`flex-1 overflow-y-auto ${hasPassation ? "px-3" : "px-8"} py-6`}>
-        <div className={`${hasPassation ? "max-w-full px-2" : "max-w-6xl"} mx-auto space-y-6`}>
-          {/* Informations générales de l'activité */}
-          <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] shadow-sm">
-            <button
-              onClick={() => setShowConfig(!showConfig)}
-              className="w-full flex items-center justify-between p-4 bg-[var(--bg-inset)] hover:bg-[var(--bg-surface-hover)] rounded-t-[var(--radius-lg)]"
-            >
-              <div className="flex items-center gap-3 flex-wrap">
-                <Settings size={18} className="text-[var(--accent)]" />
-                <span className="font-bold text-[14px] text-[var(--text-primary)]">Informations générales</span>
-                {!showConfig && (
-                  <span className="text-[11px] text-[var(--text-secondary)]">
-                    T0 : {dateT0 ? new Date(`${dateT0}T00:00:00`).toLocaleDateString("fr-FR") : "non définie"} • Budget : {budgetTotalFCFA ? formatCurrency(budgetTotalFCFA, "FCFA") : "—"}
-                  </span>
-                )}
-                {!showConfig && phases.filter((p) => p.active).map((p) => (
-                  <span key={p.key} className={`text-[10px] px-2 py-0.5 rounded font-medium bg-[var(--bg-surface)] ${p.text}`}>{p.label}</span>
-                ))}
-              </div>
-              {showConfig ? <ChevronUp size={18} className="text-[var(--text-secondary)]" /> : <ChevronDown size={18} className="text-[var(--text-secondary)]" />}
-            </button>
+      <div className="flex-1 overflow-y-auto px-8 py-5 space-y-5">
+        {/* ── 2. Ses phases ── */}
+        <ActivityPhaseBar phases={phases} selected={selected} onSelect={setSelected} dateT0={dateT0 || undefined} />
 
-            {showConfig && (
-              <div className="p-5 border-t border-[var(--border-subtle)] space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-4">
-                    <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Budget de l&apos;activité</label>
-                    <fieldset disabled={readOnly} className="disabled:opacity-80">
-                      <BudgetMultiDevise budgets={budgetInitial} onChange={setBudgetInitial} />
-                    </fieldset>
-                    {budgetInitial.some((b) => b.devise !== "FCFA" && b.montant) && (
-                      <p className="mt-1.5 text-[11px] text-[var(--text-secondary)]">
-                        Total converti : <strong>{formatCurrency(budgetTotalFCFA, "FCFA")}</strong> (taux du financement du projet)
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Date T0</label>
-                    <input type="date" value={dateT0} onChange={(e) => setDateT0(e.target.value)} disabled={readOnly} className={inputClass} />
-                    <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">Démarrage de l&apos;activité ; les délais des phases se comptent depuis T0.</p>
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2">Responsable</label>
-                    <input type="text" value={responsablePrincipal} onChange={(e) => setResponsablePrincipal(e.target.value)} disabled={readOnly} placeholder="Nom du responsable" className={inputClass} />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-3">Phases à planifier</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {phases.map((phase) => (
-                      <button
-                        key={phase.key}
-                        type="button"
-                        disabled={readOnly}
-                        onClick={() => phase.toggle(!phase.active)}
-                        className={`p-4 rounded-[var(--radius-md)] border-2 text-left transition-all disabled:cursor-not-allowed ${phase.active ? phase.on : "border-[var(--border-default)] bg-[var(--bg-surface)] opacity-60"}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className={`text-[13px] font-bold ${phase.active ? phase.text : "text-[var(--text-secondary)]"}`}>{phase.label}</span>
-                          <div className={`w-10 h-5 rounded-full transition-colors ${phase.active ? phase.track : "bg-gray-300"}`}>
-                            <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform mt-0.5 ${phase.active ? "translate-x-5" : "translate-x-0.5"}`} />
-                          </div>
-                        </div>
-                        <div className="mt-1 text-[10px] text-[var(--text-tertiary)]">
-                          {phase.active ? "Activée" : "Désactivée"}
-                          {isEditMode && !phase.active && phase.key === "etude" && planning?.livrables?.length ? " — ses livrables seront retirés à l'enregistrement" : ""}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+        {/* ── 3. La phase ouverte ── */}
+        {!phaseOuverte.active && (
+          <div className="flex flex-col items-center justify-center gap-3 py-14 rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--border-default)] text-center">
+            <p className="text-[14px] font-semibold text-[var(--text-primary)]">La phase « {PHASE_LABELS[selected]} » n&apos;est pas prévue pour cette activité.</p>
+            {!readOnly && (
+              <button onClick={() => setActive[selected](true)} className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90">
+                <Plus size={16} /> Planifier cette phase
+              </button>
             )}
           </div>
+        )}
 
-          {hasEtudePrealable && (
+        {phaseOuverte.active && !readOnly && (
+          <div className={`flex justify-end -mb-3 ${selected === "passation" ? "" : "max-w-6xl"}`}>
+            <button onClick={() => retirerPhase(selected)} className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-red-600 hover:bg-red-500/10 rounded-[var(--radius-md)]">
+              <X size={13} /> Retirer cette phase
+            </button>
+          </div>
+        )}
+
+        {/* Les phases prévues restent montées : leur saisie est conservée d'un onglet à l'autre. */}
+        {hasEtudePrealable && (
+          <div hidden={selected !== "etude"} className="max-w-6xl">
             <PlanningFormEtude livrables={livrables} onChange={setLivrables} dateT0={dateT0} readOnly={readOnly} />
-          )}
+          </div>
+        )}
 
-          {hasPassation && (
-            <>
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-[var(--radius-lg)] p-5 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white shadow-md">
-                    <FileText size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-[14px] font-bold text-green-800 dark:text-green-300 mb-1">Plan de Passation des Marchés (PPM)</h3>
-                    <p className="text-[11px] text-green-700 dark:text-green-400">Renommer : <strong>Planification de la passation</strong></p>
-                  </div>
-                </div>
-                <Link href={`/planification/${projectCode}/ppm`} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-[var(--radius-md)] text-[13px] font-bold shadow-md">
-                  <FileText size={16} /> Portail vers le PPM
-                </Link>
+        {hasPassation && (
+          <div hidden={selected !== "passation"} className="space-y-4">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border border-green-300 dark:border-green-700 rounded-[var(--radius-lg)] p-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-[13px] font-bold text-green-800 dark:text-green-300">Plan de Passation des Marchés (PPM)</h3>
+                <p className="text-[11px] text-green-700 dark:text-green-400">Planification de la passation de cette activité.</p>
               </div>
-              <PlanningFormPassation data={passationData} onChange={setPassationData} projectId={projectCode} />
-            </>
-          )}
+              <Link href={`/planification/${projectCode}/ppm`} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-[var(--radius-md)] text-[12px] font-bold">
+                <FileText size={14} /> Portail vers le PPM
+              </Link>
+            </div>
+            <PlanningFormPassation data={passationData} onChange={setPassationData} projectId={projectCode} />
+          </div>
+        )}
 
-          {hasExecution && (
+        {hasExecution && (
+          <div hidden={selected !== "execution"} className="max-w-6xl">
             <PlanningFormExecution data={executionData} onChange={setExecutionData} dateT0={dateT0} projectId={projectCode} />
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
