@@ -1,544 +1,394 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Trash2, FileText, AlertCircle, Upload, GripVertical } from "lucide-react";
+// ══════════════════════════════════════════════════════════════
+// PLANIFICATION DE L'ÉTUDE PRÉALABLE — tableau des livrables
+//
+// Composant contrôlé : la page détient les livrables. Les dates, durées,
+// délais et successeurs sont calculés par lib/livrableSchedule.ts, le même
+// moteur que le serveur. Pour chaque livrable, l'échéance est fixée par la
+// durée, le délai depuis T0 ou une date : les deux autres valeurs sont
+// déduites (en italique) et restent modifiables — les modifier change la
+// saisie qui fixe l'échéance.
+// ══════════════════════════════════════════════════════════════
+
+import { useMemo, useState } from "react";
+import { AlertCircle, ArrowDown, ArrowUp, FileText, Info, Plus, Scale, Trash2, Upload } from "lucide-react";
 import { FileImportModal } from "./FileImportModal";
-import { usePermissions } from "@/hooks/usePermissions";
-
-interface Livrable {
-  numero: string;
-  intitule: string;
-  ponderation: number;
-  delai?: number;
-  delaiUnite?: 'jours' | 'semaines' | 'mois';
-  duree?: number;
-  dureeUnite?: 'jours' | 'semaines' | 'mois';
-  dateDebut?: string;
-  dateFin?: string;
-  dateEcheance?: Date;
-  description?: string;
-  predecesseur?: string;
-  successeur?: string;
-  statut?: "en_attente" | "soumis" | "valide" | "rejete";
-}
-
-// Convertir une durée en jours selon l'unité
-const dureeToDays = (value: number, unite: string = 'mois'): number => {
-  if (unite === 'semaines') return value * 7;
-  if (unite === 'mois') return value * 30;
-  return value; // jours
-};
-
-interface EtudeData {
-  livrables: Livrable[];
-}
+import type { Livrable } from "@/services/api/planningService";
+import {
+  calculerCalendrierEtude,
+  ecart,
+  toDay,
+  type ChampLivrable,
+  type ModeFin,
+  type Unite,
+} from "@/lib/livrableSchedule";
 
 interface Props {
-  data: EtudeData | null;
-  onChange: (data: EtudeData) => void;
-  dateT0: string; // Date T0 vient du parent (Informations Générales)
-  projectId?: string; // Ajout pour les permissions
+  livrables: Livrable[];
+  onChange: (livrables: Livrable[]) => void;
+  /** Date T0 de l'activité (AAAA-MM-JJ), saisie dans les informations générales. */
+  dateT0: string;
+  readOnly: boolean;
 }
 
-export function PlanningFormEtude({ data, onChange, dateT0, projectId }: Props) {
-  const { can, loading: permissionsLoading } = usePermissions(projectId);
-  // Planifier est réservé au chef de projet : contributeurs et coordinateurs consultent.
-  const readOnly = !can("planning:edit");
-  const [livrables, setLivrables] = useState<Livrable[]>(
-    data?.livrables || [
-      { numero: "R1", intitule: "", ponderation: 0, duree: 1, dureeUnite: "mois", delaiUnite: "mois", statut: "en_attente", predecesseur: "" },
-    ]
-  );
+const UNITES: { value: Unite; label: string }[] = [
+  { value: "jours", label: "jours" },
+  { value: "semaines", label: "sem." },
+  { value: "mois", label: "mois" },
+];
+
+const GRID = "grid-cols-[56px_minmax(180px,1fr)_68px_84px_132px_128px_128px_132px_72px_76px]";
+
+export const nouveauLivrable = (numero: string): Livrable => ({
+  numero,
+  intitule: "",
+  ponderation: 0,
+  duree: 1,
+  dureeUnite: "mois",
+  delaiUnite: "mois",
+  modeFin: "duree",
+  debutFixe: false,
+  statut: "en_attente",
+});
+
+const prochainNumero = (livrables: Livrable[]) => {
+  const max = livrables.reduce((m, l) => Math.max(m, Number(/^R(\d+)$/.exec(l.numero ?? "")?.[1] ?? 0)), 0);
+  return `R${max + 1}`;
+};
+
+const formatQuantite = (value: number | undefined) =>
+  value === undefined ? "" : value.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+
+const parseQuantite = (raw: string): number | undefined => {
+  const value = parseFloat(raw.replace(",", "."));
+  return isFinite(value) && value >= 0 ? value : undefined;
+};
+
+const formatJour = (day?: string) =>
+  day ? new Date(`${day}T00:00:00`).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+export function PlanningFormEtude({ livrables, onChange, dateT0, readOnly }: Props) {
   const [showImportModal, setShowImportModal] = useState(false);
+  const calendrier = useMemo(() => calculerCalendrierEtude(livrables, dateT0), [livrables, dateT0]);
 
-  // Mettre à jour les livrables quand les données changent
-  useEffect(() => {
-    console.log("🔄 PlanningFormEtude - Props data changed:", data);
-    if (data?.livrables && data.livrables.length > 0) {
-      console.log("🔄 Mise à jour des livrables depuis les props:", data.livrables);
-      setLivrables(data.livrables);
-    } else if (data?.livrables && data.livrables.length === 0) {
-      // Si data existe mais livrables est vide, réinitialiser avec un livrable par défaut
-      console.log("⚠️ Données vides, initialisation avec livrable par défaut");
-      setLivrables([
-        { numero: "R1", intitule: "", ponderation: 0, duree: 1, dureeUnite: "mois", delaiUnite: "mois", statut: "en_attente", predecesseur: "" },
-      ]);
-    }
-  }, [data]);
+  const problemeDe = (index: number, champ: ChampLivrable) =>
+    calendrier.problemes.find((p) => p.index === index && p.champ === champ)?.message;
+  // Un message par problème : une boucle est signalée sur chacune de ses lignes
+  const problemesLignes = [...new Set(calendrier.problemes.filter((p) => p.champ !== "ponderation").map((p) => p.message))];
+  const pondValide = Math.abs(calendrier.totalPonderation - 100) <= 0.01;
 
-  // Ne pas appeler onChange dans useEffect pour éviter les boucles infinies
-  // À la place, on appelle onChange directement dans les fonctions qui modifient les livrables
-  
-  const notifyChange = (newLivrables: Livrable[]) => {
-    const updatedLivrables = newLivrables.map((livrable) => {
-      return calculateDatesForLivrable(livrable);
-    });
-    onChange({ livrables: updatedLivrables });
+  // ── Modifications ──
+  const modifier = (index: number, patch: Partial<Livrable>) =>
+    onChange(livrables.map((l, i) => (i === index ? { ...l, ...patch } : l)));
+
+  const renommer = (index: number, numero: string) => {
+    const ancien = livrables[index].numero;
+    onChange(
+      livrables.map((l, i) =>
+        i === index ? { ...l, numero } : l.predecesseur && l.predecesseur === ancien ? { ...l, predecesseur: numero } : l,
+      ),
+    );
   };
 
-  const addLivrable = () => {
-    const nextNum = `R${livrables.length + 1}`;
-    const newLivrables: Livrable[] = [
-      ...livrables,
-      { numero: nextNum, intitule: "", ponderation: 0, duree: 1, dureeUnite: "mois", delaiUnite: "mois", statut: "en_attente" as const, predecesseur: "", successeur: "" },
-    ];
-    setLivrables(newLivrables);
-    notifyChange(newLivrables);
+  const fixerFin = (index: number, mode: ModeFin, patch: Partial<Livrable>) => modifier(index, { ...patch, modeFin: mode });
+
+  const ajouter = () => onChange([...livrables, nouveauLivrable(prochainNumero(livrables))]);
+
+  const supprimer = (index: number) => {
+    const retire = livrables[index].numero;
+    onChange(
+      livrables
+        .filter((_, i) => i !== index)
+        .map((l) => (l.predecesseur === retire ? { ...l, predecesseur: "" } : l)),
+    );
   };
 
-  const removeLivrable = (index: number) => {
-    const removed = livrables[index];
-    const updated = livrables.filter((_, i) => i !== index);
-    
-    // Nettoyer les références au livrable supprimé
-    const cleaned = updated.map(liv => ({
-      ...liv,
-      predecesseur: liv.predecesseur === removed.numero ? "" : liv.predecesseur,
-      successeur: liv.successeur === removed.numero ? "" : liv.successeur,
-    }));
-    
-    setLivrables(cleaned);
-    notifyChange(cleaned);
+  const deplacer = (index: number, direction: -1 | 1) => {
+    const cible = index + direction;
+    if (cible < 0 || cible >= livrables.length) return;
+    const copie = [...livrables];
+    [copie[index], copie[cible]] = [copie[cible], copie[index]];
+    onChange(copie);
   };
 
-  const updateLivrable = (index: number, field: keyof Livrable, value: any) => {
-    const newLivrables = livrables.map((l, i) => {
-      if (i !== index) return l;
-      return { ...l, [field]: value };
-    });
-    
-    // Recalculer tous les livrables avec dépendances
-    const recalculated = recalculateAllLivrables(newLivrables);
-    setLivrables(recalculated);
-    notifyChange(recalculated);
+  /** Répartit 100 % à parts égales, l'arrondi sur la dernière ligne. */
+  const equilibrer = () => {
+    if (livrables.length === 0) return;
+    const part = Math.floor((100 / livrables.length) * 100) / 100;
+    onChange(
+      livrables.map((l, i) => ({
+        ...l,
+        ponderation: i === livrables.length - 1 ? Math.round((100 - part * (livrables.length - 1)) * 100) / 100 : part,
+      })),
+    );
   };
 
-  // Recalcul intelligent de tous les livrables
-  const recalculateAllLivrables = (items: Livrable[]): Livrable[] => {
-    const result = [...items];
-    const livrableMap = new Map<string, Livrable>();
-
-    // Créer une map pour accès rapide
-    result.forEach(liv => {
-      if (liv.numero) {
-        livrableMap.set(liv.numero, liv);
-      }
-    });
-
-    // Recalculer chaque livrable
-    result.forEach((livrable, idx) => {
-      // Si prédécesseur défini, calculer date de début
-      if (livrable.predecesseur) {
-        const pred = livrableMap.get(livrable.predecesseur);
-        if (pred && pred.dateFin) {
-          livrable.dateDebut = pred.dateFin;
-        }
-      }
-
-      // Recalculer les champs
-      result[idx] = calculateDatesForLivrable(livrable);
-
-      // Mettre à jour la map
-      if (livrable.numero) {
-        livrableMap.set(livrable.numero, result[idx]);
-      }
-
-      // Synchroniser le successeur automatiquement
-      if (livrable.predecesseur) {
-        const predIndex = result.findIndex(l => l.numero === livrable.predecesseur);
-        if (predIndex !== -1 && !result[predIndex].successeur) {
-          result[predIndex].successeur = livrable.numero;
-        }
-      }
-    });
-
-    return result;
+  const importer = (lignes: Record<string, unknown>[]) => {
+    onChange(
+      lignes.map((row) => ({
+        ...nouveauLivrable(String(row.numero ?? "")),
+        intitule: String(row.intitule ?? ""),
+        ponderation: Number(row.ponderation) || 0,
+        predecesseur: String(row.predecesseur ?? ""),
+        description: row.description ? String(row.description) : undefined,
+        duree: parseQuantite(String(row.duree ?? "")),
+        delai: parseQuantite(String(row.delai ?? "")),
+        dateDebut: toDay(String(row.dateDebut ?? "")),
+        debutFixe: !!toDay(String(row.dateDebut ?? "")),
+        dateFin: toDay(String(row.dateFin ?? "")),
+        // Priorité de l'import : durée, sinon délai, sinon date de fin
+        modeFin: parseQuantite(String(row.duree ?? "")) ? "duree" : parseQuantite(String(row.delai ?? "")) ? "delai" : "fin",
+      })),
+    );
   };
 
-  // Calcul intelligent des dates selon ce qui est rempli
-  const calculateDatesForLivrable = (livrable: Livrable): Livrable => {
-    const result = { ...livrable };
-    
-    if (!dateT0) return result;
+  // ── Styles ──
+  const cellule = "px-1.5 py-1.5 flex items-center gap-1 border-r border-b border-[var(--border-default)] min-w-0";
+  const champ = (options: { deduit?: boolean; erreur?: string }) =>
+    [
+      "w-full min-w-0 px-1.5 py-1 rounded text-[11px] border focus:outline-none focus:border-[var(--accent)] disabled:cursor-not-allowed",
+      options.erreur ? "border-red-500 bg-red-500/5" : "border-transparent hover:border-[var(--border-default)]",
+      options.deduit ? "italic text-[var(--text-tertiary)] bg-[var(--bg-inset)]" : "bg-transparent text-[var(--text-primary)]",
+    ].join(" ");
+  const selectUnite = "shrink-0 w-[52px] px-0.5 py-1 bg-transparent text-[10px] rounded border border-[var(--border-subtle)] focus:outline-none disabled:opacity-60";
 
-    // Déterminer la date de début effective
-    let dateDebutEffective = result.dateDebut ? new Date(result.dateDebut) : new Date(dateT0);
-
-    // Si prédécesseur, la date de début vient de la fin du prédécesseur
-    if (result.predecesseur) {
-      const pred = livrables.find((l) => l.numero === result.predecesseur);
-      if (pred && pred.dateFin) {
-        dateDebutEffective = new Date(pred.dateFin);
-        result.dateDebut = pred.dateFin;
-      }
-    }
-
-    // Calcul 1: Date début + Durée → Date fin (calculée automatiquement)
-    if (result.dateDebut && result.duree && !result.dateFin) {
-      const dateFin = new Date(result.dateDebut);
-      const days = dureeToDays(result.duree, result.dureeUnite || 'mois');
-      dateFin.setDate(dateFin.getDate() + days);
-      result.dateFin = dateFin.toISOString().split("T")[0];
-      result.dateEcheance = dateFin;
-    }
-
-    // Calcul 2: Date début + Date fin → Durée (calculée automatiquement)
-    if (result.dateDebut && result.dateFin && !result.duree) {
-      const debut = new Date(result.dateDebut);
-      const fin = new Date(result.dateFin);
-      const diffDays = Math.round((fin.getTime() - debut.getTime()) / (1000 * 60 * 60 * 24));
-      const unite = result.dureeUnite || 'mois';
-      if (unite === 'jours') result.duree = Math.max(0, diffDays);
-      else if (unite === 'semaines') result.duree = Math.max(0, Math.round(diffDays / 7));
-      else result.duree = Math.max(0, Math.round(diffDays / 30));
-      result.dateEcheance = fin;
-    }
-
-    // Calcul 3: T0 + Délai → Échéance (calculée automatiquement)
-    if (result.delai && !result.dateEcheance) {
-      const echeance = new Date(dateT0);
-      const days = dureeToDays(result.delai, result.delaiUnite || 'mois');
-      echeance.setDate(echeance.getDate() + days);
-      result.dateEcheance = echeance;
-    }
-
-    // Calcul 4: Si date fin existe, mettre à jour l'échéance
-    if (result.dateFin) {
-      result.dateEcheance = new Date(result.dateFin);
-    }
-
-    // Calcul 5: Si échéance existe, calculer le délai depuis T0
-    if (result.dateEcheance && !result.delai) {
-      const t0 = new Date(dateT0);
-      const echeance = new Date(result.dateEcheance);
-      const diffDays = Math.round((echeance.getTime() - t0.getTime()) / (1000 * 60 * 60 * 24));
-      const unite = result.delaiUnite || 'mois';
-      if (unite === 'jours') result.delai = Math.max(0, diffDays);
-      else if (unite === 'semaines') result.delai = Math.max(0, Math.round(diffDays / 7));
-      else result.delai = Math.max(0, Math.round(diffDays / 30));
-    }
-
-    return result;
-  };
-
-  const formatDate = (date?: string | Date): string => {
-    if (!date) return "—";
-    const d = typeof date === "string" ? new Date(date) : date;
-    return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-  };
-
-  const totalPonderation = livrables.reduce((sum, l) => sum + (l.ponderation || 0), 0);
-  const isValidPonderation = totalPonderation === 100;
-
-  const handleImport = (importedData: any[], calibrage: Record<string, number>) => {
-    console.log("📥 Import de", importedData.length, "livrables:", importedData);
-    
-    const imported = importedData.map((row) => ({
-      numero: row.numero || "",
-      intitule: row.intitule || "",
-      ponderation: row.ponderation || 0,
-      delai: row.delai,
-      duree: row.duree,
-      dateDebut: row.dateDebut || "",
-      dateFin: row.dateFin || "",
-      dateEcheance: row.dateEcheance,
-      predecesseur: row.predecesseur || "",
-      successeur: row.successeur || "",
-      description: row.description || "",
-      statut: "en_attente" as const,
-    }));
-    
-    console.log("✅ Livrables importés et transformés:", imported);
-    setLivrables(imported);
-    notifyChange(imported);
-  };
+  const dureeEtude = calendrier.debut && calendrier.fin ? ecart(calendrier.debut, calendrier.fin, "mois") : undefined;
 
   return (
     <>
-      <FileImportModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onImport={handleImport}
-        importType="etude"
-      />
+      <FileImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} onImport={importer} importType="etude" />
 
-      <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden">
-        <div className="p-5 border-b border-[var(--border-subtle)]">
-          <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <FileText size={16} />
-            Planification Étude Préalable
-          </h2>
-          <p className="text-[11px] text-[var(--text-secondary)] mt-1">
-            Définissez les livrables (rapports) avec leur pondération et délais. Tableau style MS Project.
-          </p>
-        </div>
+      <section className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden">
+        <header className="p-5 border-b border-[var(--border-subtle)] flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <FileText size={16} /> Planification de l&apos;étude préalable
+            </h2>
+            <p className="text-[11px] text-[var(--text-secondary)] mt-1">
+              Livrables de l&apos;étude : pondération, enchaînement et échéances.
+            </p>
+          </div>
 
-        <div className="p-5 space-y-5">
-          {/* Message d'avertissement pour mode View */}
-          {!permissionsLoading && readOnly && (
-            <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
-              <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
-              <div className="text-[11px] text-amber-600 dark:text-amber-400">
-                <strong>Mode lecture seule :</strong> Vous consultez cette planification. Seul le chef de projet peut la modifier.
+          {/* Synthèse de l'étude */}
+          <dl className="flex flex-wrap gap-2 text-[11px]">
+            {[
+              { label: "T0", value: dateT0 ? formatJour(dateT0) : "Non définie", alert: !dateT0 },
+              { label: "Début", value: formatJour(calendrier.debut) },
+              { label: "Fin", value: formatJour(calendrier.fin) },
+              { label: "Durée", value: dureeEtude === undefined ? "—" : `${formatQuantite(dureeEtude)} mois` },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className={`px-2.5 py-1.5 rounded-[var(--radius-md)] border ${item.alert ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400" : "border-[var(--border-default)] bg-[var(--bg-inset)]"}`}
+              >
+                <dt className="text-[9px] uppercase tracking-wider font-bold opacity-70">{item.label}</dt>
+                <dd className="font-semibold">{item.value}</dd>
               </div>
+            ))}
+            <div
+              className={`px-2.5 py-1.5 rounded-[var(--radius-md)] border ${pondValide ? "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400" : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"}`}
+            >
+              <dt className="text-[9px] uppercase tracking-wider font-bold opacity-70">Pondération</dt>
+              <dd className="font-semibold">{formatQuantite(calendrier.totalPonderation)} % {pondValide ? "✓" : "/ 100 %"}</dd>
+            </div>
+          </dl>
+        </header>
+
+        <div className="p-5 space-y-4">
+          {readOnly && (
+            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+              <AlertCircle size={15} className="shrink-0 mt-px" />
+              <span><strong>Consultation :</strong> seul le chef de projet peut modifier la planification.</span>
             </div>
           )}
 
-          {/* Info Date T0 */}
-          <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-            <AlertCircle size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-            <div className="text-[11px] text-blue-600 dark:text-blue-400">
-              <strong>Date T0 :</strong> {dateT0 ? new Date(dateT0).toLocaleDateString("fr-FR") : "Non définie"} (définie dans Informations Générales)
+          {!dateT0 && (
+            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-700 dark:text-blue-400">
+              <Info size={15} className="shrink-0 mt-px" />
+              <span>Renseignez la <strong>date T0</strong> dans les informations générales : les livrables sans prédécesseur ni date de début démarrent à T0, et les délais se comptent depuis T0.</span>
             </div>
-          </div>
+          )}
 
-          {/* Indicateur pondération */}
-          <div className="flex items-center justify-between p-3 bg-[var(--bg-inset)] rounded-[var(--radius-md)] border border-[var(--border-default)]">
-            <span className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-              Total Pondération
-            </span>
-            <div
-              className={`px-3 py-1 rounded-[var(--radius-sm)] text-[11px] font-bold ${
-                isValidPonderation
-                  ? "bg-green-500/10 text-green-600"
-                  : "bg-amber-500/10 text-amber-600"
-              }`}
-            >
-              {totalPonderation}% {isValidPonderation ? "✓ Valide" : "⚠ Doit être 100%"}
-            </div>
-          </div>
-
-          {/* Tableau des livrables - Style Excel/MS Project avec bordures */}
-          <div className="border-2 border-[var(--border-default)] rounded-[var(--radius-md)] overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-[60px_1fr_80px_120px_120px_120px_120px_60px_60px_80px] bg-[var(--bg-inset)] text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">N°</div>
-              <div className="px-2 py-2 border-r border-b-2 border-[var(--border-default)]">Intitulé du livrable</div>
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">Pond. (%)</div>
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">Délai</div>
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">Durée</div>
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">Date début</div>
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">Échéance</div>
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">Préd.</div>
-              <div className="px-2 py-2 text-center border-r border-b-2 border-[var(--border-default)]">Succ.</div>
-              <div className="px-2 py-2 text-center border-b-2 border-[var(--border-default)]">Actions</div>
-            </div>
-
-            {/* Rows */}
-            <div>
-              {livrables.map((livrable, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[60px_1fr_80px_120px_120px_120px_120px_60px_60px_80px] hover:bg-[var(--bg-surface-hover)] transition-colors text-[12px]"
-                >
-                  {/* Numéro */}
-                  <div className="px-2 py-2 flex items-center justify-center border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="text"
-                      value={livrable.numero}
-                      onChange={(e) => updateLivrable(index, "numero", e.target.value)}
-                      disabled={readOnly}
-                      className="w-full px-1 py-1 bg-transparent text-[11px] font-bold text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="R1"
-                    />
+          {/* Tableau */}
+          <div className="border border-[var(--border-default)] rounded-[var(--radius-md)] overflow-x-auto">
+            <div className="min-w-[1060px]">
+              <div className={`grid ${GRID} bg-[var(--bg-inset)] text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider`}>
+                {["N°", "Intitulé du livrable", "Pond. %", "Préd.", "Début", "Durée", "Délai (T0 +)", "Échéance", "Succ.", ""].map((label, i) => (
+                  <div key={i} className={`px-2 py-2 border-r border-b border-[var(--border-default)] ${i === 1 ? "" : "text-center"}`}>
+                    {label}
                   </div>
-
-                  {/* Intitulé */}
-                  <div className="px-2 py-2 flex items-center border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="text"
-                      value={livrable.intitule}
-                      onChange={(e) => updateLivrable(index, "intitule", e.target.value)}
-                      disabled={readOnly}
-                      className="w-full px-1 py-1 bg-transparent text-[12px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="Nom du livrable..."
-                    />
-                  </div>
-
-                  {/* Pondération */}
-                  <div className="px-2 py-2 flex items-center justify-center border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={livrable.ponderation || ""}
-                      onChange={(e) => updateLivrable(index, "ponderation", parseFloat(e.target.value) || 0)}
-                      disabled={readOnly}
-                      className="w-full px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="20"
-                    />
-                  </div>
-
-                  {/* Délai (depuis T0) + unité */}
-                  <div className="px-1 py-2 flex items-center gap-1 border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="number"
-                      min="0"
-                      value={livrable.delai || ""}
-                      onChange={(e) => updateLivrable(index, "delai", parseInt(e.target.value) || undefined)}
-                      disabled={readOnly || (!!livrable.dateEcheance && !livrable.delai)}
-                      className="w-[45px] px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
-                      placeholder="1"
-                    />
-                    <select
-                      value={livrable.delaiUnite || 'mois'}
-                      onChange={(e) => updateLivrable(index, "delaiUnite", e.target.value)}
-                      disabled={readOnly}
-                      className="w-[65px] px-0.5 py-1 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border border-[var(--border-subtle)] disabled:opacity-50"
-                    >
-                      <option value="jours">jours</option>
-                      <option value="semaines">semaines</option>
-                      <option value="mois">mois</option>
-                    </select>
-                  </div>
-
-                  {/* Durée + unité */}
-                  <div className="px-1 py-2 flex items-center gap-1 border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="number"
-                      min="0"
-                      value={livrable.duree || ""}
-                      onChange={(e) => updateLivrable(index, "duree", parseInt(e.target.value) || undefined)}
-                      disabled={readOnly || (!!livrable.dateDebut && !!livrable.dateFin && !livrable.duree)}
-                      className="w-[45px] px-1 py-1 bg-transparent text-[11px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
-                      placeholder="1"
-                    />
-                    <select
-                      value={livrable.dureeUnite || 'mois'}
-                      onChange={(e) => updateLivrable(index, "dureeUnite", e.target.value)}
-                      disabled={readOnly}
-                      className="w-[65px] px-0.5 py-1 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border border-[var(--border-subtle)] disabled:opacity-50"
-                    >
-                      <option value="jours">jours</option>
-                      <option value="semaines">semaines</option>
-                      <option value="mois">mois</option>
-                    </select>
-                  </div>
-
-                  {/* Date début */}
-                  <div className="px-2 py-2 flex items-center border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="date"
-                      value={livrable.dateDebut || ""}
-                      onChange={(e) => updateLivrable(index, "dateDebut", e.target.value)}
-                      disabled={readOnly || !!livrable.predecesseur}
-                      className="w-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
-                      title={livrable.predecesseur ? "Calculé depuis le prédécesseur" : ""}
-                    />
-                  </div>
-
-                  {/* Échéance (Date fin) */}
-                  <div className="px-2 py-2 flex items-center border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="date"
-                      value={livrable.dateFin || ""}
-                      onChange={(e) => updateLivrable(index, "dateFin", e.target.value)}
-                      disabled={readOnly || (!!livrable.dateDebut && !!livrable.duree)}
-                      className="w-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:italic"
-                      placeholder={formatDate(livrable.dateEcheance)}
-                      title={(livrable.dateDebut && livrable.duree) ? "Calculé automatiquement (Date début + Durée)" : ""}
-                    />
-                  </div>
-
-                  {/* Prédécesseur */}
-                  <div className="px-2 py-2 flex items-center justify-center border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="text"
-                      value={livrable.predecesseur || ""}
-                      onChange={(e) => updateLivrable(index, "predecesseur", e.target.value)}
-                      disabled={readOnly}
-                      className="w-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="R1"
-                      title="Numéro du livrable qui doit être terminé avant"
-                    />
-                  </div>
-
-                  {/* Successeur */}
-                  <div className="px-2 py-2 flex items-center justify-center border-r border-b border-[var(--border-default)]">
-                    <input
-                      type="text"
-                      value={livrable.successeur || ""}
-                      onChange={(e) => updateLivrable(index, "successeur", e.target.value)}
-                      disabled={readOnly}
-                      className="w-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="R3"
-                      title="Numéro du livrable qui commence après"
-                    />
-                  </div>
-
-                  {/* Actions */}
-                  <div className="px-2 py-2 flex items-center justify-center border-b border-[var(--border-default)]">
-                    {can("planning:edit") && (
-                      <button
-                        onClick={() => removeLivrable(index)}
-                        className="p-1 rounded hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all"
-                        title="Supprimer"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {/* Bouton ajouter ligne */}
-              <div className="px-3 py-2 bg-[var(--bg-inset)]/30 border-t border-[var(--border-default)]">
-                {can("planning:edit") && (
-                  <button
-                    onClick={addLivrable}
-                    className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)] transition-colors"
-                  >
-                    <Plus size={14} />
-                    Ajouter un livrable
-                  </button>
-                )}
+                ))}
               </div>
+
+              {calendrier.livrables.map((l, index) => {
+                const saisi = livrables[index];
+                const autres = livrables.filter((_, i) => i !== index && livrables[i].numero);
+                return (
+                  <div key={index} className={`grid ${GRID} text-[12px] hover:bg-[var(--bg-surface-hover)]`}>
+                    <div className={cellule}>
+                      <input
+                        value={saisi.numero}
+                        onChange={(e) => renommer(index, e.target.value)}
+                        disabled={readOnly}
+                        title={problemeDe(index, "numero")}
+                        className={`${champ({ erreur: problemeDe(index, "numero") })} text-center font-bold`}
+                      />
+                    </div>
+                    <div className={cellule}>
+                      <input
+                        value={saisi.intitule}
+                        onChange={(e) => modifier(index, { intitule: e.target.value })}
+                        disabled={readOnly}
+                        placeholder="Nom du livrable…"
+                        className={champ({})}
+                      />
+                    </div>
+                    <div className={cellule}>
+                      <input
+                        inputMode="decimal"
+                        value={saisi.ponderation ? formatQuantite(saisi.ponderation) : ""}
+                        onChange={(e) => modifier(index, { ponderation: parseQuantite(e.target.value) ?? 0 })}
+                        disabled={readOnly}
+                        placeholder="0"
+                        className={`${champ({})} text-center`}
+                      />
+                    </div>
+                    <div className={cellule}>
+                      <select
+                        value={saisi.predecesseur ?? ""}
+                        onChange={(e) => modifier(index, { predecesseur: e.target.value })}
+                        disabled={readOnly}
+                        title={problemeDe(index, "predecesseur") ?? "Livrable qui doit être terminé avant (série)"}
+                        className={`${champ({ erreur: problemeDe(index, "predecesseur") })} text-center`}
+                      >
+                        <option value="">—</option>
+                        {autres.map((o) => (
+                          <option key={o.numero} value={o.numero}>{o.numero}</option>
+                        ))}
+                        {saisi.predecesseur && !autres.some((o) => o.numero === saisi.predecesseur) && (
+                          <option value={saisi.predecesseur}>{saisi.predecesseur} ?</option>
+                        )}
+                      </select>
+                    </div>
+                    <div className={cellule}>
+                      <input
+                        type="date"
+                        value={l.dateDebut ?? ""}
+                        onChange={(e) => modifier(index, e.target.value ? { dateDebut: e.target.value, debutFixe: true } : { dateDebut: undefined, debutFixe: false })}
+                        disabled={readOnly || !!l.predecesseur}
+                        title={l.predecesseur ? `Fin de ${l.predecesseur}` : l.debutFixe ? "Date de début saisie (videz pour suivre T0)" : "Démarre à T0"}
+                        className={champ({ deduit: !l.debutFixe, erreur: problemeDe(index, "dateDebut") })}
+                      />
+                    </div>
+                    <div className={cellule}>
+                      <input
+                        inputMode="decimal"
+                        value={formatQuantite(l.duree)}
+                        onChange={(e) => fixerFin(index, "duree", { duree: parseQuantite(e.target.value) })}
+                        disabled={readOnly}
+                        title={l.modeFin === "duree" ? "La durée fixe l'échéance" : "Déduite — saisir une durée fixe l'échéance"}
+                        className={`${champ({ deduit: l.modeFin !== "duree" })} text-center`}
+                      />
+                      <select value={l.dureeUnite} onChange={(e) => modifier(index, { dureeUnite: e.target.value as Unite })} disabled={readOnly} className={selectUnite}>
+                        {UNITES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                      </select>
+                    </div>
+                    <div className={cellule}>
+                      <input
+                        inputMode="decimal"
+                        value={formatQuantite(l.delai)}
+                        onChange={(e) => fixerFin(index, "delai", { delai: parseQuantite(e.target.value) })}
+                        disabled={readOnly}
+                        title={problemeDe(index, "delai") ?? (l.modeFin === "delai" ? "Le délai depuis T0 fixe l'échéance" : "Déduit — saisir un délai fixe l'échéance")}
+                        className={`${champ({ deduit: l.modeFin !== "delai", erreur: problemeDe(index, "delai") })} text-center`}
+                      />
+                      <select value={l.delaiUnite} onChange={(e) => modifier(index, { delaiUnite: e.target.value as Unite })} disabled={readOnly} className={selectUnite}>
+                        {UNITES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                      </select>
+                    </div>
+                    <div className={cellule}>
+                      <input
+                        type="date"
+                        value={l.dateFin ?? ""}
+                        onChange={(e) => fixerFin(index, "fin", { dateFin: e.target.value || undefined })}
+                        disabled={readOnly}
+                        title={problemeDe(index, "dateFin") ?? (l.modeFin === "fin" ? "Échéance saisie" : "Déduite — saisir une date fixe l'échéance")}
+                        className={champ({ deduit: l.modeFin !== "fin", erreur: problemeDe(index, "dateFin") })}
+                      />
+                    </div>
+                    <div className={`${cellule} justify-center text-[10px] text-[var(--text-secondary)]`} title="Déduit des prédécesseurs">
+                      {l.successeur ?? "—"}
+                    </div>
+                    <div className="px-1 py-1.5 flex items-center justify-center gap-0.5 border-b border-[var(--border-default)]">
+                      {!readOnly && (
+                        <>
+                          <button type="button" onClick={() => deplacer(index, -1)} disabled={index === 0} title="Monter" className="p-1 rounded text-[var(--text-tertiary)] hover:bg-[var(--bg-inset)] disabled:opacity-25">
+                            <ArrowUp size={13} />
+                          </button>
+                          <button type="button" onClick={() => deplacer(index, 1)} disabled={index === livrables.length - 1} title="Descendre" className="p-1 rounded text-[var(--text-tertiary)] hover:bg-[var(--bg-inset)] disabled:opacity-25">
+                            <ArrowDown size={13} />
+                          </button>
+                          <button type="button" onClick={() => supprimer(index)} title="Supprimer" className="p-1 rounded text-red-500/70 hover:text-red-500 hover:bg-red-500/10">
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {livrables.length === 0 && (
+                <div className="px-4 py-6 text-center text-[12px] text-[var(--text-tertiary)]">Aucun livrable.</div>
+              )}
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            {can("planning:edit") && (
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-2 px-4 py-2 text-[12px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-default)] rounded-[var(--radius-md)] transition-colors"
-              >
-                <Upload size={14} />
-                Importer depuis Excel
+          {!readOnly && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={ajouter} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)]">
+                <Plus size={14} /> Ajouter un livrable
               </button>
-            )}
-          </div>
+              {!pondValide && livrables.length > 0 && (
+                <button type="button" onClick={equilibrer} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] rounded-[var(--radius-md)]" title="Répartir 100 % à parts égales">
+                  <Scale size={14} /> Répartir 100 %
+                </button>
+              )}
+              <button type="button" onClick={() => setShowImportModal(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] border border-[var(--border-default)] hover:bg-[var(--bg-surface-hover)] rounded-[var(--radius-md)]">
+                <Upload size={14} /> Importer depuis Excel
+              </button>
+            </div>
+          )}
 
-          {/* Aide */}
-          <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-            <AlertCircle size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-            <div className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
-              <strong>Calculs intelligents automatiques :</strong>
-              <ul className="mt-1 space-y-1 list-disc list-inside">
-                <li><strong>Délai</strong> : Temps depuis T0 jusqu'à l'échéance (ex: T0 + 3 mois = échéance)</li>
-                <li><strong>Durée</strong> : Temps d'exécution du livrable (ex: début + 1 mois = fin)</li>
-                <li><strong>Prédécesseur</strong> : Si renseigné, la date de début est calculée automatiquement (= date fin du prédécesseur)</li>
-                <li><strong>Successeur</strong> : Synchronisé automatiquement quand vous définissez un prédécesseur</li>
-                <li><strong>Date fin</strong> : Calculée automatiquement si vous renseignez Date début + Durée (grisée)</li>
-                <li><strong>Durée</strong> : Calculée automatiquement si vous renseignez Date début + Date fin (grisée)</li>
-                <li><strong>Délai</strong> : Calculé automatiquement si vous renseignez l'échéance (grisé)</li>
-                <li><strong>Parallèle</strong> : Laissez "Préd." vide → Commence à la date T0 ou date de début saisie</li>
-                <li><strong>Série</strong> : Indiquez le prédécesseur (ex: R1) → Commence après R1 automatiquement</li>
+          {/* Problèmes à corriger avant d'enregistrer */}
+          {(problemesLignes.length > 0 || (!pondValide && livrables.length > 0)) && (
+            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+              <AlertCircle size={15} className="shrink-0 mt-px" />
+              <ul className="space-y-0.5">
+                {problemesLignes.map((message) => <li key={message}>{message}</li>)}
+                {!pondValide && livrables.length > 0 && (
+                  <li>La somme des pondérations doit être égale à 100 % (actuellement {formatQuantite(calendrier.totalPonderation)} %).</li>
+                )}
               </ul>
             </div>
-          </div>
-
-          {/* Alerte pondération */}
-          {!isValidPonderation && livrables.length > 0 && (
-            <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
-              <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
-              <div className="text-[11px] text-amber-600 dark:text-amber-400">
-                <strong>Attention :</strong> La somme des pondérations doit être égale à 100%. Actuellement : {totalPonderation}%
-              </div>
-            </div>
           )}
+
+          <details className="rounded-[var(--radius-md)] border border-blue-500/20 bg-blue-500/5 text-[11px] text-blue-700 dark:text-blue-400">
+            <summary className="px-3 py-2 cursor-pointer font-semibold">Règles de calcul</summary>
+            <ul className="px-5 pb-3 space-y-1 list-disc">
+              <li><strong>Délai</strong> : temps depuis T0 jusqu&apos;à l&apos;échéance (T0 + 3 mois = échéance).</li>
+              <li><strong>Durée</strong> : temps d&apos;exécution du livrable (début + 1 mois = fin).</li>
+              <li><strong>Échéance</strong> : fixée par la durée, le délai ou une date saisie ; les deux autres valeurs sont déduites et affichées en italique. Saisir une valeur en italique la rend déterminante.</li>
+              <li><strong>Série</strong> : avec un prédécesseur, le livrable commence à la fin du prédécesseur.</li>
+              <li><strong>Parallèle</strong> : sans prédécesseur, il commence à la date de début saisie, sinon à T0.</li>
+              <li><strong>Successeurs</strong> : déduits automatiquement des prédécesseurs.</li>
+              <li><strong>Mois</strong> : mois de calendrier (15 janv. + 1 mois = 15 févr.).</li>
+              <li><strong>Pondération</strong> : la somme des livrables doit être égale à 100 %.</li>
+            </ul>
+          </details>
         </div>
-      </div>
+      </section>
     </>
   );
 }
