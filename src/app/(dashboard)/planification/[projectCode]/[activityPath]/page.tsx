@@ -16,11 +16,11 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { BarChart3, Briefcase, ChevronLeft, FileText, Hammer, Plus, Save, Trash2, User, X } from "lucide-react";
 import { getProjectById, getLeafActivities, type Project } from "@/lib/projectStore";
-import { planningService, type CreatePlanningDto, type Livrable, type Planning, type UpdatePlanningDto } from "@/services/api/planningService";
+import { planningService, type CreatePlanningDto, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
 import { PlanningFormEtude, nouveauLivrable } from "@/components/planning/PlanningFormEtude";
 import { PlanningFormPassation } from "@/components/planning/PlanningFormPassation";
-import { PlanningFormExecution } from "@/components/planning/PlanningFormExecution";
+import { PlanningFormExecution, nouvelleTache } from "@/components/planning/PlanningFormExecution";
 import { ActivityGeneralStrip } from "@/components/planning/ActivityGeneralStrip";
 import { ActivityPhaseBar, type PhaseSummary } from "@/components/planning/ActivityPhaseBar";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -30,7 +30,7 @@ import { wbsNumbers } from "@/lib/structureOps";
 import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
 import { PHASE_LABELS, PHASE_ORDER, periodeDesLignes, type PhaseKey } from "@/lib/phaseTimeline";
 import { toFCFA } from "@/lib/componentBudget";
-import { livrablePourApi, messageApi } from "@/lib/livrableApi";
+import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
 import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 
 type ActivityType = "travaux" | "fourniture" | "services" | "etudes" | "pi";
@@ -80,7 +80,7 @@ export default function ActivityPlanningPage() {
   // Données des phases
   const [livrables, setLivrables] = useState<Livrable[]>([nouveauLivrable("R1")]);
   const [passationData, setPassationData] = useState<any>(null);
-  const [executionData, setExecutionData] = useState<any>(null);
+  const [taches, setTaches] = useState<TacheExecution[]>([nouvelleTache("T1")]);
 
   const isEditMode = planning !== null;
   const actives: Record<PhaseKey, boolean> = { etude: hasEtudePrealable, passation: hasPassation, execution: hasExecution };
@@ -100,7 +100,7 @@ export default function ActivityPlanningPage() {
     setResponsablePrincipal(p.responsablePrincipal || "");
     setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
     setPassationData(p.hasPassation ? { typePassation: p.typePassation || "", etapesPassation: p.etapesPassation || [] } : null);
-    setExecutionData(p.tachesExecution?.length ? { tachesExecution: p.tachesExecution } : null);
+    setTaches(p.tachesExecution?.length ? p.tachesExecution : [nouvelleTache("T1")]);
     const premiere = PHASE_ORDER.find((k) => ({ etude: p.hasEtudePrealable, passation: p.hasPassation, execution: p.hasExecution })[k]);
     if (premiere && ouvrirPremierePhase) setSelected(premiere);
   }
@@ -112,9 +112,9 @@ export default function ActivityPlanningPage() {
       general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal }),
       etude: JSON.stringify(hasEtudePrealable ? livrables.map(livrablePourApi) : null),
       passation: JSON.stringify(hasPassation ? passationData : null),
-      execution: JSON.stringify(hasExecution ? executionData : null),
+      execution: JSON.stringify(hasExecution ? taches.map(tachePourApi) : null),
     }),
-    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, livrables, hasPassation, passationData, hasExecution, executionData],
+    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, livrables, hasPassation, passationData, hasExecution, taches],
   );
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
@@ -197,15 +197,17 @@ export default function ActivityPlanningPage() {
 
   const calendrierEtude = useMemo(() => calculerCalendrierEtude(livrables, dateT0), [livrables, dateT0]);
   const problemesEtude = useMemo(() => [...new Set(calendrierEtude.problemes.map((p) => p.message))], [calendrierEtude]);
+  const calendrierExecution = useMemo(() => calculerCalendrierEtude(taches, dateT0), [taches, dateT0]);
+  const problemesExecution = useMemo(() => [...new Set(calendrierExecution.problemes.map((p) => p.message))], [calendrierExecution]);
 
   const phases: PhaseSummary[] = useMemo(() => {
     const lignesPassation: object[] = passationData?.lignesPassation ?? passationData?.etapesPassation ?? [];
-    const taches: Array<{ designation?: string }> = executionData?.tachesExecution ?? [];
+
     const livrablesNommes = livrables.filter((l) => l.intitule?.trim()).length;
     const marches = lignesPassation.filter((l) => Object.values(l).some((v) => typeof v === "string" && v.trim() && v !== "1")).length;
     const tachesNommees = taches.filter((t) => t.designation?.trim()).length;
 
-    const resume = (key: PhaseKey, contenu: number, mot: string, periode = periodeDesLignes(key === "passation" ? lignesPassation : taches)) => {
+    const resume = (key: PhaseKey, contenu: number, mot: string, periode = periodeDesLignes(lignesPassation)) => {
       const base = { key, active: actives[key], periode, dirty: modifiees[key] };
       if (!actives[key]) return { ...base, tone: "off" as const, status: "Non prévue" };
       if (contenu === 0) return { ...base, tone: "todo" as const, status: "À planifier" };
@@ -218,10 +220,15 @@ export default function ActivityPlanningPage() {
         ? { ...etude, tone: "warn" as const, status: `${pluriel(problemesEtude.length, "problème")} à corriger` }
         : etude,
       resume("passation", marches, "marché"),
-      resume("execution", tachesNommees, "tâche"),
+      (() => {
+        const execution = resume("execution", tachesNommees, "tâche", { debut: calendrierExecution.debut, fin: calendrierExecution.fin });
+        return hasExecution && problemesExecution.length
+          ? { ...execution, tone: "warn" as const, status: `${pluriel(problemesExecution.length, "problème")} à corriger` }
+          : execution;
+      })(),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [livrables, calendrierEtude, problemesEtude, passationData, executionData, hasEtudePrealable, hasPassation, hasExecution, sections, reference]);
+  }, [livrables, calendrierEtude, problemesEtude, passationData, taches, calendrierExecution, problemesExecution, hasEtudePrealable, hasPassation, hasExecution, sections, reference]);
 
   // ── Phases ──
   const retirerPhase = (key: PhaseKey) => {
@@ -245,6 +252,11 @@ export default function ActivityPlanningPage() {
       toast.error(`Étude : ${problemesEtude[0]}${problemesEtude.length > 1 ? ` (+${problemesEtude.length - 1})` : ""}`);
       return;
     }
+    if (hasExecution && problemesExecution.length) {
+      setSelected("execution");
+      toast.error(`Exécution : ${problemesExecution[0]}${problemesExecution.length > 1 ? ` (+${problemesExecution.length - 1})` : ""}`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -266,7 +278,8 @@ export default function ActivityPlanningPage() {
         ...(hasPassation && passationData
           ? { typePassation: passationData.typePassation, etapesPassation: cleanDates(passationData.etapesPassation || []) }
           : {}),
-        ...(hasExecution && executionData ? { tachesExecution: cleanDates(executionData.tachesExecution || []) } : {}),
+        // Une phase retirée n'emporte pas ses tâches
+        tachesExecution: hasExecution ? taches.map(tachePourApi) : [],
       };
 
       if (isEditMode) {
@@ -436,7 +449,7 @@ export default function ActivityPlanningPage() {
 
         {hasExecution && (
           <div hidden={selected !== "execution"} className="max-w-6xl">
-            <PlanningFormExecution data={executionData} onChange={setExecutionData} dateT0={dateT0} projectId={projectCode} />
+            <PlanningFormExecution taches={taches} onChange={setTaches} dateT0={dateT0} readOnly={readOnly} />
           </div>
         )}
       </div>

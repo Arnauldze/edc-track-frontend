@@ -1,9 +1,12 @@
 // ══════════════════════════════════════════════════════════════
-// CALENDRIER DES LIVRABLES D'ÉTUDE
+// CALENDRIER DES LIVRABLES D'ÉTUDE ET DES TÂCHES D'EXÉCUTION
 //
 // Fichier identique dans le frontend (lib/livrableSchedule.ts) et le backend
 // (modules/planning/livrable-schedule.ts) : le navigateur calcule pendant la
 // saisie, le serveur recalcule à l'enregistrement et fait foi.
+//
+// Les deux phases suivent les mêmes règles ; seul le vocabulaire change
+// (livrable R1… / tâche T1…).
 //
 // Règles de l'équipe :
 //   Délai        temps depuis T0 jusqu'à l'échéance (T0 + 3 mois = échéance)
