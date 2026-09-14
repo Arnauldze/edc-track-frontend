@@ -1,8 +1,8 @@
-// Livrable d'étude tel qu'envoyé à l'API. Le serveur refuse les champs
-// inconnus et recalcule les dates : on n'envoie que les saisies utiles,
-// avec ce qui fixe le début (debutFixe) et l'échéance (modeFin).
+// Livrables d'étude et tâches d'exécution tels qu'envoyés à l'API. Le serveur
+// refuse les champs inconnus et recalcule les dates : on n'envoie que les
+// saisies utiles, avec ce qui fixe le début (debutFixe) et l'échéance (modeFin).
 
-import type { Livrable } from "@/services/api/planningService";
+import type { Livrable, TacheExecution } from "@/services/api/planningService";
 import { toDay } from "./livrableSchedule";
 
 export function livrablePourApi(l: Livrable): Livrable {
@@ -21,6 +21,28 @@ export function livrablePourApi(l: Livrable): Livrable {
     dateFin: l.modeFin === "fin" ? toDay(l.dateFin) : undefined,
     description: l.description || undefined,
     statut: l.statut,
+  };
+}
+
+export function tachePourApi(t: TacheExecution): TacheExecution {
+  return {
+    numero: t.numero,
+    designation: t.designation,
+    ponderation: t.ponderation || 0,
+    predecesseur: t.predecesseur || undefined,
+    debutFixe: !!t.debutFixe,
+    dateDebut: t.debutFixe ? toDay(t.dateDebut) : undefined,
+    modeFin: t.modeFin,
+    duree: t.modeFin === "duree" ? t.duree : undefined,
+    dureeUnite: t.dureeUnite,
+    delai: t.modeFin === "delai" ? t.delai : undefined,
+    delaiUnite: t.delaiUnite,
+    dateFin: t.modeFin === "fin" ? toDay(t.dateFin) : undefined,
+    unite: t.unite || undefined,
+    quantite: t.quantite,
+    prixUnitaire: t.prixUnitaire,
+    avancement: t.avancement,
+    responsable: t.responsable || undefined,
   };
 }
 

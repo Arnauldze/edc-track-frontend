@@ -11,7 +11,8 @@ import { planningService } from "@/services/api/planningService";
 import { projectService, type Component } from "@/services/api/projectService";
 import { toast } from "@/lib/toastStore";
 import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
-import { livrablePourApi, messageApi } from "@/lib/livrableApi";
+import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
+import type { LigneCalendrier } from "./PlanningCalendrierForm";
 import { findUnit, listUnits, type UnitLevel } from "@/lib/structureUnits";
 import {
   addChild, addComponent, addSibling, canAddChild, canIndent, canMoveDown, canMoveUp, canOutdent,
@@ -167,8 +168,17 @@ interface TaskRow {
   // Métadonnées
   parentId?: string;
   planning?: Planning;
-  livrableData?: Livrable;
+  /** Livrable d'étude ou tâche d'exécution affiché sur la ligne. */
+  livrableData?: LigneCalendrier;
+  /** Phase de la ligne : livrable d'étude ou tâche d'exécution. */
+  phase?: PhaseLignes;
 }
+
+type PhaseLignes = "etude" | "execution";
+/** Champ de la planification qui porte les lignes de chaque phase. */
+const CHAMP_PHASE: Record<PhaseLignes, "livrables" | "tachesExecution"> = { etude: "livrables", execution: "tachesExecution" };
+/** Lignes modifiées dans le tableau, par activité et par phase. */
+const cleLignes = (activityPath: string, phase: PhaseLignes) => `${activityPath}|${phase}`;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILITAIRES
@@ -243,7 +253,11 @@ export function MSProjectViewV2({
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [modifiedLivrables, setModifiedLivrables] = useState<Map<string, Livrable[]>>(new Map());
+  const [modifiedLivrables, setModifiedLivrables] = useState<Map<string, LigneCalendrier[]>>(new Map());
+
+  /** Lignes d'une phase : celles modifiées dans le tableau, sinon celles enregistrées. */
+  const lignesDe = (planning: Planning | undefined, activityPath: string, phase: PhaseLignes): LigneCalendrier[] =>
+    modifiedLivrables.get(cleLignes(activityPath, phase)) ?? ((planning?.[CHAMP_PHASE[phase]] ?? []) as LigneCalendrier[]);
 
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
@@ -286,11 +300,13 @@ export function MSProjectViewV2({
   // CONSTRUCTION DE L'ARBRE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /** Mesures de chaque unité, livrables en cours de modification compris. */
+  /** Mesures de chaque unité, livrables et tâches en cours de modification compris. */
   const metrics = useMemo(() => {
-    const current = plannings.map((p) =>
-      modifiedLivrables.has(p.activityPath) ? { ...p, livrables: modifiedLivrables.get(p.activityPath)! } : p,
-    );
+    const current = plannings.map((p) => ({
+      ...p,
+      livrables: (modifiedLivrables.get(cleLignes(p.activityPath, "etude")) ?? p.livrables) as Livrable[],
+      tachesExecution: (modifiedLivrables.get(cleLignes(p.activityPath, "execution")) ?? p.tachesExecution) as Planning["tachesExecution"],
+    }));
     return rollupStructure(structure, current);
   }, [structure, plannings, modifiedLivrables]);
 
@@ -338,21 +354,26 @@ export function MSProjectViewV2({
       ...fromMetrics(metrics.get(PROJECT_ROOT_ID)),
     });
 
-    const pushLivrables = (activityPath: string, livrables: Livrable[], level: number) => {
+    /** Lignes d'une phase sous l'activité : livrables d'étude, puis tâches d'exécution. */
+    const pushLivrables = (activityPath: string, phase: PhaseLignes, livrables: LigneCalendrier[], level: number) => {
       livrables.forEach((liv) => {
         rows.push({
-          id: `${activityPath}.${liv.numero}`,
+          id: `${activityPath}.${phase}.${liv.numero}`,
           numero: liv.numero,
-          nom: liv.intitule,
+          nom: (phase === "etude" ? liv.intitule : liv.designation) ?? "",
           level,
           type: "livrable",
+          phase,
           activityPath,
           hasChildren: false,
           isExpanded: false,
           parentId: activityPath,
           livrableData: liv,
           ponderation: liv.ponderation,
-          progress: liv.statut === "valide" ? 100 : 0,
+          progress:
+            phase === "etude"
+              ? ((liv as Livrable).statut === "valide" ? 100 : 0)
+              : ((liv as { avancement?: number }).avancement ?? 0),
           milestone: !liv.dateDebut && !liv.dateFin && !!liv.dateEcheance,
           dateDebut: toDay(liv.dateDebut ?? (liv.dateFin ? undefined : liv.dateEcheance)),
           dateFin: toDay(liv.dateFin ?? liv.dateEcheance),
@@ -381,17 +402,21 @@ export function MSProjectViewV2({
 
         if (node.children.length === 0) {
           const planning = findPlanning(node.id);
-          const livrables = modifiedLivrables.get(node.id) || planning?.livrables || [];
+          const livrables = lignesDe(planning, node.id, "etude");
+          const tachesExecution = lignesDe(planning, node.id, "execution");
           rows.push({
             ...common,
             type: "activity",
             activityPath: node.id,
             activityType: node.typeActivite || "travaux",
-            hasChildren: livrables.length > 0,
+            hasChildren: livrables.length + tachesExecution.length > 0,
             planning,
             ...fromMetrics(metrics.get(node.id)),
           });
-          if (expandedIds.has(node.id)) pushLivrables(node.id, livrables, level + 1);
+          if (expandedIds.has(node.id)) {
+            pushLivrables(node.id, "etude", livrables, level + 1);
+            pushLivrables(node.id, "execution", tachesExecution, level + 1);
+          }
           return;
         }
 
@@ -553,21 +578,22 @@ export function MSProjectViewV2({
   const t0De = (planning?: Planning) => toDay((planning?.dateDebutInitiale ?? planning?.dateT0Etude) as string | undefined);
 
   /**
-   * Modification d'un livrable dans le tableau. Comme sur la page de l'activité,
+   * Modification d'un livrable ou d'une tâche dans le tableau. Comme sur la page de l'activité,
    * la valeur saisie devient celle qui fixe le début ou l'échéance, et le
    * calendrier est recalculé par le moteur commun (lib/livrableSchedule.ts).
    */
   const handleCellChange = (task: TaskRow, field: string, value: string) => {
-    if (task.type !== "livrable" || !task.activityPath) return;
+    if (task.type !== "livrable" || !task.activityPath || !task.phase) return;
 
     const activityPath = task.activityPath;
+    const phase = task.phase;
     const planning = plannings.find((p) => p.activityPath === activityPath);
-    const currentLivrables = modifiedLivrables.get(activityPath) || planning?.livrables || [];
+    const currentLivrables = lignesDe(planning, activityPath, phase);
     const index = currentLivrables.findIndex((l) => l.numero === task.numero);
     if (index === -1) return;
 
     const nombre = value === "" ? undefined : parseFloat(value.replace(",", "."));
-    const patch: Partial<Livrable> =
+    const patch: Partial<LigneCalendrier> =
       field === "ponderation" ? { ponderation: nombre ?? 0 }
       : field === "duree" ? { duree: nombre, modeFin: "duree" }
       : field === "delai" ? { delai: nombre, modeFin: "delai" }
@@ -578,17 +604,19 @@ export function MSProjectViewV2({
 
     const modifies = currentLivrables.map((l, i) => (i === index ? { ...l, ...patch } : l));
     const { livrables: calcules } = calculerCalendrierEtude(modifies, t0De(planning));
-    setModifiedLivrables((prev) => new Map(prev).set(activityPath, calcules as Livrable[]));
+    setModifiedLivrables((prev) => new Map(prev).set(cleLignes(activityPath, phase), calcules));
     setHasChanges(true);
   };
 
-  /** Problèmes des livrables modifiés, par activité : l'enregistrement est bloqué tant qu'il en reste. */
+  /** Problèmes des lignes modifiées, par activité et phase : l'enregistrement est bloqué tant qu'il en reste. */
   const problemesLivrables = useMemo(() => {
     const messages: string[] = [];
-    for (const [activityPath, livrables] of modifiedLivrables.entries()) {
+    for (const [cle, lignes] of modifiedLivrables.entries()) {
+      const [activityPath, phase] = cle.split("|");
       const planning = plannings.find((p) => p.activityPath === activityPath);
-      const { problemes } = calculerCalendrierEtude(livrables, t0De(planning));
-      [...new Set(problemes.map((p) => p.message))].forEach((m) => messages.push(`${planning?.activityName ?? activityPath} : ${m}`));
+      const { problemes } = calculerCalendrierEtude(lignes, t0De(planning));
+      const libelle = `${planning?.activityName ?? activityPath} (${phase === "etude" ? "étude" : "exécution"})`;
+      [...new Set(problemes.map((p) => p.message))].forEach((m) => messages.push(`${libelle} : ${m}`));
     }
     return messages;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -600,8 +628,17 @@ export function MSProjectViewV2({
       return;
     }
     try {
-      for (const [activityPath, livrables] of modifiedLivrables.entries()) {
-        await planningService.update(project.code, activityPath, { livrables: livrables.map(livrablePourApi) } as unknown as Parameters<typeof planningService.update>[2]);
+      // Une mise à jour par activité, avec les phases modifiées
+      const parActivite = new Map<string, Record<string, unknown>>();
+      for (const [cle, lignes] of modifiedLivrables.entries()) {
+        const [activityPath, phase] = cle.split("|") as [string, PhaseLignes];
+        const envoi = parActivite.get(activityPath) ?? {};
+        envoi[CHAMP_PHASE[phase]] =
+          phase === "etude" ? (lignes as Livrable[]).map(livrablePourApi) : (lignes as Planning["tachesExecution"]).map(tachePourApi);
+        parActivite.set(activityPath, envoi);
+      }
+      for (const [activityPath, envoi] of parActivite.entries()) {
+        await planningService.update(project.code, activityPath, envoi as Parameters<typeof planningService.update>[2]);
       }
       toast.success("Modifications enregistrées");
       setHasChanges(false);
@@ -1046,7 +1083,7 @@ export function MSProjectViewV2({
 
     if (isEditing && isLivrable && !isLocked) {
       if (field === 'predecesseur') {
-        const activityLivrables = tasks.filter(t => t.type === "livrable" && t.activityPath === task.activityPath && t.numero !== task.numero);
+        const activityLivrables = tasks.filter(t => t.type === "livrable" && t.activityPath === task.activityPath && t.phase === task.phase && t.numero !== task.numero);
         return (
           <select
             value={value?.toString() || ''}
@@ -1139,7 +1176,7 @@ export function MSProjectViewV2({
         else if (suffix.includes('m')) suffix = ' mois';
       }
       
-      displayValue = value !== undefined && value !== null ? `${value}${suffix}` : '—';
+      displayValue = value !== undefined && value !== null ? `${Number(value).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}${suffix}` : '—';
     }
 
     return (

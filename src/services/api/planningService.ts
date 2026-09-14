@@ -51,13 +51,23 @@ export interface TacheExecution {
   unite?: string;
   quantite?: number;
   prixUnitaire?: number;
-  dateDebut?: Date;
-  dateFin?: Date;
+  predecesseur?: string;
+  successeur?: string;
+  dateDebut?: string | Date;
+  /** Début saisi ; sinon il suit T0 ou le prédécesseur (voir lib/livrableSchedule.ts). */
+  debutFixe?: boolean;
+  dateFin?: string | Date;
+  dateEcheance?: string | Date;
+  /** Saisie qui fixe l'échéance : durée, délai depuis T0 ou date. */
+  modeFin?: 'duree' | 'delai' | 'fin';
   duree?: number;
   dureeUnite?: 'jours' | 'semaines' | 'mois';
+  delai?: number;
+  delaiUnite?: 'jours' | 'semaines' | 'mois';
   dureeJours?: number; // Legacy
   avancement?: number;
   responsable?: string;
+  description?: string;
 }
 
 export interface Planning {
