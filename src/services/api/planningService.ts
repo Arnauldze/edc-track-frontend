@@ -16,14 +16,18 @@ export interface Livrable {
   numero: string;
   intitule: string;
   ponderation: number;
-  delaiMois: number; // Ancien champ, gardé pour compatibilité
-  dateDebut?: Date;
-  dateFin?: Date;
+  delaiMois?: number; // Ancien champ, gardé pour compatibilité
+  dateDebut?: string | Date;
+  /** Début saisi ; sinon il suit T0 ou le prédécesseur (voir lib/livrableSchedule.ts). */
+  debutFixe?: boolean;
+  dateFin?: string | Date;
+  /** Saisie qui fixe l'échéance : durée, délai depuis T0 ou date. */
+  modeFin?: 'duree' | 'delai' | 'fin';
   duree?: number;
   dureeUnite?: 'jours' | 'semaines' | 'mois';
   delai?: number;
   delaiUnite?: 'jours' | 'semaines' | 'mois';
-  dateEcheance?: Date;
+  dateEcheance?: string | Date;
   predecesseur?: string;
   successeur?: string;
   description?: string;
