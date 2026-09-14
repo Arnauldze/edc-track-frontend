@@ -10,6 +10,8 @@ import type { Planning, Livrable } from "@/services/api/planningService";
 import { planningService } from "@/services/api/planningService";
 import { projectService, type Component } from "@/services/api/projectService";
 import { toast } from "@/lib/toastStore";
+import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
+import { livrablePourApi, messageApi } from "@/lib/livrableApi";
 import { findUnit, listUnits, type UnitLevel } from "@/lib/structureUnits";
 import {
   addChild, addComponent, addSibling, canAddChild, canIndent, canMoveDown, canMoveUp, canOutdent,
@@ -184,24 +186,6 @@ const parseDate = (dateStr: string | Date): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-const addMonths = (date: Date, months: number): Date => {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
-};
-
-const calculateMonthsDiff = (start: Date, end: Date): number => {
-  const months = (end.getFullYear() - start.getFullYear()) * 12 + 
-                 (end.getMonth() - start.getMonth());
-  return Math.max(0, months);
-};
-
-const convertDate = (d: string | Date | undefined): string | undefined => {
-  if (!d) return undefined;
-  if (d instanceof Date) return d.toISOString().split('T')[0];
-  return d;
-};
-
 /** Avancement : pourcentage et jauge ; sur une synthèse, unités planifiées / unités. */
 function ProgressCell({ value, summary, planned, total }: { value?: number; summary: boolean; planned?: number; total?: number }) {
   const pct = Math.max(0, Math.min(100, value ?? 0));
@@ -299,87 +283,6 @@ export function MSProjectViewV2({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // CALCULS INTELLIGENTS
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  const recalculateLivrable = useCallback((livrable: Livrable, dateT0?: string | Date): Livrable => {
-    const result = { ...livrable };
-
-    // Convertir les dates en string si nécessaire
-    const convertToString = (date: string | Date | undefined): string | undefined => {
-      if (!date) return undefined;
-      if (date instanceof Date) return date.toISOString().split('T')[0];
-      return date;
-    };
-
-    // Calcul de la date de fin si date début + durée
-    if (result.dateDebut && result.duree !== undefined && !result.dateFin) {
-      const debut = parseDate(result.dateDebut);
-      if (debut) {
-        result.dateFin = addMonths(debut, result.duree);
-      }
-    }
-
-    // Calcul de la durée si date début + date fin
-    if (result.dateDebut && result.dateFin && result.duree === undefined) {
-      const debut = parseDate(result.dateDebut);
-      const fin = parseDate(result.dateFin);
-      if (debut && fin) {
-        result.duree = calculateMonthsDiff(debut, fin);
-      }
-    }
-
-    // Calcul de l'échéance si T0 + délai
-    if (dateT0 && result.delai !== undefined) {
-      const t0 = parseDate(dateT0);
-      if (t0) {
-        result.dateEcheance = addMonths(t0, result.delai);
-      }
-    }
-
-    return result;
-  }, []);
-
-  const recalculateAllLivrables = useCallback((livrables: Livrable[], dateT0?: string | Date): Livrable[] => {
-    const result = [...livrables];
-    const livrableMap = new Map<string, Livrable>();
-
-    result.forEach(liv => {
-      if (liv.numero) {
-        livrableMap.set(liv.numero, liv);
-      }
-    });
-
-    result.forEach((livrable, index) => {
-      // Si prédécesseur défini, calculer date de début
-      if (livrable.predecesseur) {
-        const pred = livrableMap.get(livrable.predecesseur);
-        if (pred && pred.dateFin) {
-          livrable.dateDebut = pred.dateFin;
-        }
-      }
-
-      // Recalculer
-      result[index] = recalculateLivrable(livrable, dateT0);
-
-      // Mettre à jour la map
-      if (livrable.numero) {
-        livrableMap.set(livrable.numero, result[index]);
-      }
-
-      // Synchroniser successeur
-      if (livrable.predecesseur) {
-        const predIndex = result.findIndex(l => l.numero === livrable.predecesseur);
-        if (predIndex !== -1 && !result[predIndex].successeur) {
-          result[predIndex].successeur = livrable.numero;
-        }
-      }
-    });
-
-    return result;
-  }, [recalculateLivrable]);
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // CONSTRUCTION DE L'ARBRE
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -451,13 +354,13 @@ export function MSProjectViewV2({
           ponderation: liv.ponderation,
           progress: liv.statut === "valide" ? 100 : 0,
           milestone: !liv.dateDebut && !liv.dateFin && !!liv.dateEcheance,
-          dateDebut: convertDate(liv.dateDebut ?? (liv.dateFin ? undefined : liv.dateEcheance)),
-          dateFin: convertDate(liv.dateFin ?? liv.dateEcheance),
+          dateDebut: toDay(liv.dateDebut ?? (liv.dateFin ? undefined : liv.dateEcheance)),
+          dateFin: toDay(liv.dateFin ?? liv.dateEcheance),
           duree: liv.duree,
           dureeUnite: liv.dureeUnite,
           delai: liv.delai,
           delaiUnite: liv.delaiUnite,
-          dateEcheance: convertDate(liv.dateEcheance),
+          dateEcheance: toDay(liv.dateEcheance ?? liv.dateFin),
           predecesseur: liv.predecesseur,
           successeur: liv.successeur,
         });
@@ -646,49 +549,67 @@ export function MSProjectViewV2({
     });
   };
 
-  const handleCellChange = (task: TaskRow, field: string, value: any) => {
+  /** Date T0 d'une planification : point de départ des livrables sans prédécesseur ni début saisi. */
+  const t0De = (planning?: Planning) => toDay((planning?.dateDebutInitiale ?? planning?.dateT0Etude) as string | undefined);
+
+  /**
+   * Modification d'un livrable dans le tableau. Comme sur la page de l'activité,
+   * la valeur saisie devient celle qui fixe le début ou l'échéance, et le
+   * calendrier est recalculé par le moteur commun (lib/livrableSchedule.ts).
+   */
+  const handleCellChange = (task: TaskRow, field: string, value: string) => {
     if (task.type !== "livrable" || !task.activityPath) return;
 
     const activityPath = task.activityPath;
-    const planning = plannings.find(p => p.activityPath === activityPath);
+    const planning = plannings.find((p) => p.activityPath === activityPath);
     const currentLivrables = modifiedLivrables.get(activityPath) || planning?.livrables || [];
-    
-    const livrableIndex = currentLivrables.findIndex(l => l.numero === task.numero);
-    if (livrableIndex === -1) return;
+    const index = currentLivrables.findIndex((l) => l.numero === task.numero);
+    if (index === -1) return;
 
-    const newLivrables = [...currentLivrables];
-    const livrable = { ...newLivrables[livrableIndex] };
+    const nombre = value === "" ? undefined : parseFloat(value.replace(",", "."));
+    const patch: Partial<Livrable> =
+      field === "ponderation" ? { ponderation: nombre ?? 0 }
+      : field === "duree" ? { duree: nombre, modeFin: "duree" }
+      : field === "delai" ? { delai: nombre, modeFin: "delai" }
+      : field === "dateFin" || field === "dateEcheance" ? { dateFin: value || undefined, modeFin: "fin" }
+      : field === "dateDebut" ? (value ? { dateDebut: value, debutFixe: true } : { dateDebut: undefined, debutFixe: false })
+      : field === "predecesseur" ? { predecesseur: value }
+      : {};
 
-    // Mettre à jour le champ
-    if (field === 'ponderation' || field === 'duree' || field === 'delai') {
-      (livrable as any)[field] = value ? parseFloat(value) : undefined;
-    } else {
-      (livrable as any)[field] = value || undefined;
-    }
-
-    newLivrables[livrableIndex] = livrable;
-
-    // Recalculer tous les livrables
-    const dateT0 = planning?.dateT0Etude;
-    const recalculated = recalculateAllLivrables(newLivrables, dateT0);
-
-    setModifiedLivrables(prev => new Map(prev).set(activityPath, recalculated));
+    const modifies = currentLivrables.map((l, i) => (i === index ? { ...l, ...patch } : l));
+    const { livrables: calcules } = calculerCalendrierEtude(modifies, t0De(planning));
+    setModifiedLivrables((prev) => new Map(prev).set(activityPath, calcules as Livrable[]));
     setHasChanges(true);
   };
 
+  /** Problèmes des livrables modifiés, par activité : l'enregistrement est bloqué tant qu'il en reste. */
+  const problemesLivrables = useMemo(() => {
+    const messages: string[] = [];
+    for (const [activityPath, livrables] of modifiedLivrables.entries()) {
+      const planning = plannings.find((p) => p.activityPath === activityPath);
+      const { problemes } = calculerCalendrierEtude(livrables, t0De(planning));
+      [...new Set(problemes.map((p) => p.message))].forEach((m) => messages.push(`${planning?.activityName ?? activityPath} : ${m}`));
+    }
+    return messages;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modifiedLivrables, plannings]);
+
   const handleSave = async () => {
+    if (problemesLivrables.length) {
+      toast.error(problemesLivrables[0]);
+      return;
+    }
     try {
       for (const [activityPath, livrables] of modifiedLivrables.entries()) {
-        await planningService.update(project.code, activityPath, { livrables });
+        await planningService.update(project.code, activityPath, { livrables: livrables.map(livrablePourApi) } as unknown as Parameters<typeof planningService.update>[2]);
       }
-
-      toast.success("Modifications sauvegardées");
+      toast.success("Modifications enregistrées");
       setHasChanges(false);
       setModifiedLivrables(new Map());
       onRefresh();
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
-      toast.error("Erreur lors de la sauvegarde");
+      toast.error(messageApi(error, "Erreur lors de l'enregistrement"));
     }
   };
 
@@ -1111,12 +1032,20 @@ export function MSProjectViewV2({
     const isLivrable = task.type === "livrable";
     const isEditing = editingCell?.rowId === task.id && editingCell?.field === field;
     
-    // Champs calculés
-    const isCalculated = (field === 'dateFin' && task.dateDebut && task.duree) ||
-                         (field === 'dateEcheance' && task.delai !== undefined);
+    // Valeurs déduites par le calcul (en italique) : modifiables, sauf le début
+    // d'un livrable qui suit son prédécesseur et les successeurs, toujours déduits.
+    const liv = task.livrableData;
+    const isCalculated = isLivrable && (
+      field === 'dateDebut' ? !liv?.debutFixe || !!liv?.predecesseur
+      : field === 'dateFin' || field === 'dateEcheance' ? liv?.modeFin !== 'fin'
+      : field === 'duree' ? liv?.modeFin !== 'duree'
+      : field === 'delai' ? liv?.modeFin !== 'delai'
+      : field === 'successeur'
+    );
+    const isLocked = field === 'successeur' || (field === 'dateDebut' && !!liv?.predecesseur);
 
-    if (isEditing && isLivrable && !isCalculated) {
-      if (field === 'predecesseur' || field === 'successeur') {
+    if (isEditing && isLivrable && !isLocked) {
+      if (field === 'predecesseur') {
         const activityLivrables = tasks.filter(t => t.type === "livrable" && t.activityPath === task.activityPath && t.numero !== task.numero);
         return (
           <select
@@ -1147,7 +1076,7 @@ export function MSProjectViewV2({
         );
       }
 
-      const inputType = (field === 'dateDebut' || field === 'dateFin') ? 'date'
+      const inputType = (field === 'dateDebut' || field === 'dateFin' || field === 'dateEcheance') ? 'date'
         : (field === 'ponderation' || field === 'duree' || field === 'delai') ? 'number'
           : 'text';
 
@@ -1215,9 +1144,10 @@ export function MSProjectViewV2({
 
     return (
       <div
-        onClick={() => isLivrable && !isCalculated && !editor.isEditing && setEditingCell({ rowId: task.id, field })}
+        onClick={() => isLivrable && !isLocked && !editor.isEditing && setEditingCell({ rowId: task.id, field })}
+        title={isLivrable && isCalculated && !isLocked ? "Valeur déduite — la saisir la rend déterminante" : undefined}
         style={{
-          cursor: isLivrable && !isCalculated && !editor.isEditing ? "text" : "default",
+          cursor: isLivrable && !isLocked && !editor.isEditing ? "text" : "default",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1358,7 +1288,9 @@ export function MSProjectViewV2({
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#ED7D31" }}>
             <Calendar size={14} />
             <span style={{ fontWeight: 600 }}>Modifications non sauvegardées</span>
-            <span style={{ fontSize: 10, opacity: 0.7 }}>• Cliquez pour éditer • Entrée pour valider</span>
+            {problemesLivrables.length > 0
+              ? <span style={{ fontSize: 11, color: "#C0392B", fontWeight: 600 }}>• {problemesLivrables[0]}{problemesLivrables.length > 1 ? ` (+${problemesLivrables.length - 1})` : ""}</span>
+              : <span style={{ fontSize: 10, opacity: 0.7 }}>• Cliquez pour éditer • Entrée pour valider</span>}
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <button

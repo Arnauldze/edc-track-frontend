@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { Calendar, ChevronRight, Search, Plus } from "lucide-react";
 import Link from "next/link";
 import { getProjects, type Project } from "@/lib/projectStore";
+import { planningService, type Planning } from "@/services/api/planningService";
+import { PROJECT_ROOT_ID, rollupStructure, type Metrics } from "@/lib/planningRollup";
 
 export default function PlanificationPage() {
     const [projects, setProjects] = useState<Project[]>([]);
+    /** Synthèse de chaque projet d'après ses planifications (unités planifiées, avancement, période). */
+    const [syntheses, setSyntheses] = useState<Record<string, Metrics>>({});
     const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {
@@ -16,7 +20,16 @@ export default function PlanificationPage() {
     async function loadData() {
         const projectsData = await getProjects();
         setProjects(projectsData);
+        const entries = await Promise.all(
+            projectsData.map(async (project) => {
+                const plannings: Planning[] = await planningService.getByProject(project.code).catch(() => []);
+                return [project.code, rollupStructure(project.components, plannings).get(PROJECT_ROOT_ID)!] as const;
+            }),
+        );
+        setSyntheses(Object.fromEntries(entries));
     }
+
+    const mois = (d?: Date | string) => (d ? new Date(d).toLocaleDateString("fr-FR", { month: "short", year: "numeric" }) : "—");
 
     const filtered = projects.filter((p) =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -50,9 +63,8 @@ export default function PlanificationPage() {
             {/* ── Project Cards ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.map((project) => {
-                    const totalActivities = project.components.reduce(
-                        (sum, c) => sum + c.sousComposants.reduce((s, sc) => s + sc.activities.length, 0), 0
-                    );
+                    const synthese = syntheses[project.code];
+                    const progress = Math.round(synthese?.progress ?? 0);
                     return (
                         <div
                             key={project.code}
@@ -85,8 +97,10 @@ export default function PlanificationPage() {
                                         <div className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">S/Comp.</div>
                                     </div>
                                     <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-2.5 text-center">
-                                        <div className="text-[16px] font-bold text-[var(--text-primary)]">{totalActivities}</div>
-                                        <div className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">Activ.</div>
+                                        <div className="text-[16px] font-bold text-[var(--text-primary)]" title="Unités planifiées / unités planifiables">
+                                            {synthese ? `${synthese.plannedLeaves}/${synthese.leaves}` : "—"}
+                                        </div>
+                                        <div className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">Planifiées</div>
                                     </div>
                                 </div>
 
@@ -94,16 +108,17 @@ export default function PlanificationPage() {
                                     <div className="flex items-center gap-2">
                                         <div className="h-1.5 w-24 bg-[var(--bg-inset)] rounded-full overflow-hidden">
                                             <div
-                                                className={`h-full rounded-full ${project.progress >= 80 ? "bg-green-500" : project.progress >= 40 ? "bg-blue-500" : "bg-amber-500"}`}
-                                                style={{ width: `${project.progress}%` }}
+                                                className={`h-full rounded-full ${progress >= 80 ? "bg-green-500" : progress >= 40 ? "bg-blue-500" : "bg-amber-500"}`}
+                                                style={{ width: `${progress}%` }}
                                             />
                                         </div>
-                                        <span className="text-[11px] font-bold text-[var(--text-primary)]">{project.progress}%</span>
+                                        <span className="text-[11px] font-bold text-[var(--text-primary)]" title="Avancement calculé d'après les planifications">{progress}%</span>
                                     </div>
                                     <span className="text-[10px] text-[var(--text-tertiary)] font-medium">
-                                        {project.dateDebut ? new Date(project.dateDebut).toLocaleDateString("fr-FR", { month: "short", year: "numeric" }) : "—"}
+                                        {/* Période planifiée, sinon dates saisies à l'initialisation */}
+                                        {mois(synthese?.start ?? project.dateDebut)}
                                         {" → "}
-                                        {project.dateFin ? new Date(project.dateFin).toLocaleDateString("fr-FR", { month: "short", year: "numeric" }) : "—"}
+                                        {mois(synthese?.finish ?? project.dateFin)}
                                     </span>
                                 </div>
                             </div>

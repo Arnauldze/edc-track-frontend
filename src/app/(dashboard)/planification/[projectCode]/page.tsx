@@ -3,20 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import {
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Layers,
-  DollarSign,
-  User,
-  Clock,
-  Plus,
-  BarChart3,
-  AlertTriangle,
-} from "lucide-react";
-import { getProjectById, getLeafActivities, countLeafActivities, type Project, type Component, type SousComposant } from "@/lib/projectStore";
+import { BarChart3, Calendar, ChevronLeft, Layers } from "lucide-react";
+import { getProjectById, countLeafActivities, type Project } from "@/lib/projectStore";
 import { planningService, type Planning } from "@/services/api/planningService";
 import { MSProjectViewV2 } from "@/components/planning/MSProjectViewV2";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -38,8 +26,6 @@ export default function ProjectPlanningPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [plannings, setPlannings] = useState<Planning[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
-  const [expandedSousComposants, setExpandedSousComposants] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"table" | "gantt">("table");
   const searchParams = useSearchParams();
   const focusedActivity = searchParams.get('activity') || undefined;
@@ -48,127 +34,30 @@ export default function ProjectPlanningPage() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectCode]);
 
   // Recharger quand le refreshToken change (après création/modification d'une planification)
   useEffect(() => {
-    if (refreshToken) {
-      console.log("🔄 Rechargement après sauvegarde, activité ciblée:", focusedActivity);
-      loadData();
-    }
+    if (refreshToken) loadData({ silencieux: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken]);
 
-  async function loadData() {
-    setLoading(true);
+  /**
+   * Charge le projet et ses planifications. En mode silencieux (après une
+   * modification dans le tableau), la page reste affichée pendant le rechargement.
+   */
+  async function loadData({ silencieux = false } = {}) {
+    if (!silencieux) setLoading(true);
     try {
       const proj = await getProjectById(projectCode);
-      if (proj) {
-        setProject(proj);
-        
-        // 🎨 DONNÉES MOCK HARDCODÉES pour DEMO-2026
-        if (projectCode === 'DEMO-2026') {
-          // Utiliser getLeafActivities pour générer les mocks à TOUS les niveaux
-          const leafActivities = getLeafActivities(proj);
-          const mockPlannings: Planning[] = [];
-          const RESPONSABLES = [
-            'Dr. Amina Ndiaye', 'Ing. Jean-Paul Mbarga', 'Arch. Sophie Kamdem',
-            'Tech. Ibrahim Sow', 'Dr. Marie Fotso', 'Ing. Fatou Diop', 'Arch. Moussa Kane',
-          ];
-          
-          leafActivities.forEach((leaf, planningIndex) => {
-            const startDate = new Date(2024, planningIndex % 12, 1);
-            const endDate = new Date(2024 + Math.floor((planningIndex + 6) / 12), (planningIndex + 6) % 12, 28);
-            const responsable = RESPONSABLES[planningIndex % RESPONSABLES.length];
-            
-            const mockPlanning: Planning = {
-              _id: `mock-${leaf.path}`,
-              projectCode: 'DEMO-2026',
-              activityPath: leaf.path,
-              activityName: leaf.name,
-              activityType: leaf.type as any,
-              hasEtudePrealable: leaf.type === 'etudes',
-              hasPassation: leaf.type === 'travaux' || leaf.type === 'fourniture',
-              hasExecution: leaf.type !== 'etudes',
-              budgetInitial: [{ devise: 'FCFA', montant: 150000000 + (planningIndex * 30000000), pourcentage: 100 }],
-              budgetInitialTotal: 150000000 + (planningIndex * 30000000),
-              budgetActualise: [{ devise: 'FCFA', montant: 150000000 + (planningIndex * 30000000), pourcentage: 100 }],
-              budgetActualiseTotal: 150000000 + (planningIndex * 30000000),
-              dateDebutInitiale: startDate,
-              dateFinInitiale: endDate,
-              delaiInitialMois: 6,
-              dateDebutActualisee: startDate,
-              dateFinActualisee: endDate,
-              delaiActualiseMois: 6,
-              responsablePrincipal: responsable,
-              responsablesSecondaires: [],
-              livrables: leaf.type === 'etudes' ? [
-                { numero: 'R1', intitule: 'Rapport de démarrage', ponderation: 15, delaiMois: 1, statut: 'valide' },
-                { numero: 'R2', intitule: 'Rapport intermédiaire', ponderation: 35, delaiMois: 3, statut: 'soumis' },
-                { numero: 'R3', intitule: 'Rapport final', ponderation: 50, delaiMois: 6, statut: 'en_attente' },
-              ] : [],
-              etapesPassation: (leaf.type === 'travaux' || leaf.type === 'fourniture') ? [
-                { ordre: 1, nom: 'Rédaction DAO', delaiJours: 20, statut: 'termine' },
-                { ordre: 2, nom: 'Publication avis', delaiJours: 30, statut: 'en_cours' },
-                { ordre: 3, nom: 'Réception offres', delaiJours: 7, statut: 'non_demarre' },
-              ] : [],
-              tachesExecution: leaf.type !== 'etudes' ? [
-                {
-                  numero: 'T1', designation: `Phase 1 - ${leaf.name}`,
-                  unite: leaf.type === 'services' ? 'j' : (leaf.type === 'fourniture' ? 'u' : 'ens'),
-                  quantite: leaf.type === 'services' ? 10 : (leaf.type === 'fourniture' ? 40 : 1),
-                  prixUnitaire: leaf.type === 'services' ? 450000 : (leaf.type === 'fourniture' ? 2500000 : 12000000),
-                  dateDebut: startDate,
-                  dateFin: new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000),
-                  dureeJours: 30, avancement: 75, responsable,
-                },
-                {
-                  numero: 'T2', designation: `Phase 2 - ${leaf.name}`,
-                  unite: leaf.type === 'services' ? 'j' : (leaf.type === 'fourniture' ? 'u' : 'm²'),
-                  quantite: leaf.type === 'services' ? 25 : (leaf.type === 'fourniture' ? 40 : 2000),
-                  prixUnitaire: leaf.type === 'services' ? 400000 : (leaf.type === 'fourniture' ? 400000 : 50000),
-                  dateDebut: new Date(startDate.getTime() + 31 * 24 * 60 * 60 * 1000),
-                  dateFin: new Date(startDate.getTime() + 120 * 24 * 60 * 60 * 1000),
-                  dureeJours: 90, avancement: 40, responsable,
-                },
-                {
-                  numero: 'T3', designation: `Phase 3 - ${leaf.name}`,
-                  unite: leaf.type === 'services' ? 'j' : (leaf.type === 'fourniture' ? 'u' : 'm²'),
-                  quantite: leaf.type === 'services' ? 15 : (leaf.type === 'fourniture' ? 40 : 2000),
-                  prixUnitaire: leaf.type === 'services' ? 280000 : (leaf.type === 'fourniture' ? 400000 : 20000),
-                  dateDebut: new Date(startDate.getTime() + 121 * 24 * 60 * 60 * 1000),
-                  dateFin: endDate,
-                  dureeJours: 60, avancement: 5, responsable,
-                },
-              ] : [],
-              createdBy: 'mock-user',
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            } as Planning;
-            
-            mockPlannings.push(mockPlanning);
-          });
-          
-          setPlannings(mockPlannings);
-          console.log(`✅ ${mockPlannings.length} planifications mock chargées pour DEMO-2026 (feuilles à tous niveaux)`);
-        } else {
-          // Pour les autres projets, charger depuis l'API
-          try {
-            const plans = await planningService.getByProject(projectCode);
-            console.log(`📊 Planifications chargées pour ${projectCode}:`, plans);
-            setPlannings(Array.isArray(plans) ? plans : []);
-          } catch (error) {
-            console.error("Erreur chargement planifications:", error);
-            setPlannings([]);
-          }
-        }
-        
-        // Tout déplier par défaut
-        const compIds = new Set(proj.components.map((c) => c.id));
-        const scIds = new Set(
-          proj.components.flatMap((c) => c.sousComposants.map((sc) => `${c.id}.${sc.id}`))
-        );
-        setExpandedComponents(compIds);
-        setExpandedSousComposants(scIds);
+      if (!proj) return;
+      setProject(proj);
+      try {
+        setPlannings(await planningService.getByProject(projectCode));
+      } catch (error) {
+        console.error("Erreur chargement planifications:", error);
+        setPlannings([]);
       }
     } catch (error) {
       console.error("Erreur chargement:", error);
@@ -190,57 +79,6 @@ export default function ProjectPlanningPage() {
       console.error("Erreur chargement planifications:", error);
     }
   }
-
-  const toggleComponent = (compId: string) => {
-    setExpandedComponents((prev) => {
-      const next = new Set(prev);
-      if (next.has(compId)) {
-        next.delete(compId);
-      } else {
-        next.add(compId);
-      }
-      return next;
-    });
-  };
-
-  const toggleSousComposant = (scKey: string) => {
-    setExpandedSousComposants((prev) => {
-      const next = new Set(prev);
-      if (next.has(scKey)) {
-        next.delete(scKey);
-      } else {
-        next.add(scKey);
-      }
-      return next;
-    });
-  };
-
-  const getPlanningForActivity = (activityPath: string): Planning | undefined => {
-    if (!Array.isArray(plannings)) return undefined;
-    return plannings.find((p) => p.activityPath === activityPath);
-  };
-
-  const getActivityTypeInfo = (typeId: string) => {
-    return ACTIVITY_TYPES.find((t) => t.id === typeId) || ACTIVITY_TYPES[0];
-  };
-
-  const formatBudget = (budget?: number) => {
-    if (!budget) return "—";
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "XAF",
-      minimumFractionDigits: 0,
-    }).format(budget);
-  };
-
-  const formatDate = (date?: Date) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
 
   if (loading) {
     return (
@@ -386,7 +224,7 @@ export default function ProjectPlanningPage() {
             project={project}
             plannings={plannings}
             onActivityClick={(activityPath) => router.push(`/planification/${projectCode}/${activityPath}`)}
-            onRefresh={loadData}
+            onRefresh={() => loadData({ silencieux: true })}
             focusedActivityPath={focusedActivity}
             canEditStructure={can("structure:edit")}
             onStructureSaved={handleStructureSaved}

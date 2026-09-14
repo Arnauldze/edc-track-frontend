@@ -30,6 +30,7 @@ import { wbsNumbers } from "@/lib/structureOps";
 import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
 import { PHASE_LABELS, PHASE_ORDER, periodeDesLignes, type PhaseKey } from "@/lib/phaseTimeline";
 import { toFCFA } from "@/lib/componentBudget";
+import { livrablePourApi, messageApi } from "@/lib/livrableApi";
 import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 
 type ActivityType = "travaux" | "fourniture" | "services" | "etudes" | "pi";
@@ -44,33 +45,6 @@ const ACTIVITY_TYPES: Record<ActivityType, { label: string; icon: typeof Hammer;
 };
 
 const BUDGET_VIDE: Budget[] = [{ devise: "FCFA", montant: 0, pourcentage: 100 }];
-
-/** Champs d'un livrable acceptés par l'API (les champs inconnus sont refusés). */
-function livrablePourApi(l: Livrable): Livrable {
-  return {
-    numero: l.numero,
-    intitule: l.intitule,
-    ponderation: l.ponderation || 0,
-    predecesseur: l.predecesseur || undefined,
-    debutFixe: !!l.debutFixe,
-    dateDebut: l.debutFixe ? toDay(l.dateDebut) : undefined,
-    modeFin: l.modeFin,
-    duree: l.modeFin === "duree" ? l.duree : undefined,
-    dureeUnite: l.dureeUnite,
-    delai: l.modeFin === "delai" ? l.delai : undefined,
-    delaiUnite: l.delaiUnite,
-    dateFin: l.modeFin === "fin" ? toDay(l.dateFin) : undefined,
-    description: l.description || undefined,
-    statut: l.statut,
-  };
-}
-
-/** Message d'erreur de l'API : texte, ou liste de messages de validation. */
-function messageApi(error: unknown, parDefaut: string): string {
-  const message = (error as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
-  if (Array.isArray(message)) return message.join(" • ");
-  return message || parDefaut;
-}
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
