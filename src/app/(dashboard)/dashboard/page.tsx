@@ -236,7 +236,7 @@ export default function DashboardPage() {
 
   if (projetsEnErreur) {
     return (
-      <div className="px-[var(--page-px)] py-[var(--page-py)]">
+      <div className="px-(--page-px) py-(--page-py)">
         <Card className="flex flex-col items-center gap-2 p-10 text-center">
           <AlertTriangle aria-hidden className="size-6 text-danger" />
           <p className="text-sm font-semibold text-fg">Les projets n&apos;ont pas pu être chargés.</p>
@@ -247,7 +247,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 px-[var(--page-px)] py-[var(--page-py)]">
+    <div className="flex flex-col gap-5 px-(--page-px) py-(--page-py)">
       <div className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-[22px] font-bold tracking-tight text-fg">Tableau de bord</h1>
