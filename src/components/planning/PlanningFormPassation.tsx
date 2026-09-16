@@ -440,7 +440,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
                   {can("planning:edit") && (
                     <button
                       onClick={addLigne}
-                      className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)] transition-colors"
+                      className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[var(--primary-text)] hover:bg-[var(--primary)]/10 rounded-[var(--radius-md)] transition-colors"
                     >
                       <Plus size={14} />
                       Ajouter une ligne

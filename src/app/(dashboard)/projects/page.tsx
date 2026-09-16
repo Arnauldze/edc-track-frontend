@@ -172,7 +172,7 @@ export default function ProjectsPage() {
                         placeholder="Rechercher un projet, un code..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                        className="w-full pl-10 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                     />
                 </div>
 
@@ -183,7 +183,7 @@ export default function ProjectsPage() {
                         <select
                             value={statusFilter || ""}
                             onChange={(e) => setStatusFilter(e.target.value || null)}
-                            className="appearance-none pl-9 pr-8 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] transition-colors cursor-pointer focus:outline-none focus:border-[var(--accent)]"
+                            className="appearance-none pl-9 pr-8 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] transition-colors cursor-pointer focus:outline-none focus:border-[var(--primary)]"
                         >
                             <option value="">Tous les statuts</option>
                             <option value="non_debute">Non débuté</option>
@@ -202,7 +202,7 @@ export default function ProjectsPage() {
                                 setSortBy(newSortBy);
                                 setSortOrder(newSortOrder);
                             }}
-                            className="appearance-none pl-9 pr-8 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] transition-colors cursor-pointer focus:outline-none focus:border-[var(--accent)]"
+                            className="appearance-none pl-9 pr-8 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] transition-colors cursor-pointer focus:outline-none focus:border-[var(--primary)]"
                         >
                             <option value="name-asc">Nom (A-Z)</option>
                             <option value="name-desc">Nom (Z-A)</option>
@@ -226,7 +226,7 @@ export default function ProjectsPage() {
                     {!searchQuery && currentUser?.canCreateProjects && (
                         <Link
                             href="/projects/new"
-                            className="text-[var(--accent)] text-sm font-semibold hover:underline mt-2 inline-block"
+                            className="text-[var(--primary-text)] text-sm font-semibold hover:underline mt-2 inline-block"
                         >
                             Créer votre premier projet
                         </Link>

@@ -84,7 +84,7 @@ export default function ProjectPlanningPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-[var(--text-secondary)]">Chargement...</p>
         </div>
       </div>
@@ -95,7 +95,7 @@ export default function ProjectPlanningPage() {
     return (
       <div className="p-8 text-center">
         <p className="text-[var(--text-secondary)]">Projet introuvable</p>
-        <Link href="/planification" className="text-[var(--accent)] text-sm mt-2 inline-block">
+        <Link href="/planification" className="text-[var(--primary-text)] text-sm mt-2 inline-block">
           Retour
         </Link>
       </div>
@@ -113,7 +113,7 @@ export default function ProjectPlanningPage() {
         <div className="flex items-center gap-3 mb-3">
           <Link
             href="/planification"
-            className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"
+            className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--primary-text)] transition-colors"
           >
             <ChevronLeft size={14} /> Tous les projets
           </Link>
@@ -161,7 +161,7 @@ export default function ProjectPlanningPage() {
                   cx="32"
                   cy="32"
                   r="28"
-                  stroke="var(--accent)"
+                  stroke="var(--primary)"
                   strokeWidth="6"
                   fill="none"
                   strokeDasharray={`${(progressPct / 100) * 176} 176`}
@@ -183,7 +183,7 @@ export default function ProjectPlanningPage() {
             onClick={() => setViewMode("table")}
             className={`px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold transition-colors ${
               viewMode === "table"
-                ? "bg-[var(--accent)] text-white"
+                ? "bg-[var(--primary)] text-white"
                 : "bg-[var(--bg-inset)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
             }`}
           >
@@ -194,7 +194,7 @@ export default function ProjectPlanningPage() {
             onClick={() => setViewMode("gantt")}
             className={`px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold transition-colors ${
               viewMode === "gantt"
-                ? "bg-[var(--accent)] text-white"
+                ? "bg-[var(--primary)] text-white"
                 : "bg-[var(--bg-inset)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
             }`}
           >

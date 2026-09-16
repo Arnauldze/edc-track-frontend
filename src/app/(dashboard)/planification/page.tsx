@@ -1,147 +1,183 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Calendar, ChevronRight, Search, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { getProjects, type Project } from "@/lib/projectStore";
-import { planningService, type Planning } from "@/services/api/planningService";
-import { PROJECT_ROOT_ID, rollupStructure, type Metrics } from "@/lib/planningRollup";
+import { AlertTriangle, ArrowRight, CalendarDays, Search } from "lucide-react";
+import { useProjects } from "@/hooks/useProjects";
+import { usePlanningsByProject } from "@/hooks/usePlannings";
+import { LIBELLES_STATUT, syntheseProjet, type StatutProjet, type SyntheseProjet } from "@/lib/dashboard";
+import type { Project } from "@/services/api/projectService";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// ══════════════════════════════════════════════════════════════
+// PLANIFICATION — liste des projets
+// Une carte par projet : structure, activités planifiées, avancement et
+// période. Les synthèses viennent du même moteur que le tableau de bord.
+// ══════════════════════════════════════════════════════════════
+
+const TONS_STATUT: Record<StatutProjet, BadgeTone> = {
+  termine: "success",
+  en_cours: "primary",
+  planifie: "success",
+  a_planifier: "neutral",
+};
+
+const moisEtAnnee = (date?: Date | string) => {
+  if (!date) return undefined;
+  const valeur = date instanceof Date ? date : new Date(date);
+  return isNaN(valeur.getTime()) ? undefined : valeur.toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
+};
+
+function Chiffre({ valeur, libelle, title }: { valeur: string | number; libelle: string; title?: string }) {
+  return (
+    <span title={title} className="flex flex-col gap-0.5 rounded-md bg-inset px-2.5 py-2">
+      <span className="text-base font-bold text-fg">{valeur}</span>
+      <span className="text-[10.5px] font-medium text-fg-subtle">{libelle}</span>
+    </span>
+  );
+}
+
+function CarteProjet({ project, synthese }: { project: Project; synthese: SyntheseProjet }) {
+  const sousComposants = (project.components ?? []).reduce((somme, composant) => somme + (composant.sousComposants?.length ?? 0), 0);
+  const debut = moisEtAnnee(synthese.debut ?? project.dateDebut);
+  const fin = moisEtAnnee(synthese.fin ?? project.dateFin);
+  const avancement = Math.round(synthese.avancement ?? 0);
+
+  return (
+    <Card className="flex flex-col transition-colors hover:border-line-strong">
+      <div className="flex flex-1 flex-col gap-3.5 p-4.5">
+        <div className="flex items-start justify-between gap-3">
+          <span className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-sm font-semibold leading-snug text-fg">{project.name}</span>
+            <span className="self-start rounded-sm border border-line bg-inset px-1.5 py-px font-mono text-[11px] text-fg-muted">
+              {project.code}
+            </span>
+          </span>
+          <Badge tone={TONS_STATUT[synthese.statut]} dot>
+            {LIBELLES_STATUT[synthese.statut]}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <Chiffre valeur={project.components?.length ?? 0} libelle="Composants" />
+          <Chiffre valeur={sousComposants} libelle="Sous-comp." />
+          <Chiffre
+            valeur={`${synthese.unitesPlanifiees}/${synthese.unites}`}
+            libelle="Planifiées"
+            title="Activités planifiées sur le nombre d'activités du projet"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="flex justify-between text-xs">
+            <span className="text-fg-muted">Avancement</span>
+            <span className="font-semibold text-fg">{synthese.avancement === undefined ? "—" : `${avancement} %`}</span>
+          </span>
+          <span className="h-1.5 overflow-hidden rounded-full border border-line bg-inset">
+            <span className="block h-full bg-primary" style={{ width: `${avancement}%` }} />
+          </span>
+          <span className="text-xs text-fg-subtle">{debut ? `${debut} → ${fin ?? "—"}` : "Non planifié"}</span>
+        </div>
+      </div>
+
+      <Link
+        href={`/planification/${encodeURIComponent(project.code)}`}
+        className="flex h-11 items-center justify-center gap-1.5 border-t border-line bg-inset text-[12.5px] font-semibold text-primary-fg transition-colors hover:bg-hover"
+      >
+        Ouvrir la planification
+        <ArrowRight aria-hidden className="size-3.5" />
+      </Link>
+    </Card>
+  );
+}
+
+function CarteChargement() {
+  return (
+    <Card className="flex flex-col gap-3.5 p-4.5">
+      <Skeleton className="h-4 w-3/5" />
+      <Skeleton className="h-3 w-1/3" />
+      <div className="grid grid-cols-3 gap-2">
+        <Skeleton className="h-11" />
+        <Skeleton className="h-11" />
+        <Skeleton className="h-11" />
+      </div>
+      <Skeleton className="h-1.5 rounded-full" />
+      <Skeleton className="h-3 w-2/5" />
+    </Card>
+  );
+}
 
 export default function PlanificationPage() {
-    const [projects, setProjects] = useState<Project[]>([]);
-    /** Synthèse de chaque projet d'après ses planifications (unités planifiées, avancement, période). */
-    const [syntheses, setSyntheses] = useState<Record<string, Metrics>>({});
-    const [searchQuery, setSearchQuery] = useState("");
+  const [recherche, setRecherche] = useState("");
+  const { data: projects = [], isLoading: projetsEnCours, isError } = useProjects();
+  const codes = useMemo(() => projects.map((project) => project.code), [projects]);
+  const { data: planningsParProjet, isLoading: planificationsEnCours } = usePlanningsByProject(codes);
 
-    useEffect(() => {
-        loadData();
-    }, []);
+  const enCours = projetsEnCours || planificationsEnCours;
 
-    async function loadData() {
-        const projectsData = await getProjects();
-        setProjects(projectsData);
-        const entries = await Promise.all(
-            projectsData.map(async (project) => {
-                const plannings: Planning[] = await planningService.getByProject(project.code).catch(() => []);
-                return [project.code, rollupStructure(project.components, plannings).get(PROJECT_ROOT_ID)!] as const;
-            }),
-        );
-        setSyntheses(Object.fromEntries(entries));
-    }
+  const cartes = useMemo(() => {
+    const terme = recherche.trim().toLowerCase();
+    return projects
+      .filter((project) => !terme || `${project.name} ${project.code}`.toLowerCase().includes(terme))
+      .map((project) => ({ project, synthese: syntheseProjet(project, planningsParProjet.get(project.code) ?? []) }));
+  }, [projects, planningsParProjet, recherche]);
 
-    const mois = (d?: Date | string) => (d ? new Date(d).toLocaleDateString("fr-FR", { month: "short", year: "numeric" }) : "—");
-
-    const filtered = projects.filter((p) =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    return (
-        <div className="px-[var(--page-px)] py-[var(--page-py)] min-h-full">
-            {/* ── Header ── */}
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2.5 tracking-tight">
-                        <Calendar size={20} strokeWidth={1.8} className="text-[var(--text-tertiary)]" />
-                        Planification
-                    </h1>
-                    <p className="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
-                        Planification et ordonnancement des activités projet
-                    </p>
-                </div>
-                <div className="relative w-72">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
-                    <input
-                        type="text"
-                        placeholder="Rechercher un projet..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
-                    />
-                </div>
-            </div>
-
-            {/* ── Project Cards ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filtered.map((project) => {
-                    const synthese = syntheses[project.code];
-                    const progress = Math.round(synthese?.progress ?? 0);
-                    return (
-                        <div
-                            key={project.code}
-                            className="group bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all duration-200"
-                        >
-                            <div className="p-5">
-                                <div className="flex items-start justify-between mb-3">
-                                    <div>
-                                        <h3 className="text-[14px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
-                                            {project.name}
-                                        </h3>
-                                        <span className="text-[10px] text-[var(--text-tertiary)] font-semibold bg-[var(--bg-inset)] px-1.5 py-0.5 rounded-[var(--radius-sm)]">
-                                            {project.code}
-                                        </span>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-[var(--radius-md)] bg-blue-500/10 flex items-center justify-center">
-                                        <Calendar size={14} className="text-blue-500" />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-3 mb-4">
-                                    <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-2.5 text-center">
-                                        <div className="text-[16px] font-bold text-[var(--text-primary)]">{project.components.length}</div>
-                                        <div className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">Comp.</div>
-                                    </div>
-                                    <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-2.5 text-center">
-                                        <div className="text-[16px] font-bold text-[var(--text-primary)]">
-                                            {project.components.reduce((s, c) => s + c.sousComposants.length, 0)}
-                                        </div>
-                                        <div className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">S/Comp.</div>
-                                    </div>
-                                    <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-2.5 text-center">
-                                        <div className="text-[16px] font-bold text-[var(--text-primary)]" title="Unités planifiées / unités planifiables">
-                                            {synthese ? `${synthese.plannedLeaves}/${synthese.leaves}` : "—"}
-                                        </div>
-                                        <div className="text-[9px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">Planifiées</div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-1.5 w-24 bg-[var(--bg-inset)] rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full ${progress >= 80 ? "bg-green-500" : progress >= 40 ? "bg-blue-500" : "bg-amber-500"}`}
-                                                style={{ width: `${progress}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-[11px] font-bold text-[var(--text-primary)]" title="Avancement calculé d'après les planifications">{progress}%</span>
-                                    </div>
-                                    <span className="text-[10px] text-[var(--text-tertiary)] font-medium">
-                                        {/* Période planifiée, sinon dates saisies à l'initialisation */}
-                                        {mois(synthese?.start ?? project.dateDebut)}
-                                        {" → "}
-                                        {mois(synthese?.finish ?? project.dateFin)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <Link
-                                href={`/planification/${project.code}`}
-                                className="border-t border-[var(--border-subtle)] px-5 py-3 bg-[var(--bg-inset)] hover:bg-[var(--bg-surface-hover)] transition-colors flex items-center justify-center gap-2 text-[11px] font-semibold text-[var(--accent)] group/link"
-                            >
-                                <Calendar size={12} />
-                                Planifier ce projet
-                                <ChevronRight size={12} className="group-hover/link:translate-x-0.5 transition-transform" />
-                            </Link>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {filtered.length === 0 && (
-                <div className="text-center py-16 text-[var(--text-tertiary)]">
-                    <Calendar size={48} className="mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">Aucun projet trouvé</p>
-                </div>
-            )}
+  return (
+    <div className="flex flex-col gap-5 px-(--page-px) py-(--page-py)">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[22px] font-bold tracking-tight text-fg">Planification</h1>
+          <p className="text-[13px] text-fg-muted">Planification et ordonnancement des activités des projets</p>
         </div>
-    );
+        <div className="flex items-center gap-3">
+          <span className="text-[12.5px] text-fg-subtle">
+            {enCours ? "Chargement…" : `${projects.length} projet${projects.length > 1 ? "s" : ""}`}
+          </span>
+          <div className="w-64">
+            <label htmlFor="recherche-projet" className="sr-only">
+              Rechercher un projet
+            </label>
+            <Input
+              id="recherche-projet"
+              type="search"
+              placeholder="Rechercher un projet…"
+              leftIcon={Search}
+              value={recherche}
+              onChange={(event) => setRecherche(event.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {isError ? (
+        <Card className="flex flex-col items-center gap-2 p-10 text-center">
+          <AlertTriangle aria-hidden className="size-6 text-danger" />
+          <p className="text-sm font-semibold text-fg">Les projets n&apos;ont pas pu être chargés.</p>
+          <p className="text-[13px] text-fg-muted">Vérifiez votre connexion, puis rechargez la page.</p>
+        </Card>
+      ) : enCours ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <CarteChargement />
+          <CarteChargement />
+          <CarteChargement />
+        </div>
+      ) : cartes.length === 0 ? (
+        <Card className="flex flex-col items-center gap-2 p-12 text-center">
+          <CalendarDays aria-hidden className="size-6 text-fg-subtle" />
+          <p className="text-sm font-semibold text-fg">
+            {recherche.trim() ? "Aucun projet ne correspond à cette recherche." : "Aucun projet pour le moment."}
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {cartes.map(({ project, synthese }) => (
+            <CarteProjet key={project.code} project={project} synthese={synthese} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

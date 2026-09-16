@@ -240,7 +240,7 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
 
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-[var(--border-default)] rounded-[var(--radius-lg)] p-12 text-center hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all cursor-pointer"
+                className="border-2 border-dashed border-[var(--border-default)] rounded-[var(--radius-lg)] p-12 text-center hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all cursor-pointer"
               >
                 <Upload size={48} className="mx-auto mb-4 text-[var(--text-tertiary)]" />
                 <p className="text-[14px] font-semibold text-[var(--text-primary)] mb-1">
@@ -299,7 +299,7 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
                     <select
                       value={mapping.columnIndex ?? -1}
                       onChange={(e) => handleMappingChange(index, parseInt(e.target.value))}
-                      className="w-64 px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
+                      className="w-64 px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] cursor-pointer"
                     >
                       <option value={-1}>-- Sélectionnez une colonne --</option>
                       {headers.map((header, colIndex) => (
@@ -400,7 +400,7 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
               <button
                 onClick={handlePreview}
                 disabled={!validateMappings()}
-                className="px-4 py-2 bg-[var(--accent)] text-white text-[13px] font-semibold rounded-[var(--radius-md)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-[var(--primary)] text-white text-[13px] font-semibold rounded-[var(--radius-md)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Aperçu
               </button>

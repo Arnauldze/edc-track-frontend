@@ -87,7 +87,7 @@ export function ChangeChefModal({ isOpen, projectId, currentChefs, onClose, onCh
             <select
               value={newChefId}
               onChange={(e) => setNewChefId(e.target.value)}
-              className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+              className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
             >
               <option value="">— Sélectionner —</option>
               {candidates.map((u) => (
@@ -113,7 +113,7 @@ export function ChangeChefModal({ isOpen, projectId, currentChefs, onClose, onCh
                     key={value}
                     className={`flex items-start gap-3 p-3 rounded-[var(--radius-md)] border cursor-pointer ${
                       previousChef === value
-                        ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
+                        ? "border-[var(--primary)] bg-[var(--primary-subtle)]"
                         : "border-[var(--border-default)] bg-[var(--bg-inset)]"
                     }`}
                   >
@@ -143,7 +143,7 @@ export function ChangeChefModal({ isOpen, projectId, currentChefs, onClose, onCh
             type="button"
             onClick={handleSubmit}
             disabled={!newChefId || isSubmitting}
-            className="px-5 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Enregistrement…" : "Désigner"}
           </button>

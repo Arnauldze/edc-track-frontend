@@ -126,7 +126,7 @@ export default function ArchivesPage() {
                             onClick={() => setViewMode("grid")}
                             className={`p-1.5 rounded-[var(--radius-sm)] transition-colors ${
                                 viewMode === "grid"
-                                    ? "bg-[var(--accent)] text-white"
+                                    ? "bg-[var(--primary)] text-white"
                                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-inset)]"
                             }`}
                             title="Affichage en grille"
@@ -137,7 +137,7 @@ export default function ArchivesPage() {
                             onClick={() => setViewMode("list")}
                             className={`p-1.5 rounded-[var(--radius-sm)] transition-colors ${
                                 viewMode === "list"
-                                    ? "bg-[var(--accent)] text-white"
+                                    ? "bg-[var(--primary)] text-white"
                                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-inset)]"
                             }`}
                             title="Affichage en liste"
@@ -154,7 +154,7 @@ export default function ArchivesPage() {
                             placeholder="Rechercher un projet..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                            className="w-full pl-9 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                         />
                     </div>
                 </div>
@@ -170,7 +170,7 @@ export default function ArchivesPage() {
                                 <div className="group bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] transition-all duration-200 cursor-pointer">
                                     <div className="p-5 space-y-3.5">
                                         {/* Titre */}
-                                        <h3 className="text-[15px] font-bold text-[var(--text-primary)] line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-[var(--accent)] transition-colors">
+                                        <h3 className="text-[15px] font-bold text-[var(--text-primary)] line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-[var(--primary-text)] transition-colors">
                                             {project.name}
                                         </h3>
 
@@ -264,7 +264,7 @@ export default function ArchivesPage() {
 
                                         {/* Infos projet */}
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="text-[14px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors truncate">
+                                            <h3 className="text-[14px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary-text)] transition-colors truncate">
                                                 {project.name}
                                             </h3>
                                             <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[var(--text-secondary)]">

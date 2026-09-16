@@ -11,7 +11,7 @@ import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <ReactQueryProvider>
-            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
                 <AuthProvider>
                     {children}
                 </AuthProvider>

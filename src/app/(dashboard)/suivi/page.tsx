@@ -127,7 +127,7 @@ export default function SuiviPage() {
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <h3 className="text-[14px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                                                <h3 className="text-[14px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary-text)] transition-colors">
                                                     {projet.name}
                                                 </h3>
                                                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDot(projet.status)}`} />
@@ -139,7 +139,7 @@ export default function SuiviPage() {
                                     </div>
                                     <ChevronRight
                                         size={16}
-                                        className="text-[var(--text-tertiary)] group-hover:text-[var(--accent)] group-hover:translate-x-0.5 transition-all mt-1"
+                                        className="text-[var(--text-tertiary)] group-hover:text-[var(--primary-text)] group-hover:translate-x-0.5 transition-all mt-1"
                                     />
                                 </div>
 

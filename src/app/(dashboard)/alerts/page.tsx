@@ -126,7 +126,7 @@ export default function AlertsPage() {
                     )}
                     <Link
                         href={suiviHref}
-                        className="text-[var(--accent)] text-[12px] font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
+                        className="text-[var(--primary-text)] text-[12px] font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
                     >
                         Voir <ChevronRight size={14} />
                     </Link>
