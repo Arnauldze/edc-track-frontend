@@ -49,6 +49,7 @@ EXAMPLE_API_USAGE.tsx
 verify-integration.js
 *.md
 !README.md
+!/WORKFLOW_GIT.md
 
 # Preview files
 /public/structure-activities-preview.html
