@@ -91,6 +91,11 @@ export function leafMetrics(planning: Planning | undefined): Metrics {
     span.add(phase.start, phase.finish);
   }
 
+  // Passation : sa période élargit celle de l'activité, sans peser sur
+  // l'avancement — l'état des marchés du PPM viendra avec le module Suivi.
+  span.add(planning.dateDebutPassation, planning.dateFinPassation);
+
+  // Ancien modèle d'étapes, pour les planifications enregistrées avant le PPM.
   const etapes = planning.etapesPassation ?? [];
   if (etapes.length) {
     const phase = new Span();

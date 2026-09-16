@@ -34,6 +34,7 @@ export interface Livrable {
   statut?: 'en_attente' | 'soumis' | 'valide' | 'rejete';
 }
 
+/** Ancien modèle d'étapes génériques, conservé pour les planifications déjà enregistrées. */
 export interface EtapePassation {
   ordre: number;
   nom: string;
@@ -42,6 +43,90 @@ export interface EtapePassation {
   dateFin?: Date;
   statut?: 'non_demarre' | 'en_cours' | 'termine' | 'en_retard';
   responsable?: string;
+}
+
+/**
+ * Ligne du plan de passation des marchés (PPM), telle que la saisit le tableau :
+ * tout est du texte, une étape non renseignée vaut "". Voir lib/passationApi.ts
+ * pour la conversion vers et depuis l'API.
+ */
+export interface LignePassation {
+  numero: string;
+  designation: string;
+  typeAO: string;
+  typePrestation: string;
+  montantPrevisionnel: string;
+  sourceFinancement: string;
+  imputationBudgetaire: string;
+  // Processus de sélection
+  saisineCIPM: string;
+  examenDAOCIPM: string;
+  nonObjectionBF1: string;
+  lancementAO: string;
+  depouillementOffres: string;
+  rapportAnalyseSCA: string;
+  examenRapportCIPM: string;
+  nonObjectionBF2: string;
+  // Offres financières
+  ouvertureOF: string;
+  rapportAnalyseOF: string;
+  propositionAttributionCIPM: string;
+  nonObjectionBF3: string;
+  publicationResultats: string;
+  // Contractualisation
+  souscriptionMarche: string;
+  saisineCIPM2: string;
+  examenMarcheCIPM: string;
+  visaCA: string;
+  nonObjectionBF4: string;
+  signatureMarche: string;
+  notificationMarche: string;
+  enregistrementMarche: string;
+  // Synthèse et exécution
+  delaiGlobalPassation: string;
+  osDeDemarrage: string;
+  delaiGlobalExecution: string;
+  dateReceptionProvisoire: string;
+  periodeGarantie: string;
+  dateReceptionDefinitive: string;
+}
+
+/** La même ligne côté API : dates et nombres, étapes non renseignées absentes. */
+export interface LignePassationApi {
+  numero: string;
+  designation?: string;
+  typeAO?: string;
+  typePrestation?: string;
+  montantPrevisionnel?: number;
+  sourceFinancement?: string;
+  imputationBudgetaire?: string;
+  saisineCIPM?: string | Date;
+  examenDAOCIPM?: string | Date;
+  nonObjectionBF1?: string | Date;
+  lancementAO?: string | Date;
+  depouillementOffres?: string | Date;
+  rapportAnalyseSCA?: string | Date;
+  examenRapportCIPM?: string | Date;
+  nonObjectionBF2?: string | Date;
+  ouvertureOF?: string | Date;
+  rapportAnalyseOF?: string | Date;
+  propositionAttributionCIPM?: string | Date;
+  nonObjectionBF3?: string | Date;
+  publicationResultats?: string | Date;
+  souscriptionMarche?: string | Date;
+  saisineCIPM2?: string | Date;
+  examenMarcheCIPM?: string | Date;
+  visaCA?: string;
+  nonObjectionBF4?: string | Date;
+  signatureMarche?: string | Date;
+  notificationMarche?: string | Date;
+  enregistrementMarche?: string | Date;
+  delaiGlobalPassation?: number;
+  osDeDemarrage?: string | Date;
+  delaiGlobalExecution?: number;
+  dateReceptionProvisoire?: string | Date;
+  periodeGarantie?: number;
+  dateReceptionDefinitive?: string | Date;
 }
 
 export interface TacheExecution {
@@ -107,6 +192,7 @@ export interface Planning {
   // Passation
   typePassation?: string;
   etapesPassation: EtapePassation[];
+  lignesPassation: LignePassationApi[];
   dateDebutPassation?: Date;
   dateFinPassation?: Date;
   
@@ -144,6 +230,7 @@ export interface CreatePlanningDto {
   dateT0Etude?: Date;
   typePassation?: string;
   etapesPassation?: EtapePassation[];
+  lignesPassation?: LignePassationApi[];
   dateDebutPassation?: Date;
   dateFinPassation?: Date;
   tachesExecution?: TacheExecution[];

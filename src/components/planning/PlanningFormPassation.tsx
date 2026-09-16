@@ -4,51 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Briefcase, AlertCircle, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 import { FileImportModal } from "./FileImportModal";
 import { usePermissions } from "@/hooks/usePermissions";
+import type { LignePassation } from "@/services/api/planningService";
 
 // ══════════════════════════════════════════════════════════════
-// PPM 2024 - Structure fidèle au tableau Excel EDC
+// PLAN DE PASSATION DES MARCHÉS (PPM)
+// Tableau fidèle au modèle EDC : un marché par ligne, les étapes en colonnes.
+// La ligne est saisie en texte ; lib/passationApi.ts la convertit pour l'API.
 // ══════════════════════════════════════════════════════════════
-
-interface LignePassation {
-  numero: string;
-  designation: string;
-  typeAO: string;
-  typePrestation: string;
-  montantPrevisionnel: string;
-  sourceFinancement: string;
-  imputationBudgetaire: string;
-  // ── Processus de sélection ──
-  saisineCIPM: string;
-  examenDAOCIPM: string;
-  nonObjectionBF1: string;
-  lancementAO: string;
-  depouillementOffres: string;
-  rapportAnalyseSCA: string;
-  examenRapportCIPM: string;
-  nonObjectionBF2: string;
-  // ── Offres financières ──
-  ouvertureOF: string;
-  rapportAnalyseOF: string;
-  propositionAttributionCIPM: string;
-  nonObjectionBF3: string;
-  publicationResultats: string;
-  // ── Contractualisation ──
-  souscriptionMarche: string;
-  saisineCIPM2: string;
-  examenMarcheCIPM: string;
-  visaCA: string;
-  nonObjectionBF4: string;
-  signatureMarche: string;
-  notificationMarche: string;
-  enregistrementMarche: string;
-  // ── Synthèse ──
-  delaiGlobalPassation: string;
-  osDeDemarrage: string;
-  delaiGlobalExecution: string;
-  dateReceptionProvisoire: string;
-  periodeGarantie: string;
-  dateReceptionDefinitive: string;
-}
 
 const EMPTY_LIGNE: LignePassation = {
   numero: "", designation: "", typeAO: "", typePrestation: "",
@@ -150,9 +112,8 @@ const ALL_COLS = COL_GROUPS.flatMap((g) => g.cols);
 const TOTAL_WIDTH = ALL_COLS.reduce((s, c) => s + c.width, 0) + 50; // +50 pour colonne actions
 
 interface PassationData {
-  typePassation: string;
-  etapesPassation: any[];
-  lignesPassation?: LignePassation[];
+  typePassation?: string;
+  lignesPassation: LignePassation[];
 }
 
 interface Props {
@@ -173,11 +134,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
 
   // Sync vers le parent
   useEffect(() => {
-    onChange({
-      typePassation: "PPM",
-      etapesPassation: [],
-      lignesPassation: lignes,
-    });
+    onChange({ typePassation: data?.typePassation, lignesPassation: lignes });
   }, [lignes]);
 
   // Calcul auto du délai global de passation
@@ -472,7 +429,7 @@ export function PlanningFormPassation({ data, onChange, projectId }: Props) {
               <ul className="mt-1 space-y-0.5 list-disc list-inside">
                 <li><strong>Délai global</strong> : Calculé automatiquement entre la Saisine CIPM et l'Enregistrement</li>
                 <li><strong>Non obj. BF</strong> : Non objection du Bailleur de Fonds (si applicable)</li>
-                <li><strong>N/A</strong> : Saisissez N/A dans les champs date non applicables</li>
+                <li><strong>Étape sans objet</strong> : laissez la date vide, elle ne sera pas enregistrée</li>
                 <li>Utilisez les flèches ◀ ▶ ou le scroll horizontal pour naviguer dans le tableau</li>
               </ul>
             </div>
