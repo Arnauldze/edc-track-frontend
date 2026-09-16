@@ -455,6 +455,8 @@ export function MSProjectViewV2({
       track(p.dateFinActualisee || p.dateFinInitiale);
       p.livrables?.forEach((liv) => { track(liv.dateDebut); track(liv.dateFin || liv.dateEcheance); });
       p.tachesExecution?.forEach((tache) => { track(tache.dateDebut); track(tache.dateFin); });
+      track(p.dateDebutPassation);
+      track(p.dateFinPassation);
       p.etapesPassation?.forEach((etape) => { track(etape.dateDebut); track(etape.dateFin); });
     });
     return { start: min as Date | null, end: max as Date | null };
