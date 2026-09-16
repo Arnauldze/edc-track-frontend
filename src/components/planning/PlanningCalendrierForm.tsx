@@ -189,7 +189,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
   const cellule = "px-1.5 py-1.5 flex items-center gap-1 border-r border-b border-[var(--border-default)] min-w-0";
   const champ = (options: { deduit?: boolean; erreur?: string }) =>
     [
-      "w-full min-w-0 px-1.5 py-1 rounded text-[11px] border focus:outline-none focus:border-[var(--accent)] disabled:cursor-not-allowed",
+      "w-full min-w-0 px-1.5 py-1 rounded text-[11px] border focus:outline-none focus:border-[var(--primary)] disabled:cursor-not-allowed",
       options.erreur ? "border-red-500 bg-red-500/5" : "border-transparent hover:border-[var(--border-default)]",
       options.deduit ? "italic text-[var(--text-tertiary)] bg-[var(--bg-inset)]" : "bg-transparent text-[var(--text-primary)]",
     ].join(" ");
@@ -412,7 +412,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
 
           {!readOnly && (
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={ajouter} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)]">
+              <button type="button" onClick={ajouter} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--primary-text)] hover:bg-[var(--primary)]/10 rounded-[var(--radius-md)]">
                 <Plus size={14} /> Ajouter {phase.mot === "tâche" ? "une tâche" : "un livrable"}
               </button>
               {!pondValide && lignes.length > 0 && (

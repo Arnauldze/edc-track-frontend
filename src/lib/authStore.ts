@@ -20,7 +20,7 @@ export type AuthSession = {
   loginAt: string;
 };
 
-const SESSION_KEY = "edc_auth_session";
+export const SESSION_KEY = "edc_auth_session";
 const TOKEN_KEY = "jwt_token";
 
 // ── Session management ──

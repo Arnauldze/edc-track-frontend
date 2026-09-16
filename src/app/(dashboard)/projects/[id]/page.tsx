@@ -563,7 +563,7 @@ export default function ProjectConfigPage() {
     return (
       <div className="p-8 text-center">
         <p className="text-[var(--text-secondary)]">Projet introuvable</p>
-        <Link href="/projects" className="text-[var(--accent)] text-sm mt-2 inline-block">Retour</Link>
+        <Link href="/projects" className="text-[var(--primary-text)] text-sm mt-2 inline-block">Retour</Link>
       </div>
     );
   }
@@ -576,7 +576,7 @@ export default function ProjectConfigPage() {
         <div className="mb-3">
           <Link
             href="/projects"
-            className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-tertiary)] hover:text-[var(--accent)] transition-colors inline-flex"
+            className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-tertiary)] hover:text-[var(--primary-text)] transition-colors inline-flex"
           >
             <ChevronLeft size={14} /> Tous les projets
           </Link>
@@ -695,7 +695,7 @@ export default function ProjectConfigPage() {
               {can("structure:edit") && (
                 <button
                   onClick={() => setShowEditInfoModal(true)}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                  className="flex items-center gap-2 px-4 py-1.5 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
                 >
                   <Edit2 size={13} />
                   Modifier les informations
@@ -737,7 +737,7 @@ export default function ProjectConfigPage() {
                     {/* Types & navigation - Info sur hover */}
                     <div className="relative group inline-block">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] font-semibold text-[var(--text-secondary)] cursor-help hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors">
-                        <Info size={13} className="text-[var(--accent)]" />
+                        <Info size={13} className="text-[var(--primary-text)]" />
                         <span>Types & navigation</span>
                       </div>
 
@@ -764,7 +764,7 @@ export default function ProjectConfigPage() {
                     {!canEditStructure ? null : !isEditingStructure ? (
                       <button
                         onClick={handleStartEditing}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                        className="flex items-center gap-2 px-4 py-1.5 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
                       >
                         <Edit2 size={13} />
                         Modifier la structure
@@ -824,7 +824,7 @@ export default function ProjectConfigPage() {
                                   value={comp.name}
                                   onChange={e => updateComponentName(ci, e.target.value)}
                                   placeholder="Nom du composant..."
-                                  className="flex-1 min-w-[12rem] bg-transparent border-b-2 border-[var(--border-subtle)] hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors"
+                                  className="flex-1 min-w-[12rem] bg-transparent border-b-2 border-[var(--border-subtle)] hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors"
                                 />
                               )}
 
@@ -837,7 +837,7 @@ export default function ProjectConfigPage() {
                                     </span>
                                   )
                                 ) : (
-                                  <select value={comp.typeActivite || "travaux"} onChange={e => updateComponentType(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[11px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] cursor-pointer max-w-[11rem]">
+                                  <select value={comp.typeActivite || "travaux"} onChange={e => updateComponentType(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[11px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--primary)] cursor-pointer max-w-[11rem]">
                                     {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
                                   </select>
                                 )
@@ -925,10 +925,10 @@ export default function ProjectConfigPage() {
                                   ) : (
                                     /* MODE ÉDITION */
                                     <>
-                                      <input type="text" value={sc.name} onChange={e => updateSCName(ci, si, e.target.value)} placeholder="Sous-composant..." className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[12px] font-semibold text-[var(--text-secondary)] px-1 py-0.5 transition-colors" />
+                                      <input type="text" value={sc.name} onChange={e => updateSCName(ci, si, e.target.value)} placeholder="Sous-composant..." className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[12px] font-semibold text-[var(--text-secondary)] px-1 py-0.5 transition-colors" />
                                       {/* Type d'activité (si niveau le plus bas) */}
                                       {isSousComposantLowestLevel(sc) && (
-                                        <select value={sc.typeActivite || "travaux"} onChange={e => updateSCType(ci, si, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1.5 py-1 focus:outline-none focus:border-[var(--accent)] cursor-pointer w-[120px] flex-shrink-0">
+                                        <select value={sc.typeActivite || "travaux"} onChange={e => updateSCType(ci, si, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1.5 py-1 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[120px] flex-shrink-0">
                                           {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
                                         </select>
                                       )}
@@ -978,13 +978,13 @@ export default function ProjectConfigPage() {
                                                 value={actName}
                                                 onChange={e => updateActivityName(ci, si, ai, e.target.value)}
                                                 placeholder="Nom de l'activité..."
-                                                className="flex-1 min-w-0 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] outline-none text-[11px] text-[var(--text-secondary)] px-2 py-1 focus:border-[var(--accent)] transition-colors"
+                                                className="flex-1 min-w-0 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] outline-none text-[11px] text-[var(--text-secondary)] px-2 py-1 focus:border-[var(--primary)] transition-colors"
                                               />
                                               {/* Type selector */}
                                               <select
                                                 value={actType}
                                                 onChange={e => updateActivityType(ci, si, ai, e.target.value)}
-                                                className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-1.5 py-1 focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer w-[140px] flex-shrink-0"
+                                                className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-1.5 py-1 focus:outline-none focus:border-[var(--primary)] transition-colors cursor-pointer w-[140px] flex-shrink-0"
                                               >
                                                 {ACTIVITY_TYPES.map(t => (
                                                   <option key={t.id} value={t.id}>{t.label}</option>
@@ -1004,7 +1004,7 @@ export default function ProjectConfigPage() {
                                     {/* Add activity with type dropdown (uniquement en mode édition) */}
                                     {isEditingStructure && (
                                       <div className="flex flex-wrap items-center gap-1.5 mt-1 py-1">
-                                        <button type="button" onClick={() => addActivity(ci, si, "travaux")} className="flex items-center gap-1 text-[10px] font-medium text-[var(--accent)] hover:underline"><Plus size={10} /> Activité</button>
+                                        <button type="button" onClick={() => addActivity(ci, si, "travaux")} className="flex items-center gap-1 text-[10px] font-medium text-[var(--primary-text)] hover:underline"><Plus size={10} /> Activité</button>
                                         <span className="text-[var(--text-tertiary)] text-[9px]">—</span>
                                         {ACTIVITY_TYPES.map(t => (
                                           <button
@@ -1130,7 +1130,7 @@ export default function ProjectConfigPage() {
                   placeholder="Rechercher un membre..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                  className="w-full pl-10 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 />
               </div>
 
@@ -1146,7 +1146,7 @@ export default function ProjectConfigPage() {
                 {can("team:add") && (
                   <button
                     onClick={openInviteModal}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
                   >
                     <Plus size={16} />
                     Ajouter un membre
@@ -1275,7 +1275,7 @@ export default function ProjectConfigPage() {
                   {can("team:add") && (
                     <button
                       onClick={openInviteModal}
-                      className="text-[var(--accent)] text-sm font-semibold hover:underline mt-2 inline-block"
+                      className="text-[var(--primary-text)] text-sm font-semibold hover:underline mt-2 inline-block"
                     >
                       Ajouter le premier membre
                     </button>

@@ -116,7 +116,7 @@ export function ExchangeRateModal({
                       value={rates[currency.code] || ""}
                       onChange={(e) => updateRate(currency.code, e.target.value)}
                       disabled={currency.code === "FCFA"}
-                      className="w-32 px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] text-right focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-32 px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] text-right focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <span className="text-xs text-[var(--text-secondary)] w-12">
                       FCFA
@@ -171,7 +171,7 @@ export function ExchangeRateModal({
             </button>
             <button
               onClick={handleSave}
-              className="px-5 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+              className="px-5 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
             >
               Enregistrer les taux
             </button>

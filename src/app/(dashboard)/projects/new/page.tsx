@@ -48,7 +48,7 @@ function ComboBox({ label, placeholder, options, value, onChange, disabled = fal
                     onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(""); }}
                     onFocus={() => setOpen(true)}
                     placeholder={placeholder}
-                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all pr-8"
+                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all pr-8"
                 />
                 <svg className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
             </div>
@@ -60,7 +60,7 @@ function ComboBox({ label, placeholder, options, value, onChange, disabled = fal
                             key={opt}
                             type="button"
                             onClick={() => { onChange(opt); setQuery(""); setOpen(false); }}
-                            className={`w-full text-left px-4 py-2.5 text-[13px] hover:bg-[var(--bg-surface-hover)] transition-colors ${opt === value ? "text-[var(--accent)] font-semibold bg-[var(--accent-subtle)]" : "text-[var(--text-primary)]"
+                            className={`w-full text-left px-4 py-2.5 text-[13px] hover:bg-[var(--bg-surface-hover)] transition-colors ${opt === value ? "text-[var(--primary-text)] font-semibold bg-[var(--primary-subtle)]" : "text-[var(--text-primary)]"
                                 }`}
                         >
                             {opt}
@@ -149,7 +149,7 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                     value={localite}
                     onChange={(e) => setLocalite(e.target.value)}
                     placeholder="ex: Rive droite du fleuve Sanaga, PK 42..."
-                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all"
+                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
                 />
             </div>
 
@@ -173,7 +173,7 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             value={lat}
                             onChange={(e) => { setLat(e.target.value); setAutoDetected(false); }}
                             placeholder="Latitude (ex: 5.5321)"
-                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all ${autoDetected
+                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
                                 ? "bg-green-500/5 border-green-500/30 text-[var(--text-primary)]"
                                 : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
                                 }`}
@@ -185,7 +185,7 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             value={lng}
                             onChange={(e) => { setLng(e.target.value); setAutoDetected(false); }}
                             placeholder="Longitude (ex: 13.6163)"
-                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all ${autoDetected
+                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
                                 ? "bg-green-500/5 border-green-500/30 text-[var(--text-primary)]"
                                 : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
                                 }`}
@@ -641,26 +641,26 @@ export default function NewProjectPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="col-span-2">
                             <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Titre du projet <span className="text-red-500">*</span></label>
-                            <input type="text" value={titre} onChange={e => setTitre(e.target.value)} placeholder="ex: Barrage de Lom Pangar" className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all" />
+                            <input type="text" value={titre} onChange={e => setTitre(e.target.value)} placeholder="ex: Barrage de Lom Pangar" className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
                         </div>
                         <div className="col-span-2">
                             <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Code du projet</label>
                             <div className="flex items-center gap-2">
                                 <input type="text" value={projectCode} readOnly className="flex-1 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-tertiary)] cursor-not-allowed opacity-60" />
-                                <span className="bg-[var(--accent-subtle)] text-[var(--accent)] text-[10px] px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--accent)]/20 font-bold">Auto</span>
+                                <span className="bg-[var(--primary-subtle)] text-[var(--primary-text)] text-[10px] px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--primary)]/20 font-bold">Auto</span>
                             </div>
                         </div>
                         <div className="col-span-2">
                             <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Description</label>
-                            <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Décrivez le projet..." className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all resize-none" />
+                            <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Décrivez le projet..." className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all resize-none" />
                         </div>
                         <div>
                             <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date début <span className="text-red-500">*</span></label>
-                            <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all" />
+                            <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
                         </div>
                         <div>
                             <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date fin prévue <span className="text-red-500">*</span></label>
-                            <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 transition-all" />
+                            <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
                         </div>
                     </div>
                 )}
@@ -684,12 +684,12 @@ export default function NewProjectPage() {
                 {currentStep === 4 && (
                     <div className="space-y-5">
                         {/* ── Header : Nom du projet ── */}
-                        <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[var(--accent)]/20">
-                            <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--accent)]/10 flex items-center justify-center flex-shrink-0">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--accent)]"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                        <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--primary-subtle)] border border-[var(--primary)]/20">
+                            <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--primary)]/10 flex items-center justify-center flex-shrink-0">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--primary-text)]"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
                             </div>
                             <div>
-                                <div className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-wider">Structure du projet</div>
+                                <div className="text-[10px] font-bold text-[var(--primary-text)] uppercase tracking-wider">Structure du projet</div>
                                 <div className="text-[15px] font-bold text-[var(--text-primary)]">{titre || "Nouveau Projet"}</div>
                             </div>
                         </div>
@@ -768,11 +768,11 @@ export default function NewProjectPage() {
                                     {/* ── Composant : Nom + Budget + Devise + Pondération + TypeActivite (si niveau le plus bas) + Actions ── */}
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <div className="w-7 h-7 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
-                                        <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '12rem' }} />
+                                        <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '12rem' }} />
 
                                         {/* Type d'activité (si niveau le plus bas) */}
                                         {isComponentLowestLevel(comp) && (
-                                            <select value={comp.typeActivite || "travaux"} onChange={e => updateComponentType(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] cursor-pointer w-[140px] flex-shrink-0">
+                                            <select value={comp.typeActivite || "travaux"} onChange={e => updateComponentType(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[140px] flex-shrink-0">
                                                 {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
                                             </select>
                                         )}
@@ -800,10 +800,10 @@ export default function NewProjectPage() {
                                             <div key={sc.id}>
                                                 <div className="flex items-center gap-2 py-1.5">
                                                     <div className="w-5 h-5 bg-amber-500/15 text-amber-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
-                                                    <input type="text" value={sc.name} onChange={e => updateSCName(ci, si, e.target.value)} placeholder="Sous-composant..." className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--border-default)] focus:border-[var(--accent)] outline-none text-[12px] font-semibold text-[var(--text-secondary)] px-1 py-0.5 transition-colors" />
+                                                    <input type="text" value={sc.name} onChange={e => updateSCName(ci, si, e.target.value)} placeholder="Sous-composant..." className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[12px] font-semibold text-[var(--text-secondary)] px-1 py-0.5 transition-colors" />
                                                     {/* Type d'activité (si niveau le plus bas) */}
                                                     {isSousComposantLowestLevel(sc) && (
-                                                        <select value={sc.typeActivite || "travaux"} onChange={e => updateSCType(ci, si, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1.5 py-1 focus:outline-none focus:border-[var(--accent)] cursor-pointer w-[120px] flex-shrink-0">
+                                                        <select value={sc.typeActivite || "travaux"} onChange={e => updateSCType(ci, si, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1.5 py-1 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[120px] flex-shrink-0">
                                                             {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
                                                         </select>
                                                     )}
@@ -823,9 +823,9 @@ export default function NewProjectPage() {
                                                         return (
                                                             <div key={ai} className="flex items-center gap-1.5 py-0.5 group">
                                                                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${TYPE_COLORS[actType] || "bg-purple-500/20"}`} />
-                                                                <input type="text" value={actName} onChange={e => updateActivity(ci, si, ai, e.target.value)} placeholder="Activité..." className="flex-1 min-w-0 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] outline-none text-[11px] text-[var(--text-secondary)] px-2 py-1 focus:border-[var(--accent)] transition-colors" />
+                                                                <input type="text" value={actName} onChange={e => updateActivity(ci, si, ai, e.target.value)} placeholder="Activité..." className="flex-1 min-w-0 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] outline-none text-[11px] text-[var(--text-secondary)] px-2 py-1 focus:border-[var(--primary)] transition-colors" />
                                                                 {/* Type selector */}
-                                                                <select value={actType} onChange={e => updateActivityType(ci, si, ai, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1 py-1 focus:outline-none focus:border-[var(--accent)] cursor-pointer w-[120px] flex-shrink-0">
+                                                                <select value={actType} onChange={e => updateActivityType(ci, si, ai, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1 py-1 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[120px] flex-shrink-0">
                                                                     {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
                                                                 </select>
                                                                 {/* Actions (visibles au hover) */}
@@ -836,7 +836,7 @@ export default function NewProjectPage() {
                                                             </div>
                                                         );
                                                     })}
-                                                    <button type="button" onClick={() => addActivity(ci, si)} className="flex items-center gap-1 text-[10px] font-medium text-[var(--accent)] hover:underline mt-1 py-1"><Plus size={10} /> Activité</button>
+                                                    <button type="button" onClick={() => addActivity(ci, si)} className="flex items-center gap-1 text-[10px] font-medium text-[var(--primary-text)] hover:underline mt-1 py-1"><Plus size={10} /> Activité</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -854,12 +854,12 @@ export default function NewProjectPage() {
                 {/* Step 5: Arborescence (Prévisualisation) */}
                 {currentStep === 5 && (
                     <div className="space-y-5">
-                        <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--accent-subtle)] border border-[var(--accent)]/20">
-                            <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--accent)]/10 flex items-center justify-center flex-shrink-0">
-                                <Layers size={16} className="text-[var(--accent)]" />
+                        <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--primary-subtle)] border border-[var(--primary)]/20">
+                            <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--primary)]/10 flex items-center justify-center flex-shrink-0">
+                                <Layers size={16} className="text-[var(--primary-text)]" />
                             </div>
                             <div>
-                                <div className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-wider">Arborescence du projet</div>
+                                <div className="text-[10px] font-bold text-[var(--primary-text)] uppercase tracking-wider">Arborescence du projet</div>
                                 <div className="text-[13px] font-medium text-[var(--text-primary)]">Aperçu de la structure que vous venez de créer</div>
                             </div>
                         </div>

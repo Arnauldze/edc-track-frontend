@@ -1,6 +1,15 @@
 "use client";
 
-import { AlertCircle, X } from "lucide-react";
+import { useEffect, useId, useRef } from "react";
+import { AlertTriangle, Info, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "./button";
+
+// ══════════════════════════════════════════════════════════════
+// DIALOGUE DE CONFIRMATION
+// Échap ou un clic à l'extérieur annulent ; le focus part sur « Annuler »
+// pour qu'une validation au clavier ne confirme jamais par mégarde.
+// ══════════════════════════════════════════════════════════════
 
 export type ConfirmDialogProps = {
   isOpen: boolean;
@@ -13,6 +22,12 @@ export type ConfirmDialogProps = {
   onCancel: () => void;
 };
 
+const VARIANTS = {
+  danger: { icon: AlertTriangle, pastille: "bg-danger-subtle text-danger", confirm: "border-danger bg-danger text-white hover:border-danger hover:bg-danger/90 dark:text-canvas" },
+  warning: { icon: AlertTriangle, pastille: "bg-warning-subtle text-warning", confirm: "" },
+  info: { icon: Info, pastille: "bg-primary-subtle text-primary-fg", confirm: "" },
+} as const;
+
 export function ConfirmDialog({
   isOpen,
   title,
@@ -23,73 +38,64 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const titleId = useId();
+  const messageId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    cancelRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onCancel]);
+
   if (!isOpen) return null;
 
-  const variantStyles = {
-    danger: {
-      icon: "bg-red-500/10 text-red-600",
-      button: "bg-red-600 hover:bg-red-700",
-      border: "border-red-500/20",
-    },
-    warning: {
-      icon: "bg-amber-500/10 text-amber-600",
-      button: "bg-amber-600 hover:bg-amber-700",
-      border: "border-amber-500/20",
-    },
-    info: {
-      icon: "bg-blue-500/10 text-blue-600",
-      button: "bg-blue-600 hover:bg-blue-700",
-      border: "border-blue-500/20",
-    },
-  };
-
-  const styles = variantStyles[variant];
+  const { icon: Icon, pastille, confirm } = VARIANTS[variant];
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={onCancel}
-    >
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-overlay p-4" onClick={onCancel}>
       <div
-        className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)] w-full max-w-md p-6 border border-[var(--border-default)]"
-        onClick={(e) => e.stopPropagation()}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+        className="w-full max-w-md animate-pop-in rounded-lg border border-line bg-surface shadow-lg"
+        onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start gap-3 mb-4">
-          <div className={`w-10 h-10 rounded-full ${styles.icon} flex items-center justify-center flex-shrink-0`}>
-            <AlertCircle size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-bold text-[var(--text-primary)] mb-1">
+        <div className="flex items-start gap-3.5 p-5">
+          <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", pastille)}>
+            <Icon aria-hidden className="size-4.5" />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
+            <h2 id={titleId} className="text-[15px] font-semibold text-fg">
               {title}
-            </h4>
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            </h2>
+            <p id={messageId} className="text-[13px] leading-relaxed text-fg-muted">
               {message}
             </p>
           </div>
-          <button
-            onClick={onCancel}
-            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-[var(--bg-surface-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors flex-shrink-0"
-          >
-            <X size={16} />
-          </button>
+          <Button variant="ghost" size="icon-sm" aria-label="Fermer" onClick={onCancel} className="-mr-1 -mt-1">
+            <X />
+          </Button>
         </div>
-
-        <div className="flex justify-end gap-2 mt-6">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-[var(--radius-md)] hover:bg-[var(--bg-surface-hover)] transition-colors"
-          >
+        <div className="flex justify-end gap-2 rounded-b-lg border-t border-line bg-inset px-5 py-3">
+          <Button ref={cancelRef} variant="secondary" onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            className={confirm}
             onClick={() => {
               onConfirm();
               onCancel();
             }}
-            className={`px-4 py-2 ${styles.button} text-white text-xs font-semibold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors`}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

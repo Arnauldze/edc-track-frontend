@@ -1,204 +1,107 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-    LayoutDashboard,
-    FolderOpen,
-    Eye,
-    Bell,
-    Users,
-    ChevronRight,
-    ChevronLeft,
-    Sun,
-    Moon,
-    Settings,
-    Calendar,
-} from "lucide-react";
-import { useState, useEffect } from "react";
-import { useTheme } from "next-themes";
-import { alertService } from "@/services/api";
-import { usePermissions } from "@/hooks/usePermissions";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAlertsCount } from "@/hooks/useAlerts";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { UserSessionSwitcher } from "@/components/auth/AuthProvider";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useStoredFlag } from "@/hooks/useClientState";
+import { ALERTS_HREF, sectionOf, visibleSections } from "./navigation";
+import { UserMenu } from "./UserMenu";
+
+// ══════════════════════════════════════════════════════════════
+// NAVIGATION LATÉRALE — bleu EDC, dépliée (240 px) ou repliée (72 px).
+// Le choix est conservé d'une visite à l'autre.
+// ══════════════════════════════════════════════════════════════
 
 export function Sidebar() {
-    const pathname = usePathname();
-    const [isCollapsed, setIsCollapsed] = useState(false);
-    const [mounted, setMounted] = useState(false);
-    const [alertsCount, setAlertsCount] = useState(0);
-    const { theme, setTheme } = useTheme();
-    const { isAdmin } = usePermissions();
-    const { data: currentUser } = useCurrentUser();
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useStoredFlag("edc-sidebar-collapsed");
+  const { isAdmin } = usePermissions();
+  const { data: currentUser } = useCurrentUser();
+  const { data: unreadAlerts = 0 } = useAlertsCount();
 
-    useEffect(() => {
-        setMounted(true);
-        
-        // Fetch unread alerts count
-        const fetchAlertsCount = async () => {
-            try {
-                const count = await alertService.getCount();
-                setAlertsCount(count);
-            } catch (error) {
-                console.error('Error fetching alerts count:', error);
-            }
-        };
-        
-        fetchAlertsCount();
-        
-        // Refresh count every 30 seconds
-        const interval = setInterval(fetchAlertsCount, 30000);
-        return () => clearInterval(interval);
-    }, []);
+  const sections = visibleSections({ isAdmin, canAccessInitialisation: !!currentUser?.canAccessInitialisation });
+  const active = sectionOf(pathname);
 
-    const navigation = [
-        { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, adminOnly: false },
-        { name: "Initialisation", href: "/projects", icon: Settings, adminOnly: true },
-        { name: "Planification", href: "/planification", icon: Calendar, adminOnly: false },
-        { name: "Archives", href: "/archives", icon: FolderOpen, adminOnly: false },
-        { name: "Suivi", href: "/suivi", icon: Eye, adminOnly: false },
-        { name: "Utilisateurs", href: "/users", icon: Users, adminOnly: true },
-        {
-            name: "Alertes",
-            href: "/alerts",
-            icon: Bell,
-            badge: alertsCount > 0 ? alertsCount : undefined,
-            adminOnly: false,
-        },
-    ];
+  return (
+    <aside
+      aria-label="Navigation principale"
+      className={cn(
+        "flex h-screen shrink-0 flex-col border-r border-nav-line bg-nav transition-[width] duration-200 ease-out",
+        collapsed ? "w-18" : "w-60",
+      )}
+    >
+      <Link
+        href="/dashboard"
+        className={cn(
+          "flex h-14 shrink-0 items-center gap-2.5 border-b border-nav-line focus-visible:outline-white/70 focus-visible:-outline-offset-4",
+          collapsed ? "justify-center" : "px-4",
+        )}
+      >
+        <Image src="/edc_logo.jpg" alt="EDC" width={32} height={32} className="size-8 rounded-sm bg-white object-cover" priority />
+        {!collapsed && (
+          <span className="flex flex-col leading-[1.15]">
+            <span className="text-sm font-bold text-white">EDC Track</span>
+            <span className="text-[10.5px] tracking-[0.4px] text-nav-muted">Pilotage des projets</span>
+          </span>
+        )}
+      </Link>
 
-    const isActive = (href: string) => pathname.startsWith(href);
-
-    return (
-        <div
-            className={`
-                flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out
-                bg-[var(--bg-surface)] border-r border-[var(--border-default)]
-                ${isCollapsed ? "w-[72px]" : "w-[240px]"}
-            `}
-        >
-            {/* ── Logo ── */}
-            <div className={`flex items-center h-14 px-4 border-b border-[var(--border-subtle)] ${isCollapsed ? "justify-center" : "gap-3"}`}>
-                <div className="flex-shrink-0 w-9 h-9 rounded-[var(--radius-md)] overflow-hidden shadow-[var(--shadow-sm)] bg-white">
-                    <Image src="/edc_logo.jpg" alt="EDC" width={36} height={36} className="w-full h-full object-contain" />
-                </div>
-                {!isCollapsed && (
-                    <div className="flex flex-col overflow-hidden whitespace-nowrap">
-                        <span className="text-[13px] font-bold text-[var(--text-primary)] tracking-tight">EDC Track</span>
-                        <span className="text-[9px] text-[var(--text-tertiary)] font-semibold tracking-[0.15em] uppercase">Enterprise</span>
-                    </div>
-                )}
-            </div>
-
-            {/* ── Navigation ── */}
-            <div className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
-                {navigation
-                    .filter((item) => {
-                        // Initialisation : quiconque gère ou supervise au moins un projet,
-                        // ou peut en créer — capacité calculée par le serveur (/auth/me).
-                        if (item.name === "Initialisation" && !currentUser?.canAccessInitialisation) return false;
-                        // Filtrer "Utilisateurs" : admin seulement
-                        if (item.name === "Utilisateurs" && !isAdmin) return false;
-                        return true;
-                    })
-                    .map((item) => {
-                    const active = isActive(item.href);
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            title={isCollapsed ? item.name : ""}
-                            className={`
-                                flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] transition-all duration-150 group relative
-                                text-[13px] font-medium
-                                ${active
-                                    ? "bg-[var(--bg-surface-hover)] text-[var(--text-primary)] font-semibold"
-                                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]"
-                                }
-                                ${isCollapsed ? "justify-center py-2.5" : ""}
-                            `}
-                        >
-                            {/* Active indicator */}
-                            {active && (
-                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-[var(--text-primary)] rounded-r-full" />
-                            )}
-
-                            <item.icon
-                                size={16}
-                                strokeWidth={active ? 2.2 : 1.8}
-                                className={`flex-shrink-0 transition-colors duration-150 ${active
-                                    ? "text-[var(--text-primary)]"
-                                    : "text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]"
-                                    }`}
-                            />
-
-                            {!isCollapsed && (
-                                <span className="flex-1 whitespace-nowrap overflow-hidden">{item.name}</span>
-                            )}
-
-                            {/* Badge */}
-                            {item.badge != null && item.badge > 0 && (
-                                <span
-                                    className={`
-                                        flex items-center justify-center rounded-full bg-red-500 text-white font-bold
-                                        ${isCollapsed
-                                            ? "absolute top-1 right-1 w-4 h-4 text-[8px]"
-                                            : "text-[9px] min-w-[18px] h-[18px] px-1"
-                                        }
-                                    `}
-                                >
-                                    {item.badge}
-                                </span>
-                            )}
-                        </Link>
-                    );
-                })}
-            </div>
-
-            {/* ── Bottom section ── */}
-            <div className="p-3 flex flex-col gap-1 border-t border-[var(--border-subtle)]">
-                {/* Controls row */}
-                <div className={`flex ${isCollapsed ? "flex-col items-center gap-1" : "items-center gap-0.5"}`}>
-                    {/* Theme toggle */}
-                    <button
-                        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                        className={`
-                            flex items-center gap-2 p-2 rounded-[var(--radius-md)] transition-all duration-150
-                            text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)]
-                            ${isCollapsed ? "" : "flex-1"}
-                        `}
-                        title={theme === "dark" ? "Mode clair" : "Mode sombre"}
-                    >
-                        {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-                        {!isCollapsed && (
-                            <span className="text-[11px] font-medium">
-                                {theme === "dark" ? "Clair" : "Sombre"}
-                            </span>
-                        )}
-                    </button>
-
-                    {/* Collapse toggle */}
-                    <button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="flex items-center justify-center p-2 rounded-[var(--radius-md)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-all duration-150 flex-shrink-0"
-                        title={isCollapsed ? "Déplier" : "Réduire"}
-                    >
-                        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-                    </button>
-                </div>
-
-                {/* Profile Session Switcher */}
-                {!isCollapsed ? (
-                    <UserSessionSwitcher />
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-3">
+        {sections.map((section) => {
+          const current = section === active;
+          const badge = section.href === ALERTS_HREF && unreadAlerts > 0 ? unreadAlerts : undefined;
+          const Icon = section.icon;
+          return (
+            <Link
+              key={section.href}
+              href={section.href}
+              aria-current={current ? "page" : undefined}
+              aria-label={collapsed ? (badge ? `${section.label}, ${badge} non lues` : section.label) : undefined}
+              title={collapsed ? section.label : undefined}
+              className={cn(
+                "relative flex h-9.5 shrink-0 items-center gap-2.75 rounded-md text-[13px] transition-colors duration-150",
+                "focus-visible:outline-white/70 focus-visible:-outline-offset-2",
+                collapsed ? "justify-center" : "px-2.75",
+                current ? "bg-nav-active font-semibold text-white" : "font-medium text-nav-fg hover:bg-nav-hover hover:text-white",
+              )}
+            >
+              <Icon aria-hidden className={cn("size-4.5 shrink-0", current && "text-accent")} strokeWidth={1.8} />
+              {!collapsed && <span className="flex-1 truncate">{section.label}</span>}
+              {badge !== undefined &&
+                (collapsed ? (
+                  <span aria-hidden className="absolute right-3.5 top-1.5 size-2 rounded-full border-2 border-nav bg-accent" />
                 ) : (
-                    <div className="flex justify-center py-2">
-                        <div className="w-8 h-8 rounded-[var(--radius-md)] bg-gradient-to-br from-blue-500 to-violet-600 shadow-[var(--shadow-sm)] flex items-center justify-center text-white text-[10px] font-bold">
-                            ME
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-on-accent">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                ))}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="flex flex-col gap-1 border-t border-nav-line p-3">
+        <UserMenu collapsed={collapsed} />
+        <button
+          type="button"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? "Déplier le menu" : undefined}
+          title={collapsed ? "Déplier le menu" : undefined}
+          className={cn(
+            "flex h-8 items-center gap-2 rounded-md text-xs text-nav-fg transition-colors duration-150 hover:bg-nav-hover hover:text-white",
+            "focus-visible:outline-white/70",
+            collapsed ? "justify-center" : "px-2.5",
+          )}
+        >
+          {collapsed ? <ChevronRight aria-hidden className="size-4" /> : <ChevronLeft aria-hidden className="size-4" />}
+          {!collapsed && <span>Réduire le menu</span>}
+        </button>
+      </div>
+    </aside>
+  );
 }
