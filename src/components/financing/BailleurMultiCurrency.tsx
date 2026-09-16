@@ -76,7 +76,7 @@ export function BailleurMultiCurrency({
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="w-2 h-2 rounded-full bg-[var(--accent)] flex-shrink-0 hover:scale-125 transition-transform"
+          className="w-2 h-2 rounded-full bg-[var(--primary)] flex-shrink-0 hover:scale-125 transition-transform"
           title={isExpanded ? "Réduire" : "Développer"}
         />
         <div className="flex-1 min-w-0">
@@ -136,13 +136,13 @@ export function BailleurMultiCurrency({
                   value={contrib.montant}
                   onChange={(e) => updateCurrency(contrib.id, "montant", e.target.value)}
                   placeholder="Montant"
-                  className="flex-1 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                  className="flex-1 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] transition-colors"
                 />
                 {/* Devise */}
                 <select
                   value={contrib.devise}
                   onChange={(e) => updateCurrency(contrib.id, "devise", e.target.value)}
-                  className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer w-24"
+                  className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] cursor-pointer w-24"
                 >
                   {CURRENCIES.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -170,7 +170,7 @@ export function BailleurMultiCurrency({
           <button
             type="button"
             onClick={addCurrency}
-            className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-sm)] transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-[var(--primary-text)] hover:bg-[var(--primary)]/10 rounded-[var(--radius-sm)] transition-colors"
           >
             <Plus size={12} />
             Ajouter une devise

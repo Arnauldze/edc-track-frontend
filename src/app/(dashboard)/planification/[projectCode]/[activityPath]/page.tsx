@@ -319,7 +319,7 @@ export default function ActivityPlanningPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-[var(--text-secondary)]">Chargement...</p>
         </div>
       </div>
@@ -330,7 +330,7 @@ export default function ActivityPlanningPage() {
     return (
       <div className="p-8 text-center">
         <p className="text-[var(--text-secondary)]">Projet introuvable</p>
-        <Link href="/planification" className="text-[var(--accent)] text-sm mt-2 inline-block">Retour</Link>
+        <Link href="/planification" className="text-[var(--primary-text)] text-sm mt-2 inline-block">Retour</Link>
       </div>
     );
   }
@@ -343,7 +343,7 @@ export default function ActivityPlanningPage() {
     <div className="flex flex-col h-full">
       {/* ── 1. L'activité ── */}
       <div className="bg-[var(--bg-surface)] border-b border-[var(--border-default)] px-8 pt-5 pb-3 flex-shrink-0">
-        <Link href={`/planification/${projectCode}`} className="inline-flex items-center gap-1.5 mb-3 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--accent)]">
+        <Link href={`/planification/${projectCode}`} className="inline-flex items-center gap-1.5 mb-3 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--primary-text)]">
           <ChevronLeft size={14} /> Retour au projet
         </Link>
 
@@ -410,7 +410,7 @@ export default function ActivityPlanningPage() {
           <div className="flex flex-col items-center justify-center gap-3 py-14 rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--border-default)] text-center">
             <p className="text-[14px] font-semibold text-[var(--text-primary)]">La phase « {PHASE_LABELS[selected]} » n&apos;est pas prévue pour cette activité.</p>
             {!readOnly && (
-              <button onClick={() => setActive[selected](true)} className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90">
+              <button onClick={() => setActive[selected](true)} className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90">
                 <Plus size={16} /> Planifier cette phase
               </button>
             )}

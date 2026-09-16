@@ -107,7 +107,7 @@ export function ProjectCard({ project, teamMembers = [], roleBadge }: ProjectCar
         </div>
 
         {/* Titre */}
-        <h3 className="text-[15px] font-bold text-[var(--text-primary)] line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-[var(--accent)] transition-colors">
+        <h3 className="text-[15px] font-bold text-[var(--text-primary)] line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-[var(--primary-text)] transition-colors">
           {project.name}
         </h3>
 

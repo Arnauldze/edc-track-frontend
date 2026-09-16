@@ -69,7 +69,7 @@ export function StructureEditBar({
         alignItems: "center",
         gap: 2,
         padding: "4px 8px",
-        background: "var(--accent-subtle)",
+        background: "var(--primary-subtle)",
         borderBottom: "1px solid var(--msp-border-header)",
         flexWrap: "wrap",
         flexShrink: 0,

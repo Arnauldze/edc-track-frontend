@@ -254,7 +254,7 @@ function ReasonModal({
           placeholder="Saisissez le motif..."
           rows={4}
           autoFocus
-          className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+          className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
         />
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onCancel} className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)]">
@@ -263,7 +263,7 @@ function ReasonModal({
           <button
             onClick={() => onConfirm(reason.trim())}
             disabled={!reason.trim()}
-            className="px-4 py-2 bg-[var(--accent)] text-white text-xs font-bold rounded-[var(--radius-md)] disabled:opacity-50"
+            className="px-4 py-2 bg-[var(--primary)] text-white text-xs font-bold rounded-[var(--radius-md)] disabled:opacity-50"
           >
             {confirmLabel}
           </button>
@@ -929,7 +929,7 @@ export default function ProjectConfigPage() {
       <div className="relative" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => setOpenActionMenu(isOpen ? null : fileKey)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold border transition-all ${isOpen ? "bg-[var(--accent)] text-white border-transparent" : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--text-tertiary)]"}`}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold border transition-all ${isOpen ? "bg-[var(--primary)] text-white border-transparent" : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--text-tertiary)]"}`}
         >
           <MoreHorizontal size={13} />
         </button>
@@ -1017,7 +1017,7 @@ export default function ProjectConfigPage() {
       return (
         <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden shadow-[var(--shadow-sm)] p-8">
           <div className="flex items-center justify-center gap-3">
-            <div className="w-5 h-5 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-[var(--text-secondary)]">Chargement des documents...</span>
           </div>
         </div>
@@ -1040,7 +1040,7 @@ export default function ProjectConfigPage() {
             {canUploadIn(context) && (
               <button
                 onClick={() => setCreateFolderModal({ phase })}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-bold text-[var(--accent)] hover:bg-[var(--accent-subtle)] transition-colors border border-[var(--accent-subtle)] hover:border-[var(--accent)] shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-[11px] font-bold text-[var(--primary-text)] hover:bg-[var(--primary-subtle)] transition-colors border border-[var(--primary-subtle)] hover:border-[var(--primary)] shadow-sm"
               >
                 <Plus size={13} /> Nouveau dossier
               </button>
@@ -1129,7 +1129,7 @@ export default function ProjectConfigPage() {
                     <>
                       <button
                         onClick={() => handleUploadClick(phase, idx)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white shadow-[var(--shadow-sm)] transition-all"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-[var(--shadow-sm)] transition-all"
                       >
                         <Upload size={12} /> Déposer
                       </button>
@@ -1199,7 +1199,7 @@ export default function ProjectConfigPage() {
                         >
                           <button
                             onClick={() => handlePreviewFile(file)}
-                            className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-tertiary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--accent)] transition-colors"
+                            className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-tertiary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--primary-text)] transition-colors"
                             title="Prévisualiser"
                           >
                             <Eye size={14} />
@@ -1207,7 +1207,7 @@ export default function ProjectConfigPage() {
                           {can("doc:download") && (
                             <button
                               onClick={() => handleDownloadFile(file)}
-                              className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-tertiary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--accent)] transition-colors"
+                              className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-[var(--text-tertiary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--primary-text)] transition-colors"
                               title="Télécharger"
                             >
                               <Download size={14} />
@@ -1229,7 +1229,7 @@ export default function ProjectConfigPage() {
                     <div className="px-5 py-2.5 pl-[70px]">
                       <button
                         onClick={() => handleUploadClick(phase, idx)}
-                        className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--accent)] hover:underline"
+                        className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--primary-text)] hover:underline"
                       >
                         <Plus size={12} /> Ajouter un fichier
                       </button>
@@ -1323,7 +1323,7 @@ export default function ProjectConfigPage() {
         >
           <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
             <div className="flex items-center gap-3">
-              <Eye size={16} className="text-[var(--accent)]" />
+              <Eye size={16} className="text-[var(--primary-text)]" />
               <h3 className="text-sm font-semibold text-[var(--text-primary)]">
                 {previewFile.name}
               </h3>
@@ -1380,7 +1380,7 @@ export default function ProjectConfigPage() {
           onClick={(e) => e.stopPropagation()}
         >
           <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-            <FolderOpen size={16} className="text-[var(--accent)]" /> Nouveau
+            <FolderOpen size={16} className="text-[var(--primary-text)]" /> Nouveau
             dossier
           </h4>
           <input
@@ -1389,7 +1389,7 @@ export default function ProjectConfigPage() {
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
             placeholder="Nom du dossier..."
-            className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-subtle)] mb-5"
+            className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-subtle)] mb-5"
             onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
           />
           <div className="flex justify-end gap-2">
@@ -1405,7 +1405,7 @@ export default function ProjectConfigPage() {
             <button
               onClick={handleCreateFolder}
               disabled={!newFolderName.trim()}
-              className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors disabled:opacity-50"
             >
               Créer
             </button>
@@ -1439,7 +1439,7 @@ export default function ProjectConfigPage() {
       <div>
         <button
           onClick={() => setSelectedActivity(null)}
-          className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--accent)] mb-4 transition-colors"
+          className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--primary-text)] mb-4 transition-colors"
         >
           <ChevronLeft size={14} /> Retour à l'exécution
         </button>
@@ -1514,7 +1514,7 @@ export default function ProjectConfigPage() {
                 onClick={() =>
                   alert(`Ajouter une sous-activité à ${activity.name}`)
                 }
-                className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-tertiary)] hover:text-[var(--accent)] hover:underline"
+                className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-tertiary)] hover:text-[var(--primary-text)] hover:underline"
               >
                 <Plus size={12} /> Ajouter une sous-activité
               </button>
@@ -1555,7 +1555,7 @@ export default function ProjectConfigPage() {
         <p className="text-xs text-[var(--text-tertiary)] mt-1">
           Il n&apos;existe pas, ou vous n&apos;êtes pas membre de ce projet.
         </p>
-        <Link href="/archives" className="inline-block mt-4 text-sm font-semibold text-[var(--accent)] hover:underline">
+        <Link href="/archives" className="inline-block mt-4 text-sm font-semibold text-[var(--primary-text)] hover:underline">
           Retour aux archives
         </Link>
       </div>
@@ -1570,7 +1570,7 @@ export default function ProjectConfigPage() {
         <div className="mb-3">
           <Link
             href="/archives"
-            className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-tertiary)] hover:text-[var(--accent)] transition-colors inline-flex"
+            className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-tertiary)] hover:text-[var(--primary-text)] transition-colors inline-flex"
           >
             <ChevronLeft size={14} /> Tous les projets
           </Link>
@@ -1693,7 +1693,7 @@ export default function ProjectConfigPage() {
                     onClick={() => handleSelectComp(c.id)}
                     className={`flex items-center gap-2 py-2 px-3.5 text-[12px] font-medium border-b-2 transition-all whitespace-nowrap ${
                       isActive
-                        ? "border-[var(--accent)] text-[var(--text-primary)] font-bold"
+                        ? "border-[var(--primary)] text-[var(--text-primary)] font-bold"
                         : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)]"
                     }`}
                   >
@@ -1723,10 +1723,10 @@ export default function ProjectConfigPage() {
                     <div
                       key={s.id}
                       onClick={() => handleSelectSComp(s.id)}
-                      className={`flex items-center gap-3 px-5 py-2 cursor-pointer border-l-[3px] transition-all text-[13px] ${currentSComp === s.id ? "bg-[var(--accent-subtle)] border-[var(--accent)] text-[var(--accent)] font-bold" : "border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]"}`}
+                      className={`flex items-center gap-3 px-5 py-2 cursor-pointer border-l-[3px] transition-all text-[13px] ${currentSComp === s.id ? "bg-[var(--primary-subtle)] border-[var(--primary)] text-[var(--primary-text)] font-bold" : "border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]"}`}
                     >
                       <div
-                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${currentSComp === s.id ? "bg-[var(--accent)]" : "bg-[var(--text-tertiary)]"}`}
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${currentSComp === s.id ? "bg-[var(--primary)]" : "bg-[var(--text-tertiary)]"}`}
                       />
                       {s.name}
                     </div>
@@ -1755,7 +1755,7 @@ export default function ProjectConfigPage() {
                       <div
                         key={idx}
                         onClick={() => handleSelectActivity(a)}
-                        className={`flex items-center gap-3 px-5 py-2 cursor-pointer transition-colors text-[13px] ${isSelected ? "text-[var(--accent)] font-semibold bg-[var(--accent-subtle)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]"}`}
+                        className={`flex items-center gap-3 px-5 py-2 cursor-pointer transition-colors text-[13px] ${isSelected ? "text-[var(--primary-text)] font-semibold bg-[var(--primary-subtle)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]"}`}
                       >
                         <div
                           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor}`}
@@ -1992,7 +1992,7 @@ export default function ProjectConfigPage() {
           {/* Activity selected — Étude / Passation / Exécution */}
           {currentComp && selectedActivity && lowestLevel === "activity" && (
             <div>
-              <button onClick={() => setSelectedActivity(null)} className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--accent)] mb-4 transition-colors"><ChevronLeft size={14} /> Retour</button>
+              <button onClick={() => setSelectedActivity(null)} className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--primary-text)] mb-4 transition-colors"><ChevronLeft size={14} /> Retour</button>
 
               {/* Titre simple de l'activité au lieu du gros dashboard */}
               <div className="mb-4">
