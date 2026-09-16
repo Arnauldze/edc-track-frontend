@@ -16,7 +16,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { BarChart3, Briefcase, ChevronLeft, FileText, Hammer, Plus, Save, Trash2, User, X } from "lucide-react";
 import { getProjectById, getLeafActivities, type Project } from "@/lib/projectStore";
-import { planningService, type CreatePlanningDto, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
+import { planningService, type CreatePlanningDto, type LignePassation, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
 import { PlanningFormEtude, nouveauLivrable } from "@/components/planning/PlanningFormEtude";
 import { PlanningFormPassation } from "@/components/planning/PlanningFormPassation";
@@ -31,6 +31,7 @@ import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
 import { PHASE_LABELS, PHASE_ORDER, periodeDesLignes, type PhaseKey } from "@/lib/phaseTimeline";
 import { toFCFA } from "@/lib/componentBudget";
 import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
+import { lignePassationDepuisApi, lignePassationPourApi, lignePassationRenseignee } from "@/lib/passationApi";
 import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 
 type ActivityType = "travaux" | "fourniture" | "services" | "etudes" | "pi";
@@ -79,7 +80,7 @@ export default function ActivityPlanningPage() {
 
   // Données des phases
   const [livrables, setLivrables] = useState<Livrable[]>([nouveauLivrable("R1")]);
-  const [passationData, setPassationData] = useState<any>(null);
+  const [passationData, setPassationData] = useState<{ typePassation?: string; lignesPassation: LignePassation[] } | null>(null);
   const [taches, setTaches] = useState<TacheExecution[]>([nouvelleTache("T1")]);
 
   const isEditMode = planning !== null;
@@ -99,7 +100,11 @@ export default function ActivityPlanningPage() {
     setDateT0(toDay(p.dateDebutInitiale as unknown as string) ?? "");
     setResponsablePrincipal(p.responsablePrincipal || "");
     setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
-    setPassationData(p.hasPassation ? { typePassation: p.typePassation || "", etapesPassation: p.etapesPassation || [] } : null);
+    setPassationData(
+      p.hasPassation
+        ? { typePassation: p.typePassation, lignesPassation: (p.lignesPassation ?? []).map(lignePassationDepuisApi) }
+        : null,
+    );
     setTaches(p.tachesExecution?.length ? p.tachesExecution : [nouvelleTache("T1")]);
     const premiere = PHASE_ORDER.find((k) => ({ etude: p.hasEtudePrealable, passation: p.hasPassation, execution: p.hasExecution })[k]);
     if (premiere && ouvrirPremierePhase) setSelected(premiere);
@@ -201,10 +206,10 @@ export default function ActivityPlanningPage() {
   const problemesExecution = useMemo(() => [...new Set(calendrierExecution.problemes.map((p) => p.message))], [calendrierExecution]);
 
   const phases: PhaseSummary[] = useMemo(() => {
-    const lignesPassation: object[] = passationData?.lignesPassation ?? passationData?.etapesPassation ?? [];
+    const lignesPassation = passationData?.lignesPassation ?? [];
 
     const livrablesNommes = livrables.filter((l) => l.intitule?.trim()).length;
-    const marches = lignesPassation.filter((l) => Object.values(l).some((v) => typeof v === "string" && v.trim() && v !== "1")).length;
+    const marches = lignesPassation.filter(lignePassationRenseignee).length;
     const tachesNommees = taches.filter((t) => t.designation?.trim()).length;
 
     const resume = (key: PhaseKey, contenu: number, mot: string, periode = periodeDesLignes(lignesPassation)) => {
@@ -260,9 +265,6 @@ export default function ActivityPlanningPage() {
 
     setSaving(true);
     try {
-      const cleanDates = (arr: any[]) =>
-        arr.map((item) => ({ ...item, dateDebut: item.dateDebut || undefined, dateFin: item.dateFin || undefined, dateEcheance: item.dateEcheance || undefined }));
-
       const data = {
         activityName,
         activityType,
@@ -275,9 +277,10 @@ export default function ActivityPlanningPage() {
         responsablePrincipal: responsablePrincipal || undefined,
         // Une phase retirée n'emporte pas ses données
         livrables: hasEtudePrealable ? livrables.map(livrablePourApi) : [],
-        ...(hasPassation && passationData
-          ? { typePassation: passationData.typePassation, etapesPassation: cleanDates(passationData.etapesPassation || []) }
-          : {}),
+        // Une phase retirée n’emporte pas ses marchés
+        lignesPassation: hasPassation
+          ? (passationData?.lignesPassation ?? []).filter(lignePassationRenseignee).map(lignePassationPourApi)
+          : [],
         // Une phase retirée n'emporte pas ses tâches
         tachesExecution: hasExecution ? taches.map(tachePourApi) : [],
       };
