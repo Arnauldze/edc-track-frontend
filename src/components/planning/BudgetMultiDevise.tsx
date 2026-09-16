@@ -62,7 +62,7 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
           <select
             value={budget.devise}
             onChange={(e) => updateBudget(index, "devise", e.target.value)}
-            className="w-24 px-2 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
+            className="w-24 px-2 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] cursor-pointer"
           >
             {DEVISES.map((d) => (
               <option key={d} value={d}>
@@ -79,7 +79,7 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
               onChange={(e) => updateBudget(index, "montant", parseFloat(e.target.value) || 0)}
               onBlur={calculatePourcentages}
               placeholder="Montant"
-              className="w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+              className="w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] transition-colors"
             />
           </div>
 
@@ -106,7 +106,7 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
       {/* Ajouter */}
       <button
         onClick={addBudget}
-        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-[var(--radius-md)] transition-colors"
+        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-[var(--primary-text)] hover:bg-[var(--primary)]/10 rounded-[var(--radius-md)] transition-colors"
       >
         <Plus size={14} />
         Ajouter une devise
@@ -114,7 +114,7 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
 
       {/* Total */}
       {budgets.length > 1 && (
-        <div className="flex items-center justify-between p-3 bg-[var(--bg-surface)] rounded-[var(--radius-md)] border-2 border-[var(--accent)]/20">
+        <div className="flex items-center justify-between p-3 bg-[var(--bg-surface)] rounded-[var(--radius-md)] border-2 border-[var(--primary)]/20">
           <span className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
             Total (converti)
           </span>

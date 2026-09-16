@@ -53,7 +53,7 @@ interface FinancementEditorProps {
 type PartieKey = "partiesPubliques" | "partiesPrivees";
 
 const inputSm =
-  "bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] transition-colors";
+  "bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] transition-colors";
 
 function PctBadge({ pct }: { pct: number }) {
   return (
@@ -136,7 +136,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
         <h4 className={`text-[12px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${dotClass.replace("bg-", "text-")}`}>
           <span className={`w-2 h-2 rounded-full ${dotClass}`} /> {label}
         </h4>
-        <button type="button" onClick={() => addPartie(key)} className="flex items-center gap-1 text-[11px] font-semibold text-[var(--accent)] hover:underline">
+        <button type="button" onClick={() => addPartie(key)} className="flex items-center gap-1 text-[11px] font-semibold text-[var(--primary-text)] hover:underline">
           <Plus size={12} /> Ajouter
         </button>
       </div>
@@ -144,7 +144,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
       {value[key].length === 0 ? (
         <div className="p-5 border-2 border-dashed border-[var(--border-default)] rounded-[var(--radius-md)] text-center">
           <p className="text-[11px] text-[var(--text-tertiary)] mb-2">Aucune entité</p>
-          <button type="button" onClick={() => addPartie(key)} className="text-[11px] font-semibold text-[var(--accent)] hover:underline">
+          <button type="button" onClick={() => addPartie(key)} className="text-[11px] font-semibold text-[var(--primary-text)] hover:underline">
             Ajouter une entité
           </button>
         </div>
@@ -246,8 +246,8 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
               onClick={() => switchType(type)}
               className={`flex-1 p-4 border-2 rounded-[var(--radius-md)] text-left transition-all ${
                 value.type === type
-                  ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
-                  : "border-[var(--border-default)] hover:border-[var(--accent)]/50"
+                  ? "border-[var(--primary)] bg-[var(--primary-subtle)]"
+                  : "border-[var(--border-default)] hover:border-[var(--primary)]/50"
               }`}
             >
               <div className="text-[14px] font-bold text-[var(--text-primary)] mb-1">{type}</div>
@@ -281,7 +281,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                   type="checkbox"
                   checked={value.budgetNational.enabled}
                   onChange={(e) => update({ budgetNational: { ...value.budgetNational, enabled: e.target.checked } })}
-                  className="w-4 h-4 accent-[var(--accent)]"
+                  className="w-4 h-4 accent-[var(--primary)]"
                 />
                 <div>
                   <div className="text-[13px] font-semibold text-[var(--text-primary)]">Budget National</div>
@@ -328,7 +328,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                   }}
                   onFocus={() => setBailleurDropdownOpen(true)}
                   placeholder="Rechercher et sélectionner un bailleur…"
-                  className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)]"
+                  className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)]"
                 />
                 {bailleurDropdownOpen && (
                   <>
@@ -367,7 +367,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                 <button
                   type="button"
                   onClick={() => setShowCustomBailleur(true)}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--accent)] hover:underline"
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--primary-text)] hover:underline"
                 >
                   <Plus size={12} /> Ajouter un bailleur personnalisé
                 </button>
@@ -396,7 +396,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                       setCustomBailleur("");
                       setShowCustomBailleur(false);
                     }}
-                    className="px-3 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-[12px] font-semibold hover:opacity-90"
+                    className="px-3 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-[12px] font-semibold hover:opacity-90"
                   >
                     Ajouter
                   </button>
@@ -452,7 +452,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
 
       {/* ── Budget total ── */}
       {preview.total > 0 && (
-        <div className="p-4 rounded-[var(--radius-lg)] border-2 border-[var(--accent)]/30 bg-[var(--accent)]/5 space-y-3">
+        <div className="p-4 rounded-[var(--radius-lg)] border-2 border-[var(--primary)]/30 bg-[var(--primary)]/5 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h4 className="text-[13px] font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
               <CheckCircle2 size={14} className="text-green-500" /> Budget total du projet
@@ -469,7 +469,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
             </select>
           </div>
 
-          <div className="text-[22px] font-bold text-[var(--accent)] tabular-nums">
+          <div className="text-[22px] font-bold text-[var(--primary-text)] tabular-nums">
             {formatCurrency(Math.round((preview.total / conversionRate) * 100) / 100, conversionCurrency)}
           </div>
 

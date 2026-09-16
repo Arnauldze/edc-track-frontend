@@ -333,7 +333,7 @@ export default function UsersPage() {
               placeholder="Rechercher un utilisateur..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
             />
           </div>
 
@@ -356,7 +356,7 @@ export default function UsersPage() {
             </button>
             <button
               onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
             >
               <Plus size={16} />
               Nouvel utilisateur
@@ -457,7 +457,7 @@ export default function UsersPage() {
                     {/* Bouton Modifier */}
                     <button
                       onClick={() => handleOpenModal(user)}
-                      className="p-2 text-[var(--text-tertiary)] hover:text-[var(--accent)] hover:bg-[var(--accent-subtle)] rounded-[var(--radius-md)] transition-colors"
+                      className="p-2 text-[var(--text-tertiary)] hover:text-[var(--primary-text)] hover:bg-[var(--primary-subtle)] rounded-[var(--radius-md)] transition-colors"
                       title="Modifier"
                     >
                       <Edit2 size={14} />
@@ -505,7 +505,7 @@ export default function UsersPage() {
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                    className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                     required
                   />
                 </div>
@@ -517,7 +517,7 @@ export default function UsersPage() {
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                    className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                     required
                   />
                 </div>
@@ -531,7 +531,7 @@ export default function UsersPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                   required
                 />
               </div>
@@ -544,7 +544,7 @@ export default function UsersPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 />
               </div>
 
@@ -555,7 +555,7 @@ export default function UsersPage() {
                 <select
                   value={formData.position}
                   onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 >
                   <option value="">Sélectionner une fonction...</option>
                   {EDC_POSITIONS.map(pos => (
@@ -572,7 +572,7 @@ export default function UsersPage() {
                   type="text"
                   value={formData.department}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 />
               </div>
 
@@ -583,7 +583,7 @@ export default function UsersPage() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as "active" | "inactive" })}
-                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 >
                   <option value="active">Actif</option>
                   <option value="inactive">Inactif</option>
@@ -597,7 +597,7 @@ export default function UsersPage() {
                 <select
                   value={formData.platformRole}
                   onChange={(e) => setFormData({ ...formData, platformRole: e.target.value as "admin" | "user" })}
-                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                  className="w-full px-3 py-2 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 >
                   <option value="user">Utilisateur</option>
                   <option value="admin">Administrateur</option>
@@ -612,7 +612,7 @@ export default function UsersPage() {
                     id="canCreateProjects"
                     checked={formData.canCreateProjects}
                     onChange={(e) => setFormData({ ...formData, canCreateProjects: e.target.checked })}
-                    className="mt-0.5 w-4 h-4 text-[var(--accent)] bg-[var(--bg-inset)] border-[var(--border-default)] rounded focus:ring-[var(--accent)]/20"
+                    className="mt-0.5 w-4 h-4 text-[var(--primary-text)] bg-[var(--bg-inset)] border-[var(--border-default)] rounded focus:ring-[var(--primary)]/20"
                   />
                   <label htmlFor="canCreateProjects" className="flex-1 text-xs text-[var(--text-secondary)] cursor-pointer">
                     <span className="font-semibold text-[var(--text-primary)] block mb-0.5">
@@ -637,7 +637,7 @@ export default function UsersPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 flex items-center gap-2"
                 >
                   {submitting ? (
                     <>
@@ -690,7 +690,7 @@ export default function UsersPage() {
                       navigator.clipboard.writeText(showCredentials.login);
                       toast.success("Login copié");
                     }}
-                    className="px-3 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+                    className="px-3 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
                   >
                     Copier
                   </button>
@@ -713,7 +713,7 @@ export default function UsersPage() {
                       navigator.clipboard.writeText(showCredentials.password);
                       toast.success("Mot de passe copié");
                     }}
-                    className="px-3 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+                    className="px-3 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
                   >
                     Copier
                   </button>
@@ -729,7 +729,7 @@ export default function UsersPage() {
 
             <button
               onClick={() => setShowCredentials(null)}
-              className="w-full px-4 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+              className="w-full px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
             >
               J&apos;ai noté les identifiants
             </button>

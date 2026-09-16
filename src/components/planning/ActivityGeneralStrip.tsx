@@ -78,7 +78,7 @@ function Champ({
 }
 
 const inputClass =
-  "w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--accent)]";
+  "w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--primary)]";
 
 export function ActivityGeneralStrip({ dateT0, onDateT0, budgets, onBudgets, budgetTotalFCFA, responsable, onResponsable, readOnly }: Props) {
   const plusieursDevises = budgets.some((b) => b.devise !== "FCFA" && b.montant);

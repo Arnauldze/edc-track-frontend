@@ -1220,7 +1220,7 @@ export function MSProjectViewV2({
           --msp-text-muted: var(--text-secondary);
           --msp-hover: var(--bg-surface-hover);
           --msp-weekend: var(--border-subtle);
-          --msp-selected-bg: var(--accent-subtle);
+          --msp-selected-bg: var(--primary-subtle);
         }
 
         .msp-cell-input {
@@ -1234,7 +1234,7 @@ export function MSProjectViewV2({
 
         .msp-row-selected, .msp-row-selected:hover {
           background: var(--msp-selected-bg) !important;
-          box-shadow: inset 3px 0 0 var(--accent);
+          box-shadow: inset 3px 0 0 var(--primary);
         }
 
         .msp-tool:hover:not(:disabled), .msp-menu-item:hover:not(:disabled) {
@@ -1365,7 +1365,7 @@ export function MSProjectViewV2({
             onClick={() => setShowColumnPicker(!showColumnPicker)}
             style={{
               display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
-              background: showColumnPicker ? "var(--accent-subtle)" : "transparent",
+              background: showColumnPicker ? "var(--primary-subtle)" : "transparent",
               border: "1px solid var(--msp-border)", borderRadius: 3,
               color: "var(--msp-text)", fontSize: 10, fontWeight: 600, cursor: "pointer",
             }}
@@ -1391,7 +1391,7 @@ export function MSProjectViewV2({
                   aria-pressed={scale === option.id}
                   style={{
                     padding: "3px 8px", border: "none", fontSize: 10, fontWeight: 600, cursor: "pointer",
-                    background: scale === option.id ? "var(--accent)" : "transparent",
+                    background: scale === option.id ? "var(--primary)" : "transparent",
                     color: scale === option.id ? "#fff" : "var(--msp-text)",
                   }}
                 >
@@ -1512,7 +1512,7 @@ export function MSProjectViewV2({
             style={{
               display: "flex", alignItems: "center", gap: 6, width: "100%",
               padding: "5px 12px", background: "none", border: "none",
-              color: "var(--accent)", cursor: "pointer", fontSize: 11,
+              color: "var(--primary-text)", cursor: "pointer", fontSize: 11,
             }}
           >
             <RotateCcw size={11} /> Réinitialiser
@@ -1712,8 +1712,8 @@ export function MSProjectViewV2({
                                   style={{
                                     display: "flex", flexDirection: "column", alignItems: "flex-start",
                                     padding: "6px 10px",
-                                    background: levelFilter === opt.val ? "var(--accent-subtle)" : "none",
-                                    border: levelFilter === opt.val ? "1px solid var(--accent)" : "1px solid transparent",
+                                    background: levelFilter === opt.val ? "var(--primary-subtle)" : "none",
+                                    border: levelFilter === opt.val ? "1px solid var(--primary)" : "1px solid transparent",
                                     borderRadius: 4, cursor: "pointer",
                                     color: "var(--msp-text)", fontSize: 11, textAlign: "left",
                                     transition: "all 0.15s",
@@ -1746,7 +1746,7 @@ export function MSProjectViewV2({
                             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                               {[{ val: "has", label: "A une valeur" }, { val: "empty", label: "Est vide" }].map(opt => (
                                 <button key={opt.val} onClick={() => { setFilterInputs({ value: opt.val }); }} style={{
-                                  padding: "4px 8px", background: filterInputs.value === opt.val ? "var(--accent-subtle)" : "none",
+                                  padding: "4px 8px", background: filterInputs.value === opt.val ? "var(--primary-subtle)" : "none",
                                   border: "1px solid transparent", borderRadius: 3, cursor: "pointer",
                                   color: "var(--msp-text)", fontSize: 11, textAlign: "left",
                                 }}>{opt.label}</button>

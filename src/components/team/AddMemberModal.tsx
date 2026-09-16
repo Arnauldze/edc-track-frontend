@@ -171,7 +171,7 @@ export default function AddMemberModal({
                 onChange={(e) => handleSearchChange(e.target.value)}
                 onFocus={() => !selectedUser && setShowUserDropdown(true)}
                 placeholder="Rechercher par nom, email ou poste..."
-                className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
               />
 
               {/* Dropdown des résultats */}
@@ -291,7 +291,7 @@ export default function AddMemberModal({
                             : { ...formData, projectRole: role },
                         )
                       }
-                      className="mt-0.5 w-4 h-4 text-[var(--accent)] focus:ring-[var(--accent)]"
+                      className="mt-0.5 w-4 h-4 text-[var(--primary-text)] focus:ring-[var(--primary)]"
                     />
                     <div className="flex-1">
                       <div className={`text-sm font-semibold ${isSelected ? colors.text : "text-[var(--text-primary)]"}`}>
@@ -347,7 +347,7 @@ export default function AddMemberModal({
                   selectedSubcomponent: "",
                 })
               }
-              className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+              className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
               required
             >
               <option value="project">Projet</option>
@@ -383,7 +383,7 @@ export default function AddMemberModal({
                     });
                   }
                 }}
-                className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 required
               >
                 <option value="">Sélectionner un composant</option>
@@ -422,7 +422,7 @@ export default function AddMemberModal({
                     });
                   }
                 }}
-                className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 required
               >
                 <option value="">Sélectionner un sous-composant</option>
@@ -455,7 +455,7 @@ export default function AddMemberModal({
                     entityName: actName ? `${comp?.name} > ${sc?.name} > ${actName}` : "",
                   });
                 }}
-                className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20"
+                className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20"
                 required
               >
                 <option value="">Sélectionner une activité</option>
@@ -493,7 +493,7 @@ export default function AddMemberModal({
             <button
               type="submit"
               disabled={isSubmitting || !formData.userId}
-              className="px-5 py-2 bg-[var(--accent)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting
                 ? "En cours..."
