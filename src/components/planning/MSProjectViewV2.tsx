@@ -39,6 +39,11 @@ const HEADER_HEIGHT = 44;
 const GANTT_TOP_HEIGHT = 18;
 const GANTT_BOTTOM_HEIGHT = HEADER_HEIGHT - GANTT_TOP_HEIGHT;
 const SCALE_STORAGE_KEY = "edc.planification.echelle";
+/** Échelles proposées à l'écran ; les autres restent connues de lib/timescale. */
+const ECHELLES = TIME_SCALES.filter((s) => s.id === "jours" || s.id === "mois" || s.id === "annees");
+/** Ramène une échelle retirée de l'écran (semaines, trimestres) à la plus proche proposée. */
+const echelleProposee = (echelle: TimeScale): TimeScale =>
+  echelle === "semaines" ? "mois" : echelle === "trimestres" ? "annees" : echelle;
 
 /** Couleurs des types d’activité : les mêmes rôles que la légende de l’écran. */
 const ACTIVITY_COLORS: Record<string, string> = Object.fromEntries(
@@ -333,7 +338,6 @@ export function MSProjectViewV2({
   // État pour le redimensionnement
   // Largeur du tableau en pixels ; par défaut, la somme des colonnes affichées.
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
-  const [vue, setVue] = useState<"tableau" | "gantt">("tableau");
   const [menuPlanifier, setMenuPlanifier] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -553,7 +557,7 @@ export function MSProjectViewV2({
   // COMPUTED DAYS & WEEKS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const scale = chosenScale ?? suggestScale(dataRange.start, dataRange.end);
+  const scale = echelleProposee(chosenScale ?? suggestScale(dataRange.start, dataRange.end));
   const timeline = useMemo(
     () => buildTimeline(dataRange.start, dataRange.end, scale, ganttViewportWidth),
     [dataRange, scale, ganttViewportWidth],
@@ -562,7 +566,7 @@ export function MSProjectViewV2({
 
   useEffect(() => {
     const saved = localStorage.getItem(SCALE_STORAGE_KEY) as TimeScale | null;
-    if (saved && TIME_SCALES.some((s) => s.id === saved)) setChosenScale(saved);
+    if (saved && ECHELLES.some((s) => s.id === saved)) setChosenScale(saved);
   }, []);
 
   // Largeur visible du Gantt : la période est prolongée pour la remplir.
@@ -587,8 +591,8 @@ export function MSProjectViewV2({
 
   const zoom = useCallback(
     (direction: 1 | -1) => {
-      const index = TIME_SCALES.findIndex((s) => s.id === scale);
-      const next = TIME_SCALES[index - direction];
+      const index = ECHELLES.findIndex((s) => s.id === scale);
+      const next = ECHELLES[index - direction];
       if (next) changeScale(next.id);
     },
     [scale, changeScale],
@@ -1448,7 +1452,7 @@ export function MSProjectViewV2({
                 disabled={hasChanges}
                 title={hasChanges ? "Enregistrez d'abord les modifications des livrables" : "Ajouter, déplacer, décomposer ou supprimer des unités"}
               >
-                <ListTree /> Modifier la structure
+                <ListTree /> Modifier le tableau
               </Button>
             )}
             {onActivityClick && !editor.isEditing && (
@@ -1542,24 +1546,11 @@ export function MSProjectViewV2({
         </div>
       )}
 
-      {/* ─── Barre d'outils : vue, colonnes, filtres, échelle ─── */}
+      {/* ─── Barre d'outils : colonnes, filtres, échelle ─── */}
       <div style={{
         display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, flexShrink: 0,
         padding: "10px 24px", background: "var(--bg-surface)", borderBottom: "1px solid var(--border-default)",
       }}>
-        <div role="group" aria-label="Affichage" className="inline-flex gap-0.5 rounded-lg border border-line bg-inset p-0.75">
-          {(["tableau", "gantt"] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={vue === option}
-              onClick={() => setVue(option)}
-              className={vue === option ? "flex h-6.5 items-center rounded-md bg-surface px-3 text-xs font-semibold text-fg shadow-sm" : "flex h-6.5 items-center rounded-md px-3 text-xs font-medium text-fg-muted transition-colors hover:text-fg"}
-            >
-              {option === "tableau" ? "Tableau" : "Gantt"}
-            </button>
-          ))}
-        </div>
         <div style={{ position: "relative" }}>
           <Button variant="secondary" size="sm" aria-expanded={showColumnPicker} onClick={() => setShowColumnPicker(!showColumnPicker)}>
             <Columns3 /> Colonnes
@@ -1642,7 +1633,7 @@ export function MSProjectViewV2({
         )}
         <div style={{ flex: 1 }} />
         <div role="group" aria-label="Échelle de temps" className="inline-flex gap-0.5 rounded-lg border border-line bg-inset p-0.75">
-          {TIME_SCALES.map((option) => (
+          {ECHELLES.map((option) => (
             <button
               key={option.id}
               type="button"
@@ -1714,7 +1705,7 @@ export function MSProjectViewV2({
           style={{
             width: leftWidth ?? largeurColonnes,
             maxWidth: "75%",
-            display: vue === "gantt" ? "none" : "flex",
+            display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             flexShrink: 0,
@@ -1740,8 +1731,9 @@ export function MSProjectViewV2({
                   zIndex: 10,
                 }}
               >
-                {columnsVisible.map((col) => {
+                {columnsVisible.map((col, colIdx) => {
                   const isFilterOpen = filterDropdown === col.id;
+                  const isLast = colIdx === columnsVisible.length - 1;
 
                   return (
                     <div
@@ -1750,6 +1742,7 @@ export function MSProjectViewV2({
                         display: "flex", alignItems: "center",
                         justifyContent: col.align === "left" ? "flex-start" : col.align === "right" ? "flex-end" : "center",
                         gap: 3, padding: "0 8px",
+                        borderRight: isLast ? "none" : "1px solid var(--border-default)",
                         height: HEADER_HEIGHT, color: "var(--text-tertiary)",
                         fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.4px",
                         position: "relative",
@@ -1933,12 +1926,13 @@ export function MSProjectViewV2({
                       fontWeight: isSummary ? 600 : 400,
                     }}
                   >
-                    {columnsVisible.map((col) => {
+                    {columnsVisible.map((col, colIdx) => {
+                      const borderStyle = colIdx === columnsVisible.length - 1 ? "none" : "1px solid var(--border-default)";
 
                       // N° column
                       if (col.id === "numero") {
                         return (
-                          <div key={col.id} className="font-mono" style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 400, color: "var(--text-tertiary)" }}>
+                          <div key={col.id} className="font-mono" style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRight: borderStyle, fontSize: 11, fontWeight: 400, color: "var(--text-tertiary)" }}>
                             {task.numero}
                           </div>
                         );
@@ -1947,7 +1941,7 @@ export function MSProjectViewV2({
                       // Nom column — special rendering with expand/collapse + icons
                       if (col.id === "nom") {
                         return (
-                          <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: getIndent(task.level) + 8, paddingRight: 8, overflow: "hidden" }}>
+                          <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 6, borderRight: borderStyle, paddingLeft: getIndent(task.level) + 8, paddingRight: 8, overflow: "hidden" }}>
                             {task.hasChildren ? (
                               <button
                                 onClick={() => toggleExpand(task.id)}
@@ -2002,7 +1996,7 @@ export function MSProjectViewV2({
                         const type = task.type === "activity" ? (task.activityType as ActivityType) : undefined;
                         const locked = !!task.unitId && plannedIds.has(task.unitId);
                         return (
-                          <div key={col.id} style={{ display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
+                          <div key={col.id} style={{ display: "flex", alignItems: "center", borderRight: borderStyle, padding: "0 8px", overflow: "hidden" }}>
                             {type && editor.isEditing && !locked ? (
                               <select
                                 value={type}
@@ -2030,7 +2024,7 @@ export function MSProjectViewV2({
 
                       // All other columns — generic render
                       return (
-                        <div key={col.id} style={{ minWidth: 0 }}>{renderCell(task, col.field, col.align)}</div>
+                        <div key={col.id} style={{ minWidth: 0, borderRight: borderStyle }}>{renderCell(task, col.field, col.align)}</div>
                       );
                     })}
                   </div>
@@ -2050,7 +2044,6 @@ export function MSProjectViewV2({
             cursor: "col-resize",
             flexShrink: 0,
             position: "relative",
-            display: vue === "gantt" ? "none" : "block",
             transition: "background 0.15s",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--primary)")}
