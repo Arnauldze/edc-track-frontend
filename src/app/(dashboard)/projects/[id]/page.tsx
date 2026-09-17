@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { getProjectById, updateProject, deleteProject, isComponentLowestLevel, isSousComposantLowestLevel, type Project, type Component, type SousComposant } from "@/lib/projectStore";
 import { getProjectTeam, getUserById, getUserDirectory, type TeamAssignment, type DirectoryUser, addTeamAssignment, removeTeamAssignment } from "@/lib/userStore";
-import { PROJECT_ROLE_LABELS, PROJECT_ROLE_COLORS, getGrantableRoles, isProjectRole, type ProjectRole } from "@/lib/rbacStore";
+import { PROJECT_ROLE_LABELS, rolePuce, getGrantableRoles, isProjectRole, type ProjectRole } from "@/lib/rbacStore";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
@@ -1230,7 +1230,7 @@ export default function ProjectConfigPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${PROJECT_ROLE_COLORS[assignment.projectRole]?.bg || 'bg-inset'} ${PROJECT_ROLE_COLORS[assignment.projectRole]?.text || 'text-fg'} border ${PROJECT_ROLE_COLORS[assignment.projectRole]?.border || 'border-line'}`}>
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${rolePuce(assignment.projectRole)} border`}>
                               {isProjectRole(assignment.projectRole) ? PROJECT_ROLE_LABELS[assignment.projectRole] : "Rôle retiré"}
                             </span>
                           </td>

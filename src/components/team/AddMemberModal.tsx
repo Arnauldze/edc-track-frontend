@@ -272,7 +272,7 @@ export default function AddMemberModal({
                       ${chefTaken ? "opacity-60 cursor-not-allowed" : ""}
                       flex items-start gap-3 p-3.5 rounded-[var(--radius-md)] cursor-pointer transition-all duration-150 border
                       ${isSelected
-                        ? `${colors.bg} ${colors.border} ring-1 ring-${colors.text.replace('text-', '')}/30`
+                        ? `${colors.bg} ${colors.border} ring-1 ${colors.ring}`
                         : "bg-[var(--bg-inset)] border-[var(--border-default)] hover:bg-[var(--bg-surface-hover)]"
                       }
                     `}

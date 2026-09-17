@@ -11,6 +11,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorDisplay } from "@/components/ui/ErrorDisplay";
 import { getErrorMessage } from "@/services/api/client";
 import { ProjectCard } from "@/components/projects/ProjectCard";
+import { rolePastille, rolePuce } from "@/lib/rbacStore";
 
 // ══════════════════════════════════════
 // PAGE — INITIALISATION
@@ -20,21 +21,14 @@ type ProjectWithTeam = Project & {
     teamMembers: Array<{ initials: string; color: string }>;
 };
 
-const ROLE_COLORS: Record<string, string> = {
-    coordinateur_general: "bg-cat-violet",
-    coordinateur: "bg-cat-indigo",
-    chef_projet: "bg-primary",
-    contributeur: "bg-warning",
-    view: "bg-fg-subtle",
-};
-
 // Badge du rôle de l'utilisateur sur le projet. Rien pour l'admin, qui gère tout.
+// Les couleurs viennent de lib/rbacStore.ts, source unique.
 function roleBadgeFor(myRoles: string[]): { label: string; className: string } | undefined {
     if (myRoles.includes("chef_projet")) {
-        return { label: "Chef de projet", className: "bg-primary-subtle text-primary border-primary/20" };
+        return { label: "Chef de projet", className: rolePuce("chef_projet") };
     }
     if (myRoles.includes("coordinateur") || myRoles.includes("coordinateur_general")) {
-        return { label: "Supervision", className: "bg-cat-violet/10 text-cat-violet border-cat-violet/20" };
+        return { label: "Supervision", className: rolePuce("coordinateur_general") };
     }
     return undefined;
 }
@@ -71,7 +65,7 @@ export default function ProjectsPage() {
                     ...project,
                     teamMembers: (project.team ?? []).slice(0, 5).map((member) => ({
                         initials: `${member.firstName?.[0] ?? ""}${member.lastName?.[0] ?? ""}`.toUpperCase(),
-                        color: ROLE_COLORS[member.projectRole] || "bg-fg-subtle",
+                        color: rolePastille(member.projectRole),
                     })),
                 })),
             );
