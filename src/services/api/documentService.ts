@@ -8,6 +8,8 @@ export interface DocumentMetadata {
   _id: string;
   projectId: string;
   phase: 'etude' | 'passation' | 'execution';
+  /** Emplacement dans la structure : « global » ou des identifiants séparés par « / ». */
+  context?: string;
   folderName: string;
   fileName: string;
   fileSize?: string;
