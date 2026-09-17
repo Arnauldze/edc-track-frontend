@@ -10,7 +10,7 @@ import type { Planning, Livrable } from "@/services/api/planningService";
 import { planningService } from "@/services/api/planningService";
 import { projectService, type Component } from "@/services/api/projectService";
 import { toast } from "@/lib/toastStore";
-import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
+import { calculerCalendrierEtude, ecart, toDay } from "@/lib/livrableSchedule";
 import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
 import type { LigneCalendrier } from "./PlanningCalendrierForm";
 import { findUnit, listUnits, type UnitLevel } from "@/lib/structureUnits";
@@ -64,6 +64,8 @@ const MSP_ALERTE_COLOR = "var(--warning)";
 const MSP_PROBLEME_COLOR = "var(--danger)";
 /** Chemin critique : un contour. La teinte reste réservée au type d'activité. */
 const MSP_CRITIQUE_COLOR = "var(--danger)";
+/** Référence de base : une barre grise sous la barre courante, comme MS Project. */
+const MSP_REFERENCE_COLOR = "var(--text-tertiary)";
 /** Niveaux de la WBS : une intensité décroissante, pas une teinte de plus. */
 const MSP_NIVEAU_COMPOSANT = "var(--text-primary)";
 const MSP_NIVEAU_SOUS_COMPOSANT = "var(--text-secondary)";
@@ -89,18 +91,22 @@ const COLUMN_DEFS: ColumnDef[] = [
   { id: "numero", label: "N°", width: "60px", align: "center", defaultVisible: true, filterType: "text", field: "numero" },
   { id: "nom", label: "Nom", width: "minmax(200px, 1fr)", align: "left", defaultVisible: true, filterType: "level", field: "nom" },
   { id: "type", label: "Type", width: "110px", align: "center", defaultVisible: true, filterType: "text", field: "activityType" },
-  { id: "ponderation", label: "Pond.", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "ponderation" },
+  { id: "ponderation", label: "Pond.", width: "70px", align: "center", defaultVisible: false, filterType: "number", field: "ponderation" },
   { id: "dateDebut", label: "Début", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateDebut" },
   { id: "dateFin", label: "Fin", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateFin" },
   { id: "duree", label: "Durée", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "duree" },
   { id: "avancement", label: "Avanc.", width: "90px", align: "center", defaultVisible: true, filterType: "number", field: "progress" },
-  { id: "budget", label: "Budget", width: "80px", align: "right", defaultVisible: true, filterType: "number", field: "budget" },
-  { id: "delai", label: "Délai", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "delai" },
-  { id: "dateEcheance", label: "Échéance", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateEcheance" },
-  { id: "predecesseur", label: "Préd.", width: "60px", align: "center", defaultVisible: true, filterType: "ref", field: "predecesseur" },
-  { id: "successeur", label: "Succ.", width: "60px", align: "center", defaultVisible: true, filterType: "ref", field: "successeur" },
+  { id: "budget", label: "Budget", width: "80px", align: "right", defaultVisible: false, filterType: "number", field: "budget" },
+  { id: "delai", label: "Délai", width: "70px", align: "center", defaultVisible: false, filterType: "number", field: "delai" },
+  { id: "dateEcheance", label: "Échéance", width: "90px", align: "center", defaultVisible: false, filterType: "date", field: "dateEcheance" },
+  { id: "predecesseur", label: "Préd.", width: "60px", align: "center", defaultVisible: false, filterType: "ref", field: "predecesseur" },
+  { id: "successeur", label: "Succ.", width: "60px", align: "center", defaultVisible: false, filterType: "ref", field: "successeur" },
   { id: "marge", label: "Marge", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "margeTotale" },
+  { id: "ecart", label: "Écart réf.", width: "80px", align: "center", defaultVisible: true, filterType: "number", field: "ecartReference" },
 ];
+
+/** Clé de stockage local du choix de colonnes (le défaut tient dans le volet de 800 px). */
+const CLE_COLONNES = "planning.colonnesVisibles";
 
 interface ColumnFilter {
   columnId: string;
@@ -162,6 +168,11 @@ interface TaskRow {
   margeTotale?: number;
   /** Marge nulle : la ligne est sur le chemin critique.  */
   critique?: boolean;
+  /** Échéance figée dans la référence de base, si elle existe. */
+  referenceDebut?: string;
+  referenceFin?: string;
+  /** Dérive en jours depuis la référence : positive = en retard. */
+  ecartReference?: number;
   
   // Synthèse (voir lib/planningRollup.ts)
   /** Durée calculée, déjà mise en forme (unités de structure). */
@@ -271,6 +282,23 @@ export function MSProjectViewV2({
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     () => new Set(COLUMN_DEFS.filter(c => c.defaultVisible).map(c => c.id))
   );
+  // Choix de colonnes propre à chaque navigateur, relu après le montage pour ne pas casser l'hydratation.
+  const colonnesRelues = useRef(false);
+  useEffect(() => {
+    try {
+      const brut = localStorage.getItem(CLE_COLONNES);
+      const ids: unknown = brut ? JSON.parse(brut) : null;
+      if (Array.isArray(ids)) {
+        const connus = ids.filter((id): id is string => typeof id === "string" && COLUMN_DEFS.some(c => c.id === id));
+        if (connus.length) setVisibleColumns(new Set([...connus, "numero", "nom"]));
+      }
+    } catch { /* stockage indisponible : on garde les colonnes par défaut */ }
+    colonnesRelues.current = true;
+  }, []);
+  useEffect(() => {
+    if (!colonnesRelues.current) return;
+    try { localStorage.setItem(CLE_COLONNES, JSON.stringify([...visibleColumns])); } catch { /* sans effet */ }
+  }, [visibleColumns]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
 
@@ -286,6 +314,8 @@ export function MSProjectViewV2({
   // Computed: visible columns and dynamic grid template
   const columnsVisible = useMemo(() => COLUMN_DEFS.filter(c => visibleColumns.has(c.id)), [visibleColumns]);
   const gridTemplate = useMemo(() => columnsVisible.map(c => c.width).join(" "), [columnsVisible]);
+  // Largeur réelle des colonnes affichées : la barre de défilement horizontale doit toutes les atteindre.
+  const largeurColonnes = useMemo(() => columnsVisible.reduce((somme, c) => somme + (parseInt(c.width.replace("minmax(", ""), 10) || 0), 0), [columnsVisible]);
   
   // Échelle de temps : choix mémorisé sur ce navigateur, sinon déduite de la durée du projet
   const [chosenScale, setChosenScale] = useState<TimeScale | null>(null);
@@ -371,9 +401,14 @@ export function MSProjectViewV2({
       livrables: LigneCalendrier[],
       level: number,
       t0?: string,
+      reference?: Planning["reference"],
     ) => {
       const { livrables: avecMarge } = calculerCalendrierEtude(livrables, t0);
       avecMarge.forEach((liv) => {
+        // Une ligne ajoutée après le figeage n'a pas de repère : pas d'écart,
+        // ce qui n'est pas la même chose qu'un écart nul.
+        const fige = reference?.lignes?.find((l) => l.numero === liv.numero && l.phase === phase);
+        const referenceFin = toDay(fige?.dateFin as string | undefined);
         rows.push({
           id: `${activityPath}.${phase}.${liv.numero}`,
           numero: liv.numero,
@@ -403,6 +438,9 @@ export function MSProjectViewV2({
           successeur: liv.successeur,
           margeTotale: liv.margeTotale,
           critique: liv.critique,
+          referenceDebut: toDay(fige?.dateDebut as string | undefined),
+          referenceFin,
+          ecartReference: ecartJours(referenceFin, toDay(liv.dateFin ?? liv.dateEcheance)),
         });
       });
     };
@@ -431,10 +469,16 @@ export function MSProjectViewV2({
             hasChildren: livrables.length + tachesExecution.length > 0,
             planning,
             ...fromMetrics(metrics.get(node.id)),
+            referenceDebut: toDay(planning?.reference?.dateDebut as string | undefined),
+            referenceFin: toDay(planning?.reference?.dateFin as string | undefined),
+            ecartReference: ecartJours(
+              toDay(planning?.reference?.dateFin as string | undefined),
+              toDay((planning?.dateFinActualisee ?? planning?.dateFinInitiale) as string | undefined),
+            ),
           });
           if (expandedIds.has(node.id)) {
-            pushLivrables(node.id, "etude", livrables, level + 1, t0De(planning));
-            pushLivrables(node.id, "execution", tachesExecution, level + 1, t0De(planning));
+            pushLivrables(node.id, "etude", livrables, level + 1, t0De(planning), planning?.reference);
+            pushLivrables(node.id, "execution", tachesExecution, level + 1, t0De(planning), planning?.reference);
           }
           return;
         }
@@ -597,6 +641,10 @@ export function MSProjectViewV2({
 
   /** Date T0 d'une planification : point de départ des livrables sans prédécesseur ni début saisi. */
   const t0De = (planning?: Planning) => toDay((planning?.dateDebutInitiale ?? planning?.dateT0Etude) as string | undefined);
+
+  /** Dérive en jours entre une échéance de référence et l'échéance courante. */
+  const ecartJours = (reference?: string, courante?: string) =>
+    reference && courante ? ecart(reference, courante, "jours") : undefined;
 
   /**
    * Modification d'un livrable ou d'une tâche dans le tableau. Comme sur la page de l'activité,
@@ -1098,10 +1146,13 @@ export function MSProjectViewV2({
       : field === 'dateFin' || field === 'dateEcheance' ? liv?.modeFin !== 'fin'
       : field === 'duree' ? liv?.modeFin !== 'duree'
       : field === 'delai' ? liv?.modeFin !== 'delai'
-      : field === 'successeur' || field === 'margeTotale'
+      : field === 'successeur' || field === 'margeTotale' || field === 'ecartReference'
     );
     const isLocked =
-      field === 'successeur' || field === 'margeTotale' || (field === 'dateDebut' && !!liv?.predecesseur);
+      field === 'successeur' ||
+      field === 'margeTotale' ||
+      field === 'ecartReference' ||
+      (field === 'dateDebut' && !!liv?.predecesseur);
 
     if (isEditing && isLivrable && !isLocked) {
       if (field === 'predecesseur') {
@@ -1206,11 +1257,27 @@ export function MSProjectViewV2({
       displayValue = value === undefined || value === null ? '—' : `${Number(value).toLocaleString('fr-FR')} j`;
     }
 
+    // L'écart à la référence se lit signé : + en retard, − en avance. Un tiret
+    // signale l'absence de référence, à ne pas confondre avec un écart nul.
+    if (field === 'ecartReference') {
+      const jours = value as number | undefined;
+      displayValue =
+        jours === undefined || jours === null
+          ? '—'
+          : jours === 0
+            ? 'à l’heure'
+            : `${jours > 0 ? '+' : '−'}${Math.abs(jours).toLocaleString('fr-FR')} j`;
+    }
+
     return (
       <div
         onClick={() => isLivrable && !isLocked && !editor.isEditing && setEditingCell({ rowId: task.id, field })}
         title={
-          field === 'margeTotale'
+          field === 'ecartReference'
+            ? task.referenceFin
+              ? `Référence : ${formatDate(task.referenceFin)}`
+              : "Aucune référence figée pour cette ligne"
+            : field === 'margeTotale'
             ? task.critique
               ? "Chemin critique : tout retard ici décale la fin de la phase"
               : "Report possible, en jours, sans décaler la fin de la phase"
@@ -1226,8 +1293,21 @@ export function MSProjectViewV2({
           padding: "0 4px",
           lineHeight: `${ROW_HEIGHT}px`,
           background: isCalculated ? "var(--msp-bg-header)" : "transparent",
-          color: field === 'margeTotale' && task.critique ? MSP_CRITIQUE_COLOR : isCalculated ? "var(--msp-text-muted)" : "inherit",
-          fontWeight: field === 'margeTotale' && task.critique ? 600 : undefined,
+          color:
+            field === 'margeTotale' && task.critique
+              ? MSP_CRITIQUE_COLOR
+              : field === 'ecartReference' && task.ecartReference !== undefined && task.ecartReference !== 0
+                ? task.ecartReference > 0
+                  ? MSP_CRITIQUE_COLOR
+                  : MSP_TODAY_COLOR
+                : isCalculated
+                  ? "var(--msp-text-muted)"
+                  : "inherit",
+          fontWeight:
+            (field === 'margeTotale' && task.critique) ||
+            (field === 'ecartReference' && !!task.ecartReference)
+              ? 600
+              : undefined,
           fontStyle: isCalculated ? "italic" : "normal",
         }}
       >
@@ -1623,7 +1703,7 @@ export function MSProjectViewV2({
             onScroll={handleLeftScroll}
             style={{ flex: 1, overflowY: "auto", overflowX: "auto", position: "relative" }}
           >
-            <div style={{ minWidth: 800, display: "flex", flexDirection: "column" }}>
+            <div style={{ minWidth: Math.max(800, largeurColonnes), display: "flex", flexDirection: "column" }}>
               {/* Table Header — dynamic columns */}
               <div
                 onContextMenu={handleHeaderContextMenu}
@@ -2062,6 +2142,7 @@ export function MSProjectViewV2({
 
                 const isProject = task.type === "project";
                 const isSummary = isProject || task.type === "component" || task.type === "subcomponent";
+                const referencePos = calculateBarPosition(task.referenceDebut, task.referenceFin);
                 const color = isProject ? MSP_PROJECT_COLOR : task.activityType ? ACTIVITY_COLORS[task.activityType] : MSP_BAR_BLUE;
                 const progress = Math.max(0, Math.min(100, task.progress ?? 0));
                 const tooltip = [
@@ -2073,6 +2154,9 @@ export function MSProjectViewV2({
                     : task.margeTotale !== undefined
                       ? `Marge : ${task.margeTotale.toLocaleString("fr-FR")} j`
                       : undefined,
+                  task.ecartReference !== undefined
+                    ? `Référence : ${formatDate(task.referenceFin)} (${task.ecartReference > 0 ? "+" : task.ecartReference < 0 ? "−" : ""}${Math.abs(task.ecartReference)} j)`
+                    : undefined,
                 ].filter(Boolean).join("\n");
 
                 if (task.milestone && !isSummary) {
@@ -2128,6 +2212,23 @@ export function MSProjectViewV2({
                         <div style={{ position: "absolute", left: 0, top: "100%", marginTop: 1, height: 2, width: `${progress}%`, background: MSP_TODAY_COLOR }} />
                       )}
                     </div>
+                    {/* Référence de base : barre grise sous la barre courante, comme
+                        MS Project. La dérive se lit au décalage entre les deux. */}
+                    {referencePos && (
+                      <div
+                        title={`Référence : ${formatDate(task.referenceDebut)} → ${formatDate(task.referenceFin)}`}
+                        style={{
+                          position: "absolute",
+                          left: referencePos.left,
+                          top: ROW_HEIGHT / 2 + (isSummary ? 4 : 7),
+                          width: referencePos.width,
+                          height: 3,
+                          background: MSP_REFERENCE_COLOR,
+                          opacity: 0.55,
+                          borderRadius: 1,
+                        }}
+                      />
+                    )}
                     {task.progress !== undefined && (
                       <span
                         style={{

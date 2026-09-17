@@ -201,6 +201,9 @@ export interface Planning {
   dateDebutExecution?: Date;
   dateFinExecution?: Date;
   
+  // Référence de base : absente tant qu'elle n'a pas été figée.
+  reference?: ReferencePlanning;
+
   // Métadonnées
   fichierImporte?: string;
   calibrageFichier?: Record<string, any>;
@@ -258,6 +261,30 @@ export interface PlanningStats {
   budgetActualiseTotal: number;
 }
 
+/** Échéances d'une ligne au moment du figeage. */
+export interface LigneReference {
+  numero: string;
+  /** 'etude' ou 'execution' : deux lignes peuvent porter le même numéro. */
+  phase: string;
+  dateDebut?: Date;
+  dateFin?: Date;
+}
+
+/**
+ * Photographie du plan à un instant choisi. Elle ne bouge plus tant qu'on ne la
+ * refige pas, contrairement aux champs *Initiale : dateDebutInitiale est le T0
+ * saisi et se déplace à chaque enregistrement.
+ */
+export interface ReferencePlanning {
+  dateDebut?: Date;
+  dateFin?: Date;
+  delaiMois?: number;
+  budgetTotal?: number;
+  lignes: LigneReference[];
+  figeeLe: Date;
+  figeePar: string;
+}
+
 export interface BudgetOverrun {
   activityPath: string;
   activityName: string;
@@ -309,6 +336,22 @@ class PlanningService {
   // Supprimer une planification
   async delete(projectCode: string, activityPath: string): Promise<void> {
     await apiClient.delete(`${this.baseUrl}/project/${projectCode}/activity/${activityPath}`);
+  }
+
+  // Figer le plan courant comme référence de base
+  async figerReference(projectCode: string, activityPath: string): Promise<Planning> {
+    const response = await apiClient.post(
+      `${this.baseUrl}/project/${projectCode}/activity/${activityPath}/reference`
+    );
+    return response.data?.data || response.data;
+  }
+
+  // Retirer la référence de base
+  async libererReference(projectCode: string, activityPath: string): Promise<Planning> {
+    const response = await apiClient.delete(
+      `${this.baseUrl}/project/${projectCode}/activity/${activityPath}/reference`
+    );
+    return response.data?.data || response.data;
   }
 
   // Statistiques d'un projet
