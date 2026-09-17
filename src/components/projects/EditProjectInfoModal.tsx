@@ -224,7 +224,7 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
                 }`}
               >
                 {t.label}
-                {tabHasError[t.id] && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                {tabHasError[t.id] && <span className="w-1.5 h-1.5 rounded-full bg-danger" />}
                 {t.id === "financement" && financementChanged && !tabHasError.financement && (
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)]" title="Modifié" />
                 )}
@@ -240,7 +240,7 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
                 <div>
                   <label className={labelClass}>Nom du projet *</label>
                   <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputClass} />
-                  {nameError && <p className="text-xs text-red-500 mt-1.5">{nameError}</p>}
+                  {nameError && <p className="text-xs text-danger mt-1.5">{nameError}</p>}
                 </div>
 
                 <div>
@@ -269,7 +269,7 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
                     />
                   </div>
                 </div>
-                {dateError && <p className="text-xs text-red-500 -mt-3">{dateError}</p>}
+                {dateError && <p className="text-xs text-danger -mt-3">{dateError}</p>}
               </>
             )}
 
@@ -333,9 +333,9 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
             {tab === "financement" && (
               <>
                 {budgetMismatch && !financementChanged && (
-                  <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
-                    <AlertTriangle size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-[12px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                  <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-warning-subtle border border-warning/20">
+                    <AlertTriangle size={14} className="text-warning flex-shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-warning leading-relaxed">
                       Le budget enregistré ({storedBudget > 0 ? formatCurrency(storedBudget, "FCFA") : "non défini"}) ne
                       correspond pas à son financement ({formatCurrency(preview.total, "FCFA")}). Vérifiez les montants
                       ci-dessous : à l&apos;enregistrement du financement, le budget sera recalculé à partir de ces sources.
@@ -354,7 +354,7 @@ export function EditProjectInfoModal({ isOpen, project, onClose, onSaved }: Edit
                 ? `Budget après enregistrement : ${preview.total > 0 ? formatCurrency(preview.total, "FCFA") : "à définir"}`
                 : ""}
               {componentsWillFollow && (
-                <span className="block text-amber-600">
+                <span className="block text-warning">
                   Les montants de {budgetedComponents > 1 ? `ses ${budgetedComponents} composants` : "son composant"} seront réajustés : chaque composant garde sa part.
                 </span>
               )}

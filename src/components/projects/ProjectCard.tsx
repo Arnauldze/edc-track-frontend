@@ -36,18 +36,18 @@ interface ProjectCardProps {
 
 // Couleurs pour les tags de secteur
 const SECTOR_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  santé: { bg: "bg-red-500/10", text: "text-red-600", border: "border-red-500/20" },
-  énergie: { bg: "bg-blue-500/10", text: "text-blue-600", border: "border-blue-500/20" },
-  éducation: { bg: "bg-purple-500/10", text: "text-purple-600", border: "border-purple-500/20" },
-  tourisme: { bg: "bg-green-500/10", text: "text-green-600", border: "border-green-500/20" },
-  infrastructure: { bg: "bg-orange-500/10", text: "text-orange-600", border: "border-orange-500/20" },
-  défaut: { bg: "bg-gray-500/10", text: "text-gray-600", border: "border-gray-500/20" },
+  santé: { bg: "bg-danger-subtle", text: "text-danger", border: "border-danger/20" },
+  énergie: { bg: "bg-primary-subtle", text: "text-primary", border: "border-primary/20" },
+  éducation: { bg: "bg-cat-violet/10", text: "text-cat-violet", border: "border-cat-violet/20" },
+  tourisme: { bg: "bg-success-subtle", text: "text-success", border: "border-success/20" },
+  infrastructure: { bg: "bg-warning-subtle", text: "text-warning", border: "border-warning/20" },
+  défaut: { bg: "bg-inset", text: "text-fg-muted", border: "border-line" },
 };
 
 // Couleurs pour le type de financement
 const FINANCEMENT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  MOP: { bg: "bg-amber-500/10", text: "text-amber-700", border: "border-amber-500/20" },
-  PPP: { bg: "bg-indigo-500/10", text: "text-indigo-700", border: "border-indigo-500/20" },
+  MOP: { bg: "bg-warning-subtle", text: "text-warning", border: "border-warning/20" },
+  PPP: { bg: "bg-cat-indigo/10", text: "text-cat-indigo", border: "border-cat-indigo/20" },
 };
 
 export function ProjectCard({ project, teamMembers = [], roleBadge }: ProjectCardProps) {
@@ -73,10 +73,10 @@ export function ProjectCard({ project, teamMembers = [], roleBadge }: ProjectCar
   
   // Couleur de la barre de progression selon le niveau
   const getProgressColor = () => {
-    if (progress >= 80) return "bg-green-500";
-    if (progress >= 40) return "bg-blue-500";
-    if (progress > 0) return "bg-amber-500";
-    return "bg-gray-400";
+    if (progress >= 80) return "bg-success";
+    if (progress >= 40) return "bg-primary";
+    if (progress > 0) return "bg-warning";
+    return "bg-fg-subtle";
   };
 
   return (

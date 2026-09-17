@@ -23,11 +23,11 @@ interface TeamMemberDisplay extends TeamAssignment {
 }
 
 const ROLE_COLORS: Record<string, string> = {
-  coordinateur_general: "bg-purple-500",
-  coordinateur: "bg-indigo-500",
-  chef_projet: "bg-blue-500",
-  contributeur: "bg-amber-500",
-  view: "bg-gray-500",
+  coordinateur_general: "bg-cat-violet",
+  coordinateur: "bg-cat-indigo",
+  chef_projet: "bg-primary",
+  contributeur: "bg-warning",
+  view: "bg-fg-subtle",
 };
 
 export function ProjectTeamCard({ assignments, usersById, loading = false, onInvite }: ProjectTeamCardProps) {
@@ -41,7 +41,7 @@ export function ProjectTeamCard({ assignments, usersById, loading = false, onInv
   });
 
   const getRoleColor = (role: string) => {
-    return ROLE_COLORS[role] || "bg-gray-500";
+    return ROLE_COLORS[role] || "bg-fg-subtle";
   };
 
   const getAssignmentText = (member: TeamMemberDisplay) => {

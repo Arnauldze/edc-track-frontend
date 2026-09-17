@@ -52,7 +52,7 @@ export function ExchangeRateModal({
         {/* Header */}
         <div className="p-6 border-b border-[var(--border-default)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[var(--radius-md)] bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-[var(--radius-md)] bg-gradient-to-br from-success to-success flex items-center justify-center">
               <DollarSign size={20} className="text-white" />
             </div>
             <div>
@@ -75,9 +75,9 @@ export function ExchangeRateModal({
         {/* Content */}
         <div className="p-6 space-y-5">
           {/* Info */}
-          <div className="flex gap-3 p-4 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-            <AlertCircle size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-blue-600 dark:text-blue-400">
+          <div className="flex gap-3 p-4 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
+            <AlertCircle size={16} className="text-primary flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-primary">
               <strong>Important :</strong> Utilisez les taux de change officiels
               mentionnés dans la convention de financement. Ces taux seront utilisés
               pour calculer le budget total en FCFA.
@@ -128,10 +128,10 @@ export function ExchangeRateModal({
           </div>
 
           {/* Exemple de calcul */}
-          <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-[var(--radius-md)]">
+          <div className="p-4 bg-success-subtle border border-success/20 rounded-[var(--radius-md)]">
             <div className="flex items-start gap-2 mb-2">
-              <Calculator size={14} className="text-green-500 flex-shrink-0 mt-0.5" />
-              <div className="text-xs font-bold text-green-600 dark:text-green-400">
+              <Calculator size={14} className="text-success flex-shrink-0 mt-0.5" />
+              <div className="text-xs font-bold text-success">
                 Exemple de calcul
               </div>
             </div>

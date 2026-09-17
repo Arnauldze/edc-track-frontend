@@ -163,22 +163,22 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
 
   const getStatusBadge = () => {
     const statusColors: Record<string, string> = {
-      planifie: "bg-gray-500/10 text-gray-600 border-gray-500/20",
-      en_cours: "bg-green-500/10 text-green-600 border-green-500/20",
-      termine: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-      suspendu: "bg-red-500/10 text-red-600 border-red-500/20",
+      planifie: "bg-inset text-fg-muted border-line",
+      en_cours: "bg-success-subtle text-success border-success/20",
+      termine: "bg-primary-subtle text-primary border-primary/20",
+      suspendu: "bg-danger-subtle text-danger border-danger/20",
     };
-    const color = statusColors[project.status || ""] || "bg-gray-500/10 text-gray-600 border-gray-500/20";
+    const color = statusColors[project.status || ""] || "bg-inset text-fg-muted border-line";
     return color;
   };
 
   const getPriorityBadge = () => {
     const priorityColors: Record<string, string> = {
-      haute: "bg-red-500/10 text-red-600 border-red-500/20",
-      moyenne: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
-      basse: "bg-green-500/10 text-green-600 border-green-500/20",
+      haute: "bg-danger-subtle text-danger border-danger/20",
+      moyenne: "bg-warning-subtle text-warning border-warning/20",
+      basse: "bg-success-subtle text-success border-success/20",
     };
-    const color = priorityColors[project.priority || ""] || "bg-gray-500/10 text-gray-600 border-gray-500/20";
+    const color = priorityColors[project.priority || ""] || "bg-inset text-fg-muted border-line";
     return color;
   };
 
@@ -302,7 +302,7 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
               {project.budget ? formatMoney(project.budget, 2) : "—"} FCFA
             </div>
             {overAllocation >= 1 && (
-              <div className="mt-2 p-2.5 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
+              <div className="mt-2 p-2.5 rounded-[var(--radius-md)] bg-warning-subtle border border-warning/20 text-xs text-warning">
                 Les composants totalisent {formatMoney(allocatedFCFA, 2)} FCFA, soit {formatMoney(overAllocation, 2)} FCFA
                 de plus que le budget financé.
               </div>
@@ -342,7 +342,7 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
             </span>
           )}
           {project.category && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 border border-blue-500/20">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary-subtle text-primary border border-primary/20">
               {project.category}
             </span>
           )}

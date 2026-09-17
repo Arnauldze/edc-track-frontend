@@ -51,10 +51,13 @@
 
   /* États */
   --success: #1E7A4C;
+  --success-hover: #185F3B;
   --success-subtle: #E4F3EA;
   --warning: #93600B;
+  --warning-hover: #744B08;
   --warning-subtle: #FBF1D7;
   --danger: #B42318;
+  --danger-hover: #8F1C13;
   --danger-subtle: #FCEAE8;
 
   /* Navigation latérale */
@@ -71,6 +74,11 @@
   --type-services: #23806A;
   --type-etudes: #6A4FBE;
   --type-pi: #B03F69;
+  --cat-violet: #6D28D9;
+  --cat-indigo: #4C4FCB;
+  --cat-cyan: #0E7490;
+  --cat-teal: #0F766E;
+  --cat-rose: #BE185D;
 
   /* Phases d'une activité */
   --phase-etude: #2F5BC4;
@@ -135,10 +143,13 @@
   --on-accent: #1C1204;
 
   --success: #5CC08B;
+  --success-hover: #7CD0A3;
   --success-subtle: #12291E;
   --warning: #E6B652;
+  --warning-hover: #EFC974;
   --warning-subtle: #2A2413;
   --danger: #F07D72;
+  --danger-hover: #F59A91;
   --danger-subtle: #2E1817;
 
   --nav-bg: #0F1A33;
@@ -153,6 +164,11 @@
   --type-services: #4FB797;
   --type-etudes: #9D86E6;
   --type-pi: #E07BA1;
+  --cat-violet: #A78BFA;
+  --cat-indigo: #9296EE;
+  --cat-cyan: #5FC6DE;
+  --cat-teal: #5AC4B9;
+  --cat-rose: #F08FB8;
 
   --phase-etude: #6A93E8;
   --phase-passation: #5CC08B;
@@ -207,10 +223,13 @@
   --color-on-accent: var(--on-accent);
 
   --color-success: var(--success);
+  --color-success-hover: var(--success-hover);
   --color-success-subtle: var(--success-subtle);
   --color-warning: var(--warning);
+  --color-warning-hover: var(--warning-hover);
   --color-warning-subtle: var(--warning-subtle);
   --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
   --color-danger-subtle: var(--danger-subtle);
 
   --color-nav: var(--nav-bg);
@@ -225,6 +244,11 @@
   --color-type-services: var(--type-services);
   --color-type-etudes: var(--type-etudes);
   --color-type-pi: var(--type-pi);
+  --color-cat-violet: var(--cat-violet);
+  --color-cat-indigo: var(--cat-indigo);
+  --color-cat-cyan: var(--cat-cyan);
+  --color-cat-teal: var(--cat-teal);
+  --color-cat-rose: var(--cat-rose);
 
   --color-phase-etude: var(--phase-etude);
   --color-phase-passation: var(--phase-passation);

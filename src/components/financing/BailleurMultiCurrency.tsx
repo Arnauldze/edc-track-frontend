@@ -85,7 +85,7 @@ export function BailleurMultiCurrency({
               {bailleurNom}
             </span>
             {contributions.length > 1 && (
-              <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-600 text-[10px] font-bold rounded">
+              <span className="px-1.5 py-0.5 bg-primary-subtle text-primary text-[10px] font-bold rounded">
                 {contributions.length} devises
               </span>
             )}
@@ -115,7 +115,7 @@ export function BailleurMultiCurrency({
           <button
             type="button"
             onClick={() => onRemove(bailleurId)}
-            className="text-[var(--text-tertiary)] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 p-1"
+            className="text-[var(--text-tertiary)] hover:text-danger transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 p-1"
             title="Supprimer le bailleur"
           >
             <Trash2 size={14} />
@@ -157,7 +157,7 @@ export function BailleurMultiCurrency({
                 <button
                   type="button"
                   onClick={() => removeCurrency(contrib.id)}
-                  className="p-1 text-[var(--text-tertiary)] hover:text-red-500 transition-colors"
+                  className="p-1 text-[var(--text-tertiary)] hover:text-danger transition-colors"
                   title="Supprimer cette devise"
                 >
                   <Trash2 size={12} />

@@ -21,20 +21,20 @@ type ProjectWithTeam = Project & {
 };
 
 const ROLE_COLORS: Record<string, string> = {
-    coordinateur_general: "bg-purple-500",
-    coordinateur: "bg-indigo-500",
-    chef_projet: "bg-blue-500",
-    contributeur: "bg-amber-500",
-    view: "bg-gray-500",
+    coordinateur_general: "bg-cat-violet",
+    coordinateur: "bg-cat-indigo",
+    chef_projet: "bg-primary",
+    contributeur: "bg-warning",
+    view: "bg-fg-subtle",
 };
 
 // Badge du rôle de l'utilisateur sur le projet. Rien pour l'admin, qui gère tout.
 function roleBadgeFor(myRoles: string[]): { label: string; className: string } | undefined {
     if (myRoles.includes("chef_projet")) {
-        return { label: "Chef de projet", className: "bg-blue-500/10 text-blue-600 border-blue-500/20" };
+        return { label: "Chef de projet", className: "bg-primary-subtle text-primary border-primary/20" };
     }
     if (myRoles.includes("coordinateur") || myRoles.includes("coordinateur_general")) {
-        return { label: "Supervision", className: "bg-purple-500/10 text-purple-600 border-purple-500/20" };
+        return { label: "Supervision", className: "bg-cat-violet/10 text-cat-violet border-cat-violet/20" };
     }
     return undefined;
 }
@@ -71,7 +71,7 @@ export default function ProjectsPage() {
                     ...project,
                     teamMembers: (project.team ?? []).slice(0, 5).map((member) => ({
                         initials: `${member.firstName?.[0] ?? ""}${member.lastName?.[0] ?? ""}`.toUpperCase(),
-                        color: ROLE_COLORS[member.projectRole] || "bg-gray-500",
+                        color: ROLE_COLORS[member.projectRole] || "bg-fg-subtle",
                     })),
                 })),
             );

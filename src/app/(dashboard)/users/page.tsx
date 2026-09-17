@@ -394,7 +394,7 @@ export default function UsersPage() {
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-cat-violet flex items-center justify-center text-white text-sm font-bold">
                       {user.firstName?.[0] || ""}{user.lastName?.[0] || ""}
                     </div>
                     <div>
@@ -435,8 +435,8 @@ export default function UsersPage() {
                   <span
                     className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                       user.status === "active"
-                        ? "bg-green-500/10 text-green-600 border border-green-500/20"
-                        : "bg-gray-500/10 text-gray-600 border border-gray-500/20"
+                        ? "bg-success-subtle text-success border border-success/20"
+                        : "bg-inset text-fg-muted border border-line"
                     }`}
                   >
                     {user.status === "active" ? "Actif" : "Inactif"}
@@ -448,7 +448,7 @@ export default function UsersPage() {
                     <button
                       onClick={() => handleResetPassword(user.id)}
                       disabled={resettingPassword === user.id}
-                      className="p-2 text-[var(--text-tertiary)] hover:text-orange-500 hover:bg-orange-500/10 rounded-[var(--radius-md)] transition-colors disabled:opacity-50"
+                      className="p-2 text-[var(--text-tertiary)] hover:text-warning hover:bg-warning-subtle rounded-[var(--radius-md)] transition-colors disabled:opacity-50"
                       title="Réinitialiser le mot de passe"
                     >
                       {resettingPassword === user.id ? <LoadingSpinner size="sm" /> : <RotateCcw size={14} />}
@@ -466,7 +466,7 @@ export default function UsersPage() {
                     {/* Bouton Supprimer */}
                     <button
                       onClick={() => handleDelete(user.id, `${user.firstName} ${user.lastName}`)}
-                      className="p-2 text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-500/10 rounded-[var(--radius-md)] transition-colors"
+                      className="p-2 text-[var(--text-tertiary)] hover:text-danger hover:bg-danger-subtle rounded-[var(--radius-md)] transition-colors"
                       title="Supprimer"
                     >
                       <Trash2 size={14} />
@@ -606,7 +606,7 @@ export default function UsersPage() {
 
               {/* Checkbox canCreateProjects - seulement pour utilisateurs non-admin */}
               {formData.platformRole !== "admin" && (
-                <div className="flex items-start gap-2 p-3 bg-blue-500/5 border border-blue-500/10 rounded-[var(--radius-md)]">
+                <div className="flex items-start gap-2 p-3 bg-primary-subtle border border-primary/10 rounded-[var(--radius-md)]">
                   <input
                     type="checkbox"
                     id="canCreateProjects"
@@ -720,8 +720,8 @@ export default function UsersPage() {
                 </div>
               </div>
 
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-[var(--radius-md)] p-3">
-                <p className="text-xs text-yellow-600">
+              <div className="bg-warning-subtle border border-warning/20 rounded-[var(--radius-md)] p-3">
+                <p className="text-xs text-warning">
                   ⚠️ Copiez ces identifiants maintenant. Vous ne pourrez plus les voir après avoir fermé cette fenêtre.
                 </p>
               </div>

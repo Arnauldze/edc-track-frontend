@@ -14,7 +14,7 @@ export default function SuiviProjetSoonPage({ params }: { params: Promise<{ id: 
                 
                 {/* Background decorative elements */}
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[var(--primary)]/10 rounded-full blur-[120px] pointer-events-none" />
-                <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[150px] pointer-events-none" />
+                <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-cat-violet/10 rounded-full blur-[150px] pointer-events-none" />
 
                 {/* Back Button */}
                 <div className="absolute top-8 left-8">
@@ -25,7 +25,7 @@ export default function SuiviProjetSoonPage({ params }: { params: Promise<{ id: 
 
                 {/* Content */}
                 <div className="relative z-10 flex flex-col items-center text-center max-w-xl px-6">
-                    <div className="w-20 h-20 mb-8 rounded-3xl bg-gradient-to-br from-[var(--primary)] to-purple-600 flex items-center justify-center shadow-2xl shadow-[var(--primary)]/20 animate-pulse">
+                    <div className="w-20 h-20 mb-8 rounded-3xl bg-gradient-to-br from-[var(--primary)] to-cat-violet flex items-center justify-center shadow-2xl shadow-[var(--primary)]/20 animate-pulse">
                         <ActivitySquare size={40} className="text-white" />
                     </div>
                     
@@ -38,7 +38,7 @@ export default function SuiviProjetSoonPage({ params }: { params: Promise<{ id: 
                     </p>
 
                     <div className="flex items-center gap-3 px-6 py-3 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-sm font-medium text-[var(--text-tertiary)] shadow-lg">
-                        <Construction size={16} className="text-amber-500" />
+                        <Construction size={16} className="text-warning" />
                         <span>En construction pour le projet {id}</span>
                     </div>
                 </div>

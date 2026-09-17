@@ -509,10 +509,10 @@ export default function ProjectConfigPage() {
 
   const getDocIcon = (type: string) => {
     const styles: Record<string, string> = {
-      pdf: "bg-red-500/10 text-red-500",
-      xls: "bg-green-500/10 text-green-600",
-      doc: "bg-blue-500/10 text-blue-500",
-      plan: "bg-purple-500/10 text-purple-500",
+      pdf: "bg-danger-subtle text-danger",
+      xls: "bg-success-subtle text-success",
+      doc: "bg-primary-subtle text-primary",
+      plan: "bg-cat-violet/10 text-cat-violet",
     };
     return (
       <div
@@ -524,12 +524,12 @@ export default function ProjectConfigPage() {
   };
   const getFileIcon = (type: string) => {
     const styles: Record<string, { color: string; icon: React.ReactNode }> = {
-      pdf: { color: "text-red-500", icon: <FileText size={14} /> },
-      dwg: { color: "text-purple-500", icon: <File size={14} /> },
-      zip: { color: "text-amber-500", icon: <File size={14} /> },
-      xls: { color: "text-green-500", icon: <File size={14} /> },
-      doc: { color: "text-blue-500", icon: <File size={14} /> },
-      img: { color: "text-teal-500", icon: <ImageIcon size={14} /> },
+      pdf: { color: "text-danger", icon: <FileText size={14} /> },
+      dwg: { color: "text-cat-violet", icon: <File size={14} /> },
+      zip: { color: "text-warning", icon: <File size={14} /> },
+      xls: { color: "text-success", icon: <File size={14} /> },
+      doc: { color: "text-primary", icon: <File size={14} /> },
+      img: { color: "text-cat-teal", icon: <ImageIcon size={14} /> },
     };
     const s = styles[type] || {
       color: "text-[var(--text-tertiary)]",
@@ -545,22 +545,22 @@ export default function ProjectConfigPage() {
       valide: {
         icon: <CheckCircle2 size={10} />,
         label: "Validé",
-        style: "bg-green-500/10 text-green-600 border-green-500/20",
+        style: "bg-success-subtle text-success border-success/20",
       },
       encours: {
         icon: <Clock size={10} />,
         label: "En cours",
-        style: "bg-orange-500/10 text-orange-600 border-orange-500/20",
+        style: "bg-warning-subtle text-warning border-warning/20",
       },
       rejete: {
         icon: <XCircle size={10} />,
         label: "Rejeté",
-        style: "bg-red-500/10 text-red-600 border-red-500/20",
+        style: "bg-danger-subtle text-danger border-danger/20",
       },
       manquant: {
         icon: <AlertCircle size={10} />,
         label: "Manquant",
-        style: "bg-red-500/10 text-red-600 border-red-500/20",
+        style: "bg-danger-subtle text-danger border-danger/20",
       },
     };
     const c = config[status];
@@ -941,7 +941,7 @@ export default function ProjectConfigPage() {
                 setShowValidateModal({ docIdx, fileIdx, fileName });
                 setOpenActionMenu(null);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-green-600 hover:bg-green-500/10 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-success hover:bg-success-subtle transition-colors"
             >
               <CheckCircle2 size={14} /> Valider
             </button>
@@ -957,7 +957,7 @@ export default function ProjectConfigPage() {
                 });
                 setOpenActionMenu(null);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-orange-600 hover:bg-orange-500/10 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-warning hover:bg-warning-subtle transition-colors"
             >
               <XCircle size={14} /> Rejeter
             </button>
@@ -968,7 +968,7 @@ export default function ProjectConfigPage() {
                   handleRollbackValidation(phase, docIdx, fileIdx);
                   setOpenActionMenu(null);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-blue-600 hover:bg-blue-500/10 transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-primary hover:bg-primary-subtle transition-colors"
               >
                 <Edit2 size={14} /> Débloquer (remettre en revue)
               </button>
@@ -987,7 +987,7 @@ export default function ProjectConfigPage() {
                 });
                 setOpenActionMenu(null);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-red-500 hover:bg-red-500/10 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-danger hover:bg-danger-subtle transition-colors"
             >
               <Trash2 size={14} /> Envoyer corbeille
             </button>
@@ -1135,7 +1135,7 @@ export default function ProjectConfigPage() {
                       </button>
                       <button
                         onClick={() => handleDeleteDocFolder(phase, idx)}
-                        className="flex items-center justify-center w-7 h-7 rounded-[var(--radius-md)] text-red-500 hover:bg-red-500/10 transition-colors"
+                        className="flex items-center justify-center w-7 h-7 rounded-[var(--radius-md)] text-danger hover:bg-danger-subtle transition-colors"
                         title="Supprimer le dossier"
                       >
                         <Trash2 size={13} />
@@ -1167,7 +1167,7 @@ export default function ProjectConfigPage() {
                               {file.version ? ` • v${file.version}` : ""}
                             </div>
                             {file.rejectionReason && (
-                              <div className="text-[10px] text-orange-600 truncate">
+                              <div className="text-[10px] text-warning truncate">
                                 Motif rejet : {file.rejectionReason}
                               </div>
                             )}
@@ -1258,8 +1258,8 @@ export default function ProjectConfigPage() {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-              <Lock size={18} className="text-amber-600" />
+            <div className="w-10 h-10 rounded-full bg-warning-subtle flex items-center justify-center">
+              <Lock size={18} className="text-warning" />
             </div>
             <div>
               <h4 className="text-sm font-bold text-[var(--text-primary)]">
@@ -1270,8 +1270,8 @@ export default function ProjectConfigPage() {
               </p>
             </div>
           </div>
-          <div className="p-3 bg-amber-500/10 rounded-[var(--radius-md)] border border-amber-500/20 mb-4">
-            <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+          <div className="p-3 bg-warning-subtle rounded-[var(--radius-md)] border border-warning/20 mb-4">
+            <p className="text-xs text-warning leading-relaxed">
               <strong>⚠️ Attention :</strong> En validant{" "}
               <strong>&quot;{showValidateModal.fileName}&quot;</strong>, cette
               action sera <strong>définitive</strong>. Seul un administrateur
@@ -1294,7 +1294,7 @@ export default function ProjectConfigPage() {
                 );
                 setShowValidateModal(null);
               }}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 bg-success hover:bg-success-hover text-white text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors flex items-center gap-1.5"
             >
               <Lock size={12} /> Valider définitivement
             </button>
@@ -1425,15 +1425,15 @@ export default function ProjectConfigPage() {
           : "Non démarrée";
     const statusStyle =
       activity.status === "done"
-        ? "bg-green-500/10 text-green-600 border-green-500/20"
+        ? "bg-success-subtle text-success border-success/20"
         : activity.status === "exec"
-          ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+          ? "bg-primary-subtle text-primary border-primary/20"
           : "bg-[var(--bg-inset)] text-[var(--text-tertiary)] border-[var(--border-default)]";
     const barColor =
       activity.pct === 100
-        ? "bg-green-500"
+        ? "bg-success"
         : activity.pct > 0
-          ? "bg-blue-500"
+          ? "bg-primary"
           : "";
     return (
       <div>
@@ -1579,7 +1579,7 @@ export default function ProjectConfigPage() {
         {/* Titre et bouton */}
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-[var(--shadow-sm)] flex-shrink-0">
+            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-success to-success flex items-center justify-center text-white shadow-[var(--shadow-sm)] flex-shrink-0">
               <svg
                 width="20"
                 height="20"
@@ -1604,13 +1604,13 @@ export default function ProjectConfigPage() {
           </div>
           <button
             onClick={() => setShowTrashBin(!showTrashBin)}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-600 border border-red-500/20 rounded-[var(--radius-md)] text-sm font-semibold hover:bg-red-500/20 transition-all shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-danger-subtle text-danger border border-danger/20 rounded-[var(--radius-md)] text-sm font-semibold hover:bg-danger-subtle transition-all shadow-sm"
             title="Voir les documents supprimés"
           >
             <Trash2 size={16} />
             Corbeille
             {trashedDocs.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+              <span className="ml-1 px-1.5 py-0.5 bg-danger text-white text-[10px] font-bold rounded-full">
                 {trashedDocs.length}
               </span>
             )}
@@ -1632,8 +1632,8 @@ export default function ProjectConfigPage() {
             }}
             className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[12px] font-bold transition-all flex-shrink-0 ${
               !currentComp && !showComposantes
-                ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.1)]"
-                : "text-[var(--text-secondary)] hover:text-emerald-600 hover:bg-emerald-500/8 border border-transparent"
+                ? "bg-success-subtle text-success border border-success/30 shadow-[0_0_8px_rgba(16,185,129,0.1)]"
+                : "text-[var(--text-secondary)] hover:text-success hover:bg-success-subtle border border-transparent"
             }`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1658,8 +1658,8 @@ export default function ProjectConfigPage() {
               }}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[12px] font-bold transition-all flex-shrink-0 ${
                 showComposantes || currentComp
-                  ? "bg-blue-500/15 text-blue-600 border border-blue-500/30 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
-                  : "text-[var(--text-secondary)] hover:text-blue-600 hover:bg-blue-500/8 border border-transparent"
+                  ? "bg-primary-subtle text-primary border border-primary/30 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
+                  : "text-[var(--text-secondary)] hover:text-primary hover:bg-primary-subtle border border-transparent"
               }`}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1668,7 +1668,7 @@ export default function ProjectConfigPage() {
                 <path d="M2 12l10 5 10-5" />
               </svg>
               Composantes
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-500/20 text-[10px] font-bold">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary-subtle text-[10px] font-bold">
                 {PROJECT.components.length}
               </span>
             </button>
@@ -1681,9 +1681,9 @@ export default function ProjectConfigPage() {
             <div className="flex gap-0.5 overflow-x-auto scrollbar-hide">
               {PROJECT.components.map((c, idx) => {
                 const dotColors = [
-                  "bg-emerald-500", "bg-blue-500", "bg-amber-500",
-                  "bg-purple-500", "bg-cyan-500", "bg-rose-500",
-                  "bg-teal-500", "bg-indigo-500", "bg-orange-500", "bg-pink-500",
+                  "bg-success", "bg-primary", "bg-warning",
+                  "bg-cat-violet", "bg-cat-cyan", "bg-danger",
+                  "bg-cat-teal", "bg-cat-indigo", "bg-warning", "bg-cat-rose",
                 ];
                 const dotColor = dotColors[idx % dotColors.length];
                 const isActive = currentComp === c.id;
@@ -1746,9 +1746,9 @@ export default function ProjectConfigPage() {
                   {sc.activities.map((a, idx) => {
                     const dotColor =
                       a.pct === 100
-                        ? "bg-green-500"
+                        ? "bg-success"
                         : a.pct > 0
-                          ? "bg-blue-500"
+                          ? "bg-primary"
                           : "bg-[var(--text-tertiary)]";
                     const isSelected = selectedActivity?.id === a.id;
                     return (
@@ -1788,7 +1788,7 @@ export default function ProjectConfigPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                    <Trash2 size={20} className="text-red-500" />
+                    <Trash2 size={20} className="text-danger" />
                     Corbeille
                   </h2>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">
@@ -1855,7 +1855,7 @@ export default function ProjectConfigPage() {
                                 toast.error(getErrorMessage(error));
                               }
                             }}
-                            className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-[var(--radius-sm)] transition-colors"
+                            className="p-1.5 text-success hover:bg-success-subtle rounded-[var(--radius-sm)] transition-colors"
                             title="Restaurer"
                           >
                             <CheckCircle2 size={14} />
@@ -1864,7 +1864,7 @@ export default function ProjectConfigPage() {
                         {can("doc:unlock") && (
                           <button
                             onClick={() => setShowPermanentDeleteModal({ docId: doc._id, fileName: doc.fileName })}
-                            className="p-1.5 text-red-600 hover:bg-red-500/10 rounded-[var(--radius-sm)] transition-colors"
+                            className="p-1.5 text-danger hover:bg-danger-subtle rounded-[var(--radius-sm)] transition-colors"
                             title="Supprimer définitivement"
                           >
                             <XCircle size={14} />
@@ -1911,7 +1911,7 @@ export default function ProjectConfigPage() {
                   </div>
                   <div className="mb-2">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-6 h-6 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
+                      <div className="w-6 h-6 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
                       <h2 className="text-sm font-semibold text-[var(--text-primary)]">{currentPhase === "etude" ? "Étude" : currentPhase === "passation" ? "Passation" : "Exécution"} — {comp.name}</h2>
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents de {currentPhase} du composant.</p>
@@ -1932,7 +1932,7 @@ export default function ProjectConfigPage() {
                   </div>
                   <div className="mb-2 mt-4">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-6 h-6 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
+                      <div className="w-6 h-6 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
                       <h2 className="text-sm font-semibold text-[var(--text-primary)]">Étude — {comp.name}</h2>
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents d&apos;étude du composant. Sélectionnez un sous-composant pour voir son étude spécifique.</p>
@@ -1957,7 +1957,7 @@ export default function ProjectConfigPage() {
                   </div>
                   <div className="mb-2">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-6 h-6 bg-amber-500/15 text-amber-500 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
+                      <div className="w-6 h-6 bg-warning-subtle text-warning rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
                       <h2 className="text-sm font-semibold text-[var(--text-primary)]">{currentPhase === "etude" ? "Étude" : currentPhase === "passation" ? "Passation" : "Exécution"} — {sc.name}</h2>
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents de {currentPhase} du sous-composant.</p>
@@ -1978,7 +1978,7 @@ export default function ProjectConfigPage() {
                   </div>
                   <div className="mb-2 mt-4">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-6 h-6 bg-amber-500/15 text-amber-500 rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
+                      <div className="w-6 h-6 bg-warning-subtle text-warning rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
                       <h2 className="text-sm font-semibold text-[var(--text-primary)]">Étude — {sc.name}</h2>
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents d&apos;étude du sous-composant. Cliquez sur une activité pour voir toutes ses phases.</p>
