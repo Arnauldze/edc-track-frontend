@@ -14,12 +14,19 @@ import { UserMenu } from "./UserMenu";
 
 // ══════════════════════════════════════════════════════════════
 // NAVIGATION LATÉRALE — bleu EDC, dépliée (240 px) ou repliée (72 px).
-// Le choix est conservé d'une visite à l'autre.
+// Le choix est conservé d'une visite à l'autre. Quelques écrans à trois
+// volets (assistant de création) la replient d'office, sans toucher au
+// choix de l'utilisateur : il le retrouve en quittant l'écran.
 // ══════════════════════════════════════════════════════════════
+
+/** Écrans qui replient le menu d'office, pour laisser la place au contenu. */
+const REPLI_FORCE = ["/projects/new"];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useStoredFlag("edc-sidebar-collapsed");
+  const [stored, setCollapsed] = useStoredFlag("edc-sidebar-collapsed");
+  const replieDOffice = REPLI_FORCE.includes(pathname);
+  const collapsed = stored || replieDOffice;
   const { isAdmin } = usePermissions();
   const { data: currentUser } = useCurrentUser();
   const { data: unreadAlerts = 0 } = useAlertsCount();
@@ -89,6 +96,7 @@ export function Sidebar() {
         <UserMenu collapsed={collapsed} />
         <button
           type="button"
+          hidden={replieDOffice}
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? "Déplier le menu" : undefined}
           title={collapsed ? "Déplier le menu" : undefined}

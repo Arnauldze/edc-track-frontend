@@ -3,16 +3,18 @@
 // ══════════════════════════════════════════════════════════════
 // FinancementEditor — saisie du financement d'un projet
 // Utilisé à la création (assistant) et à la modification (détail projet).
-// Budget et pourcentages sont affichés en direct ; le serveur les recalcule
-// à l'enregistrement avec le même algorithme (lib/financement.ts).
+// Une ligne par source : montant, devise, équivalent en FCFA et part du
+// budget. Budget et pourcentages sont affichés en direct ; le serveur les
+// recalcule à l'enregistrement avec le même algorithme (lib/financement.ts).
 // ══════════════════════════════════════════════════════════════
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, DollarSign, Plus, Trash2 } from "lucide-react";
-import { BailleurMultiCurrency, type CurrencyContribution } from "@/components/financing/BailleurMultiCurrency";
+import { AlertTriangle, Building2, Handshake, Landmark, Plus, Trash2, X } from "lucide-react";
+import { type CurrencyContribution } from "@/components/financing/BailleurMultiCurrency";
 import { ExchangeRateModal } from "@/components/financing/ExchangeRateModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CURRENCIES, formatCurrency } from "@/lib/helpers/currencyHelpers";
+import { formatMoney } from "@/lib/utils";
 import {
   BASE_CURRENCY,
   computeFinancementPreview,
@@ -21,7 +23,6 @@ import {
   sourcesDroppedBySwitch,
   validateFinancement,
   type FinancementFormValue,
-  type FinancementType,
   type PartieForm,
 } from "@/lib/financement";
 
@@ -43,6 +44,10 @@ const BAILLEURS_LIST = [
   "BID (Banque Interaméricaine de Développement)",
 ];
 
+/** Couleurs des sources dans la barre de répartition (classes écrites en entier pour Tailwind). */
+export const SOURCE_COLORS = ["bg-type-services", "bg-type-travaux", "bg-type-etudes", "bg-type-fourniture", "bg-type-pi", "bg-accent"];
+export const sourceColor = (index: number) => SOURCE_COLORS[index % SOURCE_COLORS.length];
+
 interface FinancementEditorProps {
   value: FinancementFormValue;
   onChange: (value: FinancementFormValue) => void;
@@ -52,67 +57,71 @@ interface FinancementEditorProps {
 
 type PartieKey = "partiesPubliques" | "partiesPrivees";
 
-const inputSm =
-  "bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] transition-colors";
+const inputClass =
+  "h-9 bg-surface border border-line rounded-[var(--radius-sm)] px-2.5 text-[13px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors";
 
-function PctBadge({ pct }: { pct: number }) {
+const toNumber = (text: string) => {
+  const n = parseFloat(String(text).replace(",", "."));
+  return isNaN(n) ? 0 : n;
+};
+
+/** Montant d'une source : saisie et devise dans un même champ. */
+function MontantField({ montant, devise, onMontant, onDevise, label }: { montant: string; devise: string; onMontant: (v: string) => void; onDevise: (v: string) => void; label: string }) {
   return (
-    <span
-      className="w-16 flex-shrink-0 text-right text-[11px] font-semibold text-[var(--text-secondary)] tabular-nums"
-      title="Calculé automatiquement à partir des montants"
-    >
-      {pct.toFixed(2)} %
-    </span>
+    <div className="flex items-center h-9 w-[260px] max-w-full bg-surface border border-line rounded-[var(--radius-sm)] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-colors">
+      <input
+        type="text"
+        inputMode="decimal"
+        aria-label={label}
+        value={montant}
+        onChange={(e) => onMontant(e.target.value)}
+        placeholder="0"
+        className="min-w-0 flex-1 h-full bg-transparent px-2.5 text-[13px] tabular-nums text-fg placeholder:text-fg-subtle focus:outline-none"
+      />
+      <select
+        aria-label={`Devise — ${label}`}
+        value={devise}
+        onChange={(e) => onDevise(e.target.value)}
+        className="h-full bg-transparent border-l border-line pl-2 pr-1 text-[12.5px] font-semibold text-fg focus:outline-none cursor-pointer"
+      >
+        {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
+      </select>
+    </div>
   );
 }
 
 export function FinancementEditor({ value, onChange, showErrors = false }: FinancementEditorProps) {
+  const [showBailleurPicker, setShowBailleurPicker] = useState(false);
   const [bailleurSearch, setBailleurSearch] = useState("");
-  const [bailleurDropdownOpen, setBailleurDropdownOpen] = useState(false);
-  const [customBailleur, setCustomBailleur] = useState("");
-  const [showCustomBailleur, setShowCustomBailleur] = useState(false);
   const [showRates, setShowRates] = useState(false);
   const [pendingRemoval, setPendingRemoval] = useState<{ title: string; message: string; apply: () => void } | null>(null);
-  const [conversionCurrency, setConversionCurrency] = useState(BASE_CURRENCY);
 
   const preview = useMemo(() => computeFinancementPreview(value), [value]);
   const errors = useMemo(() => validateFinancement(value), [value]);
   const pctOf = (id: string) => preview.sources[id]?.pct ?? 0;
+  const amountOf = (id: string) => preview.sources[id]?.amount ?? 0;
 
   const update = (patch: Partial<FinancementFormValue>) => onChange({ ...value, ...patch });
-
-  // ── Type ──
-  const switchType = (type: FinancementType) => {
-    if (type !== value.type) update({ type });
-  };
   const hiddenSources = sourcesDroppedBySwitch(value);
 
   // ── Bailleurs ──
   const availableBailleurs = BAILLEURS_LIST.filter(
-    (nom) =>
-      !value.bailleurs.some((b) => b.nom === nom) && nom.toLowerCase().includes(bailleurSearch.toLowerCase()),
+    (nom) => !value.bailleurs.some((b) => b.nom === nom) && nom.toLowerCase().includes(bailleurSearch.toLowerCase()),
   );
 
   const addBailleur = (nom: string) => {
     const trimmed = nom.trim();
     if (!trimmed) return;
     if (value.bailleurs.some((b) => b.nom.toLowerCase() === trimmed.toLowerCase())) return;
-    update({
-      bailleurs: [...value.bailleurs, { id: newId("b"), nom: trimmed, contributions: [newContribution()] }],
-    });
+    update({ bailleurs: [...value.bailleurs, { id: newId("b"), nom: trimmed, contributions: [newContribution()] }] });
+    setBailleurSearch("");
+    setShowBailleurPicker(false);
   };
 
-  const updateBailleurContributions = (id: string, contributions: CurrencyContribution[]) =>
+  const setContributions = (id: string, contributions: CurrencyContribution[]) =>
     update({ bailleurs: value.bailleurs.map((b) => (b.id === id ? { ...b, contributions } : b)) });
 
-  const askRemoveBailleur = (id: string) => {
-    const bailleur = value.bailleurs.find((b) => b.id === id);
-    setPendingRemoval({
-      title: "Retirer le bailleur",
-      message: `Retirer « ${bailleur?.nom} » du financement ? Le budget sera recalculé.`,
-      apply: () => update({ bailleurs: value.bailleurs.filter((b) => b.id !== id) }),
-    });
-  };
+  const askRemove = (title: string, message: string, apply: () => void) => setPendingRemoval({ title, message, apply });
 
   // ── Parties PPP ──
   const addPartie = (key: PartieKey) =>
@@ -121,388 +130,289 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
   const updatePartie = (key: PartieKey, id: string, patch: Partial<PartieForm>) =>
     update({ [key]: value[key].map((p) => (p.id === id ? { ...p, ...patch } : p)) });
 
-  const askRemovePartie = (key: PartieKey, id: string) => {
-    const partie = value[key].find((p) => p.id === id);
-    setPendingRemoval({
-      title: key === "partiesPubliques" ? "Retirer la partie publique" : "Retirer la partie privée",
-      message: `Retirer « ${partie?.nom || "sans nom"} » du financement ? Le budget sera recalculé.`,
-      apply: () => update({ [key]: value[key].filter((p) => p.id !== id) }),
-    });
+  // ── Répartition ──
+  const repartition: { id: string; nom: string; pct: number; color: string }[] = [];
+  if (value.type === "MOP") {
+    if (value.budgetNational.enabled) repartition.push({ id: "national", nom: "Budget national", pct: pctOf("national"), color: sourceColor(0) });
+    value.bailleurs.forEach((b, i) => repartition.push({ id: b.id, nom: b.nom, pct: pctOf(b.id), color: sourceColor(i + 1) }));
+  } else {
+    [...value.partiesPubliques, ...value.partiesPrivees].forEach((p, i) =>
+      repartition.push({ id: p.id, nom: p.nom || "Sans nom", pct: pctOf(p.id), color: sourceColor(i) }),
+    );
+  }
+
+  const foreignCurrencies = preview.usedCurrencies.filter((c) => c !== BASE_CURRENCY);
+  const equivalentFCFA = (montant: string, devise: string) => {
+    const brut = toNumber(montant);
+    if (!brut || devise === BASE_CURRENCY) return "";
+    const rate = value.tauxChange[devise];
+    return rate ? `≈ ${formatMoney(brut * rate, 0)} FCFA` : "taux de change manquant";
   };
 
-  const renderParties = (key: PartieKey, label: string, dotClass: string, placeholder: string) => (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className={`text-[12px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${dotClass.replace("bg-", "text-")}`}>
-          <span className={`w-2 h-2 rounded-full ${dotClass}`} /> {label}
-        </h4>
-        <button type="button" onClick={() => addPartie(key)} className="flex items-center gap-1 text-[11px] font-semibold text-[var(--primary-text)] hover:underline">
-          <Plus size={12} /> Ajouter
-        </button>
+  // ── Rendu d'une source ──
+  const sourceCard = (
+    { color, titre, sousTitre, pct, onRemove, children }:
+    { color: string; titre: React.ReactNode; sousTitre?: React.ReactNode; pct: number; onRemove?: () => void; children: React.ReactNode },
+  ) => (
+    <div className="rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-3 space-y-2.5">
+      <div className="flex items-center gap-2.5">
+        <span className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${color}`} aria-hidden />
+        <div className="flex-1 min-w-0">{titre}</div>
+        {sousTitre && <span className="text-[11.5px] text-fg-subtle whitespace-nowrap">{sousTitre}</span>}
+        <span className="w-14 text-right text-[13px] font-semibold tabular-nums text-fg" title="Part du budget, calculée à partir des montants">
+          {pct.toFixed(1).replace(".", ",")} %
+        </span>
+        <span className="w-6 flex justify-end">
+          {onRemove && (
+            <button type="button" onClick={onRemove} className="text-fg-subtle hover:text-danger transition-colors" title="Retirer">
+              <Trash2 size={15} />
+            </button>
+          )}
+        </span>
       </div>
-
-      {value[key].length === 0 ? (
-        <div className="p-5 border-2 border-dashed border-[var(--border-default)] rounded-[var(--radius-md)] text-center">
-          <p className="text-[11px] text-[var(--text-tertiary)] mb-2">Aucune entité</p>
-          <button type="button" onClick={() => addPartie(key)} className="text-[11px] font-semibold text-[var(--primary-text)] hover:underline">
-            Ajouter une entité
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {value[key].map((p) => (
-            <div key={p.id} className="p-3 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={p.nom}
-                  onChange={(e) => updatePartie(key, p.id, { nom: e.target.value })}
-                  placeholder={placeholder}
-                  className={`flex-1 ${inputSm} ${showErrors && !p.nom.trim() ? "border-danger" : ""}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => askRemovePartie(key, p.id)}
-                  className="p-1 text-[var(--text-tertiary)] hover:text-danger transition-colors"
-                  title="Retirer"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  value={p.montant}
-                  onChange={(e) => updatePartie(key, p.id, { montant: e.target.value })}
-                  placeholder="Montant"
-                  className={`flex-1 min-w-0 ${inputSm}`}
-                />
-                <select
-                  value={p.devise}
-                  onChange={(e) => updatePartie(key, p.id, { devise: e.target.value })}
-                  className={`w-24 cursor-pointer ${inputSm}`}
-                >
-                  {CURRENCIES.map((c) => (
-                    <option key={c.code} value={c.code}>{c.code}</option>
-                  ))}
-                </select>
-                <PctBadge pct={pctOf(p.id)} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="pl-5">{children}</div>
     </div>
   );
 
-  // ── Récapitulatif par source, dans les devises saisies ──
-  const breakdown: { label: string; amounts: string; pct: number }[] = [];
-  if (value.type === "MOP") {
-    const n = value.budgetNational;
-    if (n.enabled && parseFloat(n.montant) > 0) {
-      breakdown.push({ label: "Budget National", amounts: formatCurrency(parseFloat(n.montant), n.devise), pct: pctOf("national") });
-    }
-    for (const b of value.bailleurs) {
-      const parts = b.contributions.filter((c) => parseFloat(c.montant) > 0);
-      if (parts.length === 0) continue;
-      breakdown.push({
-        label: b.nom,
-        amounts: parts.map((c) => formatCurrency(parseFloat(c.montant), c.devise)).join(" + "),
-        pct: pctOf(b.id),
-      });
-    }
-  } else {
-    for (const [key, suffix] of [["partiesPubliques", "Public"], ["partiesPrivees", "Privé"]] as const) {
-      for (const p of value[key]) {
-        if (!(parseFloat(p.montant) > 0)) continue;
-        breakdown.push({
-          label: `${p.nom || "Sans nom"} (${suffix})`,
-          amounts: formatCurrency(parseFloat(p.montant), p.devise),
-          pct: pctOf(p.id),
-        });
-      }
-    }
-  }
-
-  const conversionRate = value.tauxChange[conversionCurrency] || 1;
-  const foreignCurrencies = preview.usedCurrencies.filter((c) => c !== BASE_CURRENCY);
-
   return (
-    <div className="space-y-6">
-      {/* ── Structuration juridique ── */}
-      <div>
-        <h3 className="text-[13px] font-bold text-[var(--text-primary)] mb-3 uppercase tracking-wider">
-          Structuration juridique <span className="text-danger">*</span>
-        </h3>
-        <div className="flex gap-4">
+    <div className="space-y-5">
+      {/* ── Mode de financement ── */}
+      <section className="space-y-2">
+        <h3 className="text-[12px] font-semibold text-fg-muted">Mode de financement</h3>
+        <div className="flex flex-col sm:flex-row gap-3">
           {([
-            ["MOP", "Maîtrise d'Ouvrage Publique"],
-            ["PPP", "Partenariat Public-Privé"],
-          ] as const).map(([type, label]) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => switchType(type)}
-              className={`flex-1 p-4 border-2 rounded-[var(--radius-md)] text-left transition-all ${
-                value.type === type
-                  ? "border-[var(--primary)] bg-[var(--primary-subtle)]"
-                  : "border-[var(--border-default)] hover:border-[var(--primary)]/50"
-              }`}
-            >
-              <div className="text-[14px] font-bold text-[var(--text-primary)] mb-1">{type}</div>
-              <div className="text-[11px] text-[var(--text-tertiary)]">{label}</div>
-            </button>
-          ))}
+            ["MOP", Landmark, "Maîtrise d'ouvrage publique (MOP)", "L'État finance, seul ou avec des bailleurs de fonds."],
+            ["PPP", Handshake, "Partenariat public-privé (PPP)", "Des parties publiques et privées se partagent le financement."],
+          ] as const).map(([type, Icon, titre, texte]) => {
+            const actif = value.type === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => type !== value.type && update({ type })}
+                aria-pressed={actif}
+                className={`flex-1 flex gap-3 text-left px-4 py-3.5 rounded-[var(--radius-md)] border transition-colors ${actif ? "border-primary bg-primary-subtle ring-1 ring-primary" : "border-line bg-surface hover:border-line-strong"}`}
+              >
+                <span className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded-full border-[1.5px] ${actif ? "border-[5px] border-primary bg-surface" : "border-line-strong"}`} aria-hidden />
+                <span className="min-w-0">
+                  <span className={`flex items-center gap-2 text-[13.5px] font-semibold ${actif ? "text-primary-fg" : "text-fg"}`}>
+                    <Icon size={16} /> {titre}
+                  </span>
+                  <span className="mt-0.5 block text-[12px] leading-snug text-fg-muted">{texte}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
         {hiddenSources > 0 && (
-          <div className="mt-3 flex gap-2 p-3 rounded-[var(--radius-md)] bg-warning-subtle border border-warning/20">
-            <AlertTriangle size={14} className="text-warning flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-warning leading-relaxed">
-              {hiddenSources} source{hiddenSources > 1 ? "s" : ""} saisie{hiddenSources > 1 ? "s" : ""} en{" "}
-              {value.type === "MOP" ? "PPP" : "MOP"} ne {hiddenSources > 1 ? "seront" : "sera"} pas enregistrée
-              {hiddenSources > 1 ? "s" : ""} : un projet {value.type} ne retient que ses propres sources. Revenez en{" "}
-              {value.type === "MOP" ? "PPP" : "MOP"} pour les conserver.
+          <div className="flex gap-2 rounded-[var(--radius-md)] border border-warning/30 bg-warning-subtle px-3 py-2.5">
+            <AlertTriangle size={14} className="mt-0.5 flex-shrink-0 text-warning" />
+            <p className="text-[12px] leading-relaxed text-fg-muted">
+              {hiddenSources} source{hiddenSources > 1 ? "s" : ""} saisie{hiddenSources > 1 ? "s" : ""} en {value.type === "MOP" ? "PPP" : "MOP"} ne {hiddenSources > 1 ? "seront" : "sera"} pas enregistrée{hiddenSources > 1 ? "s" : ""} : un projet {value.type} ne retient que ses propres sources. Revenez en {value.type === "MOP" ? "PPP" : "MOP"} pour les conserver.
             </p>
           </div>
         )}
-      </div>
+      </section>
 
       {/* ── Sources ── */}
-      <div>
-        <h3 className="text-[13px] font-bold text-[var(--text-primary)] mb-3 uppercase tracking-wider">Sources de financement</h3>
+      <section className="space-y-2.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-[12px] font-semibold text-fg-muted">Sources de financement</h3>
+          <p className="text-[12px] text-fg-subtle">
+            {foreignCurrencies.length > 0
+              ? foreignCurrencies.map((c) => `1 ${c} = ${formatMoney(value.tauxChange[c] ?? 0, value.tauxChange[c] && value.tauxChange[c] < 10 ? 3 : 0)} FCFA`).join(" · ")
+              : "Montants convertis en FCFA"}
+            {" · "}
+            <button type="button" onClick={() => setShowRates(true)} className="font-semibold text-primary-fg hover:underline">
+              Modifier les taux
+            </button>
+          </p>
+        </div>
 
         {value.type === "MOP" ? (
-          <div className="space-y-5">
-            {/* Budget national */}
-            <div className="p-4 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-surface)] space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={value.budgetNational.enabled}
-                  onChange={(e) => update({ budgetNational: { ...value.budgetNational, enabled: e.target.checked } })}
-                  className="w-4 h-4 accent-[var(--primary)]"
-                />
-                <div>
-                  <div className="text-[13px] font-semibold text-[var(--text-primary)]">Budget National</div>
-                  <div className="text-[11px] text-[var(--text-tertiary)]">Financement par l&apos;État du Cameroun</div>
-                </div>
-              </label>
-              {value.budgetNational.enabled && (
-                <div className="ml-7 flex items-center gap-2">
+          <>
+            {sourceCard({
+              color: sourceColor(0),
+              titre: (
+                <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
-                    type="number"
-                    min="0"
-                    value={value.budgetNational.montant}
-                    onChange={(e) => update({ budgetNational: { ...value.budgetNational, montant: e.target.value } })}
-                    placeholder="Montant"
-                    className={`flex-1 min-w-0 ${inputSm}`}
+                    type="checkbox"
+                    checked={value.budgetNational.enabled}
+                    onChange={(e) => update({ budgetNational: { ...value.budgetNational, enabled: e.target.checked } })}
+                    className="w-4 h-4 accent-[var(--primary)]"
                   />
-                  <select
-                    value={value.budgetNational.devise}
-                    onChange={(e) => update({ budgetNational: { ...value.budgetNational, devise: e.target.value } })}
-                    className={`w-24 cursor-pointer ${inputSm}`}
-                  >
-                    {CURRENCIES.map((c) => (
-                      <option key={c.code} value={c.code}>{c.code}</option>
-                    ))}
-                  </select>
-                  <PctBadge pct={pctOf("national")} />
+                  <span className="text-[13px] font-semibold text-fg">Budget national</span>
+                  <span className="text-[11.5px] text-fg-subtle">État du Cameroun</span>
+                </label>
+              ),
+              pct: value.budgetNational.enabled ? pctOf("national") : 0,
+              children: value.budgetNational.enabled ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <MontantField
+                    label="Montant du budget national"
+                    montant={value.budgetNational.montant}
+                    devise={value.budgetNational.devise}
+                    onMontant={(montant) => update({ budgetNational: { ...value.budgetNational, montant } })}
+                    onDevise={(devise) => update({ budgetNational: { ...value.budgetNational, devise } })}
+                  />
+                  <span className="text-[12px] tabular-nums text-fg-muted">{equivalentFCFA(value.budgetNational.montant, value.budgetNational.devise)}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Bailleurs */}
-            <div className="space-y-3">
-              <label className="block text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                Bailleurs de fonds
-              </label>
-
-              <div className="relative">
-                <input
-                  type="text"
-                  value={bailleurSearch}
-                  onChange={(e) => {
-                    setBailleurSearch(e.target.value);
-                    setBailleurDropdownOpen(true);
-                  }}
-                  onFocus={() => setBailleurDropdownOpen(true)}
-                  placeholder="Rechercher et sélectionner un bailleur…"
-                  className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)]"
-                />
-                {bailleurDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => {
-                        setBailleurDropdownOpen(false);
-                        setBailleurSearch("");
-                      }}
-                    />
-                    <div className="absolute z-50 w-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] shadow-[var(--shadow-lg)] max-h-52 overflow-y-auto">
-                      {availableBailleurs.length > 0 ? (
-                        availableBailleurs.map((nom) => (
-                          <button
-                            key={nom}
-                            type="button"
-                            onClick={() => {
-                              addBailleur(nom);
-                              setBailleurSearch("");
-                              setBailleurDropdownOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors"
-                          >
-                            {nom}
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-4 py-3 text-[12px] text-[var(--text-tertiary)] italic">Aucun bailleur trouvé</div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {!showCustomBailleur ? (
-                <button
-                  type="button"
-                  onClick={() => setShowCustomBailleur(true)}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--primary-text)] hover:underline"
-                >
-                  <Plus size={12} /> Ajouter un bailleur personnalisé
-                </button>
               ) : (
+                <p className="text-[12px] text-fg-subtle">Cochez pour inscrire une part financée par l&apos;État.</p>
+              ),
+            })}
+
+            {value.bailleurs.map((b, i) => (
+              <div key={b.id}>
+                {sourceCard({
+                  color: sourceColor(i + 1),
+                  titre: <span className="block truncate text-[13px] font-semibold text-fg">{b.nom}</span>,
+                  sousTitre: "Bailleur",
+                  pct: pctOf(b.id),
+                  onRemove: () => askRemove("Retirer le bailleur", `Retirer « ${b.nom} » du financement ? Le budget sera recalculé.`, () => update({ bailleurs: value.bailleurs.filter((x) => x.id !== b.id) })),
+                  children: (
+                    <div className="space-y-2">
+                      {b.contributions.map((c) => (
+                        <div key={c.id} className="flex flex-wrap items-center gap-3">
+                          <MontantField
+                            label={`Contribution ${b.nom}`}
+                            montant={c.montant}
+                            devise={c.devise}
+                            onMontant={(montant) => setContributions(b.id, b.contributions.map((x) => (x.id === c.id ? { ...x, montant } : x)))}
+                            onDevise={(devise) => setContributions(b.id, b.contributions.map((x) => (x.id === c.id ? { ...x, devise } : x)))}
+                          />
+                          <span className="flex-1 min-w-0 text-[12px] tabular-nums text-fg-muted">{equivalentFCFA(c.montant, c.devise)}</span>
+                          {b.contributions.length > 1 && (
+                            <button type="button" onClick={() => setContributions(b.id, b.contributions.filter((x) => x.id !== c.id))} className="text-fg-subtle hover:text-danger transition-colors" title="Retirer cette devise">
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => setContributions(b.id, [...b.contributions, newContribution()])} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-fg hover:underline">
+                        <Plus size={13} /> Autre devise
+                      </button>
+                    </div>
+                  ),
+                })}
+              </div>
+            ))}
+
+            {showBailleurPicker ? (
+              <div className="rounded-[var(--radius-md)] border border-primary bg-surface p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    value={customBailleur}
-                    onChange={(e) => setCustomBailleur(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addBailleur(customBailleur);
-                        setCustomBailleur("");
-                        setShowCustomBailleur(false);
-                      }
-                    }}
-                    placeholder="Nom du bailleur…"
                     autoFocus
-                    className={`flex-1 ${inputSm} py-2 text-[13px]`}
+                    value={bailleurSearch}
+                    onChange={(e) => setBailleurSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addBailleur(bailleurSearch); } if (e.key === "Escape") { setShowBailleurPicker(false); setBailleurSearch(""); } }}
+                    placeholder="Nom du bailleur : choisissez dans la liste ou saisissez le vôtre"
+                    className={`flex-1 min-w-0 ${inputClass}`}
                   />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addBailleur(customBailleur);
-                      setCustomBailleur("");
-                      setShowCustomBailleur(false);
-                    }}
-                    className="px-3 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-[12px] font-semibold hover:opacity-90"
-                  >
+                  <button type="button" onClick={() => addBailleur(bailleurSearch)} disabled={!bailleurSearch.trim()} className="h-9 px-3 rounded-[var(--radius-sm)] bg-primary text-on-primary text-[12.5px] font-semibold disabled:opacity-40">
                     Ajouter
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCustomBailleur(false);
-                      setCustomBailleur("");
-                    }}
-                    className="px-3 py-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] text-[12px] font-semibold"
-                  >
+                  <button type="button" onClick={() => { setShowBailleurPicker(false); setBailleurSearch(""); }} className="h-9 px-2 text-[12.5px] font-medium text-fg-muted hover:text-fg">
                     Annuler
                   </button>
                 </div>
-              )}
-
-              {value.bailleurs.length > 0 && (
-                <div className="space-y-2">
-                  {value.bailleurs.map((b) => (
-                    <BailleurMultiCurrency
-                      key={b.id}
-                      bailleurId={b.id}
-                      bailleurNom={b.nom}
-                      contributions={b.contributions}
-                      pourcentageTotal={pctOf(b.id)}
-                      onUpdate={updateBailleurContributions}
-                      onRemove={askRemoveBailleur}
-                    />
-                  ))}
+                <div className="max-h-40 overflow-y-auto">
+                  {availableBailleurs.length > 0 ? availableBailleurs.map((nom) => (
+                    <button key={nom} type="button" onClick={() => addBailleur(nom)} className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-2 text-left text-[13px] text-fg hover:bg-hover">
+                      <Building2 size={14} className="text-fg-subtle" /> {nom}
+                    </button>
+                  )) : (
+                    <p className="px-2 py-2 text-[12px] text-fg-subtle">Aucun bailleur de la liste ne correspond : « Ajouter » enregistre le nom saisi.</p>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowBailleurPicker(true)}
+                className="flex w-full items-center justify-center gap-2 h-10 rounded-[var(--radius-md)] border border-dashed border-line-strong text-[12.5px] font-semibold text-fg-muted hover:border-primary hover:text-primary-fg transition-colors"
+              >
+                <Plus size={15} /> Ajouter un bailleur
+              </button>
+            )}
+          </>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {renderParties("partiesPubliques", "Parties publiques", "bg-primary", "Nom de l'entité publique…")}
-            {renderParties("partiesPrivees", "Parties privées", "bg-success", "Nom de l'entité privée…")}
-          </div>
-        )}
-      </div>
-
-      {/* ── Taux de change ── */}
-      {(foreignCurrencies.length > 0 || preview.missingRates.length > 0) && (
-        <button
-          type="button"
-          onClick={() => setShowRates(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-subtle text-primary-fg border border-primary/20 rounded-[var(--radius-md)] text-[12px] font-semibold hover:bg-primary-subtle transition-colors"
-        >
-          <DollarSign size={14} />
-          Taux de change ({foreignCurrencies.map((c) => `1 ${c} = ${value.tauxChange[c] ?? "?"} FCFA`).join(" · ")})
-        </button>
-      )}
-
-      {/* ── Budget total ── */}
-      {preview.total > 0 && (
-        <div className="p-4 rounded-[var(--radius-lg)] border-2 border-[var(--primary)]/30 bg-[var(--primary)]/5 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-[13px] font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
-              <CheckCircle2 size={14} className="text-success" /> Budget total du projet
-            </h4>
-            <select
-              value={conversionCurrency}
-              onChange={(e) => setConversionCurrency(e.target.value)}
-              className={`cursor-pointer ${inputSm}`}
-              title="Devise d'affichage du total"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>{c.code}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="text-[22px] font-bold text-[var(--primary-text)] tabular-nums">
-            {formatCurrency(Math.round((preview.total / conversionRate) * 100) / 100, conversionCurrency)}
-          </div>
-
-          <div className="space-y-1.5">
-            {breakdown.map((row) => (
-              <div key={row.label} className="flex items-center justify-between gap-3 px-2 py-1.5 bg-[var(--bg-surface)] rounded-[var(--radius-sm)]">
-                <span className="text-[12px] text-[var(--text-secondary)] truncate">{row.label}</span>
-                <span className="text-[12px] font-semibold text-[var(--text-primary)] text-right">
-                  {row.amounts}
-                  <span className="text-[11px] text-[var(--text-tertiary)] ml-2 tabular-nums">{row.pct.toFixed(2)} %</span>
-                </span>
+          <>
+            {([["partiesPubliques", "Partie publique"], ["partiesPrivees", "Partie privée"]] as const).map(([key, label]) => (
+              <div key={key} className="space-y-2.5">
+                {value[key].map((p, i) => (
+                  <div key={p.id}>
+                    {sourceCard({
+                      color: sourceColor(key === "partiesPubliques" ? i : value.partiesPubliques.length + i),
+                      titre: (
+                        <input
+                          type="text"
+                          value={p.nom}
+                          onChange={(e) => updatePartie(key, p.id, { nom: e.target.value })}
+                          placeholder={key === "partiesPubliques" ? "Nom de l'entité publique" : "Nom de l'entité privée"}
+                          className={`w-full ${inputClass} ${showErrors && !p.nom.trim() ? "border-danger" : ""}`}
+                        />
+                      ),
+                      sousTitre: label,
+                      pct: pctOf(p.id),
+                      onRemove: () => askRemove("Retirer la partie", `Retirer « ${p.nom || "sans nom"} » du financement ? Le budget sera recalculé.`, () => update({ [key]: value[key].filter((x) => x.id !== p.id) })),
+                      children: (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <MontantField
+                            label={`Montant — ${p.nom || label}`}
+                            montant={p.montant}
+                            devise={p.devise}
+                            onMontant={(montant) => updatePartie(key, p.id, { montant })}
+                            onDevise={(devise) => updatePartie(key, p.id, { devise })}
+                          />
+                          <span className="text-[12px] tabular-nums text-fg-muted">{equivalentFCFA(p.montant, p.devise)}</span>
+                        </div>
+                      ),
+                    })}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => addPartie(key)}
+                  className="flex w-full items-center justify-center gap-2 h-10 rounded-[var(--radius-md)] border border-dashed border-line-strong text-[12.5px] font-semibold text-fg-muted hover:border-primary hover:text-primary-fg transition-colors"
+                >
+                  <Plus size={15} /> Ajouter une {label.toLowerCase()}
+                </button>
               </div>
             ))}
-          </div>
+          </>
+        )}
+      </section>
 
-          <p className="text-[10px] text-[var(--text-tertiary)] italic">
-            Budget et pourcentages sont calculés automatiquement à partir des montants et des taux de change.
-          </p>
+      {/* ── Répartition ── */}
+      <section className="rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3 space-y-2">
+        <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
+          <span className="font-semibold text-fg">Répartition</span>
+          <span className="font-semibold tabular-nums text-fg">{formatMoney(preview.total, 0)} FCFA</span>
         </div>
-      )}
+        {preview.total > 0 ? (
+          <>
+            <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-inset">
+              {repartition.filter((s) => s.pct > 0).map((s) => <div key={s.id} className={s.color} style={{ width: `${s.pct}%` }} title={`${s.nom} : ${s.pct.toFixed(1)} %`} />)}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-fg-muted">
+              {repartition.map((s) => (
+                <span key={s.id} className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-sm ${s.color}`} /> {s.nom} · <span className="tabular-nums">{s.pct.toFixed(1).replace(".", ",")} %</span>
+                  <span className="text-fg-subtle tabular-nums">({formatCurrency(amountOf(s.id), BASE_CURRENCY)})</span>
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-[12px] text-fg-subtle">Aucun montant saisi : le budget du projet restera à définir jusqu&apos;à l&apos;ajout d&apos;une source.</p>
+        )}
+      </section>
 
-      {preview.total <= 0 && (
-        <p className="text-[11px] text-[var(--text-tertiary)] italic">
-          Aucun montant saisi : le budget du projet restera à définir jusqu&apos;à l&apos;ajout d&apos;une source.
-        </p>
-      )}
-
-      {/* ── Erreurs ── */}
       {showErrors && errors.length > 0 && (
-        <div className="p-3 rounded-[var(--radius-md)] bg-danger-subtle border border-danger/20 space-y-1">
-          {errors.map((error) => (
-            <p key={error} className="text-[12px] text-danger">{error}</p>
-          ))}
+        <div className="rounded-[var(--radius-md)] border border-danger/30 bg-danger-subtle px-3 py-2.5 space-y-1">
+          {errors.map((error) => <p key={error} className="text-[12.5px] text-danger">{error}</p>)}
         </div>
       )}
 
@@ -520,10 +430,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
         message={pendingRemoval?.message ?? ""}
         confirmLabel="Retirer"
         variant="danger"
-        onConfirm={() => {
-          pendingRemoval?.apply();
-          setPendingRemoval(null);
-        }}
+        onConfirm={() => { pendingRemoval?.apply(); setPendingRemoval(null); }}
         onCancel={() => setPendingRemoval(null)}
       />
     </div>

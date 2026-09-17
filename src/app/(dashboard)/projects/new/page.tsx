@@ -3,20 +3,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, MapPin, Pencil } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, Check, Coins, Info, Layers, MapPin, Pencil, type LucideIcon } from "lucide-react";
 import { addProject, generateProjectCode, type ComponentData } from "@/lib/projectStore";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { FinancementEditor } from "@/components/financing/FinancementEditor";
+import { FinancementEditor, sourceColor } from "@/components/financing/FinancementEditor";
 import { StructureTreeEditor } from "@/components/projects/StructureTreeEditor";
 import { computeFinancementPreview, emptyFinancement, financementToPayload, validateFinancement, type FinancementFormValue } from "@/lib/financement";
 import { CAMEROON_DATA, CITY_COORDS, REGIONS } from "@/lib/cameroonGeo";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { newUnitId } from "@/lib/structureUnits";
-import { ACTIVITY_TYPES } from "@/lib/activityTypes";
+import { ACTIVITY_TYPES, ACTIVITY_TYPE_ORDER, type ActivityType } from "@/lib/activityTypes";
 import { allocationStatus, formatShare, round2, shareOf, toFCFA, type AllocationStatus } from "@/lib/componentBudget";
 import { formatDate, formatMoney } from "@/lib/utils";
-
 
 // ══════════════════════════════════════
 // COMBOBOX COMPONENT
@@ -241,17 +240,14 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
 // ══════════════════════════════════════
 
 const STEPS = [
-    { id: 1, name: "Informations", intro: "Nom, description et période du projet." },
-    { id: 2, name: "Localisation", intro: "Où se déroule le projet. Facultatif : vous pourrez compléter plus tard depuis la fiche du projet." },
-    { id: 3, name: "Financement", intro: "Mode de financement et sources. Le budget total se calcule à partir des contributions." },
-    { id: 4, name: "Structure", intro: "Composantes, sous-composantes et activités. Le budget du projet se répartit sur les composantes." },
-    { id: 5, name: "Vérification", intro: "Relisez le projet avant de le créer. Tout reste modifiable ensuite depuis sa fiche." },
+    { id: 1, name: "Informations", detail: "Nom, code, dates", intro: "Le code est attribué automatiquement. Le projet n'est créé qu'à la dernière étape." },
+    { id: 2, name: "Localisation", detail: "Région, département, ville", intro: "Où se déroule le projet. Facultatif : vous pourrez le renseigner plus tard depuis la fiche du projet." },
+    { id: 3, name: "Financement", detail: "Mode et sources", intro: "Le budget du projet est la somme des sources. Les sources pourront être complétées plus tard depuis la fiche du projet." },
+    { id: 4, name: "Structure", detail: "Composantes et activités", intro: "Découpez le projet en composantes, sous-composantes et activités. Une unité sans enfant est une activité : c'est elle qui sera planifiée." },
+    { id: 5, name: "Vérification", detail: "Relire puis créer", intro: "Relisez le projet avant de le créer. Tout reste modifiable ensuite depuis sa fiche." },
 ] as const;
 
 const LAST_STEP = STEPS.length;
-
-// Couleurs des sources dans la barre de répartition (classes écrites en entier pour Tailwind).
-const SOURCE_COLORS = ["bg-primary", "bg-accent", "bg-type-services", "bg-type-etudes", "bg-type-pi", "bg-type-fourniture"];
 
 const fieldClass =
     "w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors";
@@ -259,7 +255,7 @@ const fieldClass =
 function Field({ label, required, error, hint, children }: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) {
     return (
         <div>
-            <label className="block text-[13px] font-medium text-fg mb-1.5">
+            <label className="block text-[12.5px] font-semibold text-fg-muted mb-1.5">
                 {label} {required && <span className="text-danger">*</span>}
             </label>
             {children}
@@ -274,7 +270,21 @@ const monthsBetween = (debut: string, fin: string) => {
     return Math.max(1, Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
 };
 
+/** « 3 ans 4 mois », « 8 mois ». */
+const dureeLabel = (mois: number) => {
+    const ans = Math.floor(mois / 12), reste = mois % 12;
+    if (ans === 0) return `${mois} mois`;
+    return `${ans} an${ans > 1 ? "s" : ""}${reste ? ` ${reste} mois` : ""}`;
+};
+
 const fcfa = (amount: number) => `${formatMoney(amount, 0)} FCFA`;
+
+/** Montant court pour l'aperçu : 41,52 Md FCFA. */
+const fcfaCourt = (amount: number) => {
+    if (amount >= 1e9) return `${formatMoney(amount / 1e9, 2)} Md FCFA`;
+    if (amount >= 1e6) return `${formatMoney(amount / 1e6, 2)} M FCFA`;
+    return fcfa(amount);
+};
 
 const yearOf = (iso: string) => Number(iso.slice(0, 4));
 
@@ -292,6 +302,20 @@ function infoErrors(titre: string, dateDebut: string, dateFin: string) {
 /** Nombre d'unités (tous niveaux) encore sans nom. */
 function unnamedUnits(components: ComponentData[]) {
     return components.reduce((n, c) => n + (c.name.trim() ? 0 : 1) + c.sousComposants.reduce((m, sc) => m + (sc.name.trim() ? 0 : 1) + sc.activities.filter((a) => !a.name.trim()).length, 0), 0);
+}
+
+/** Nombre d'activités par type, pour l'aperçu. */
+function typeCounts(components: ComponentData[]) {
+    const counts = new Map<ActivityType, number>();
+    const add = (t: ActivityType = "travaux") => counts.set(t, (counts.get(t) ?? 0) + 1);
+    for (const c of components) {
+        if (c.sousComposants.length === 0) { add(c.typeActivite); continue; }
+        for (const sc of c.sousComposants) {
+            if (sc.activities.length === 0) { add(sc.typeActivite); continue; }
+            for (const a of sc.activities) add(a.typeActivite);
+        }
+    }
+    return ACTIVITY_TYPE_ORDER.filter((t) => counts.has(t)).map((t) => [t, counts.get(t)!] as const);
 }
 
 const emptyComponent = (): ComponentData => ({ id: newUnitId("component"), name: "", devise: "FCFA", typeActivite: "travaux", sousComposants: [] });
@@ -349,7 +373,8 @@ export default function NewProjectPage() {
     const financementErrors = validateFinancement(financement);
     const unnamed = unnamedUnits(components);
     const duree = monthsBetween(dateDebut, dateFin);
-    const lieu = [ville, region].filter(Boolean).join(", ");
+    const lieu = [region, departement, ville].filter(Boolean).join(" › ");
+    const periode = dateDebut && dateFin && infoValid ? `${formatDate(dateDebut)} → ${formatDate(dateFin)}${duree ? ` · ${dureeLabel(duree)}` : ""}` : "";
 
     const totalSC = components.reduce((sum, c) => sum + c.sousComposants.length, 0);
     const totalActivities = components.reduce((sum, c) => sum + c.sousComposants.reduce((s, sc) => s + sc.activities.length, 0), 0);
@@ -365,12 +390,18 @@ export default function NewProjectPage() {
             ...financement.bailleurs.map((b) => ({ id: b.id, nom: b.nom || "Bailleur sans nom" })),
         ]
         : [...financement.partiesPubliques, ...financement.partiesPrivees].map((p) => ({ id: p.id, nom: p.nom || "Partie sans nom" }))
-    ).map((s, i) => ({ ...s, color: SOURCE_COLORS[i % SOURCE_COLORS.length], amount: financementPreview.sources[s.id]?.amount ?? 0, pct: financementPreview.sources[s.id]?.pct ?? 0 }));
+    ).map((s, i) => ({ ...s, color: sourceColor(i), amount: financementPreview.sources[s.id]?.amount ?? 0, pct: financementPreview.sources[s.id]?.pct ?? 0 }));
+
+    const financementLabel = sources.length === 0
+        ? ""
+        : financement.type === "MOP"
+            ? `MOP · ${[financement.budgetNational.enabled ? "budget national" : "", financement.bailleurs.length ? `${financement.bailleurs.length} bailleur${financement.bailleurs.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" + ")}`
+            : `PPP · ${financement.partiesPubliques.length} publique${financement.partiesPubliques.length > 1 ? "s" : ""} + ${financement.partiesPrivees.length} privée${financement.partiesPrivees.length > 1 ? "s" : ""}`;
 
     const summaries: Record<number, string> = {
-        1: titre.trim() ? [titre.trim(), dateDebut && dateFin && infoValid ? `${formatDate(dateDebut)} → ${formatDate(dateFin)}` : ""].filter(Boolean).join(" · ") : "",
+        1: [titre.trim(), periode].filter(Boolean).join(" · "),
         2: lieu || (maxStep > 2 ? "Non renseignée" : ""),
-        3: maxStep > 3 || financementPreview.total > 0 ? `${financement.type} · ${sources.length} source${sources.length > 1 ? "s" : ""}${financementPreview.total > 0 ? ` · ${fcfa(financementPreview.total)}` : ""}` : "",
+        3: financementPreview.total > 0 ? `${financementLabel} · ${fcfaCourt(financementPreview.total)}` : financementLabel,
         4: maxStep > 4 ? structureLabel : "",
         5: "",
     };
@@ -385,8 +416,7 @@ export default function NewProjectPage() {
     };
 
     const goTo = (step: number) => {
-        if (step > maxStep) return;
-        setCurrentStep(step);
+        if (step <= maxStep) setCurrentStep(step);
     };
 
     const handleNext = () => {
@@ -449,53 +479,52 @@ export default function NewProjectPage() {
     };
 
     const step = STEPS[currentStep - 1];
-    const nextLabel = currentStep < LAST_STEP ? `Continuer : ${STEPS[currentStep].name}` : creating ? "Création…" : "Créer le projet";
 
     // ── Rendu ──
     return (
         <div className="flex h-full min-h-0 bg-canvas">
-            {/* Étapes */}
-            <aside className="hidden lg:flex w-[260px] flex-shrink-0 flex-col border-r border-line bg-surface overflow-y-auto px-5 py-6">
-                <Link href="/projects" className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-fg-muted hover:text-fg transition-colors">
-                    <ArrowLeft size={14} /> Projets
-                </Link>
-                <h1 className="mt-3 text-[18px] font-semibold text-fg tracking-tight">Nouveau projet</h1>
-                <p className="mt-0.5 font-mono text-[12px] text-fg-subtle">{projectCode}</p>
+            {/* ── Étapes ── */}
+            <aside className="hidden lg:flex w-[250px] flex-shrink-0 flex-col gap-5 border-r border-line bg-surface px-5 py-6 overflow-y-auto">
+                <div>
+                    <h1 className="text-[17px] font-semibold tracking-tight text-fg">Nouveau projet</h1>
+                    <p className="mt-1 text-[12.5px] leading-snug text-fg-muted">Le projet n&apos;est créé qu&apos;à la dernière étape.</p>
+                </div>
 
-                <ol className="mt-7">
+                <ol>
                     {STEPS.map((s, i) => {
                         const active = s.id === currentStep;
+                        const faite = s.id < maxStep && !active;
                         const reachable = s.id <= maxStep;
-                        const done = !active && s.id < maxStep;
                         return (
-                            <li key={s.id} className="relative flex gap-3 pb-6 last:pb-0">
-                                {i < STEPS.length - 1 && (
-                                    <span className={`absolute left-[13px] top-8 bottom-1 w-px ${s.id < maxStep ? "bg-primary/40" : "bg-line"}`} aria-hidden />
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => goTo(s.id)}
-                                    disabled={!reachable}
-                                    aria-current={active ? "step" : undefined}
-                                    className={`relative z-10 w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center text-[12px] font-semibold transition-colors
-                                        ${active ? "bg-primary text-on-primary ring-4 ring-primary/15" : done ? "bg-primary-subtle text-primary-fg" : "bg-surface border border-line text-fg-subtle"}`}
-                                >
-                                    {done ? <Check size={14} strokeWidth={2.5} /> : s.id}
-                                </button>
-                                <div className="min-w-0 pt-1">
+                            <li key={s.id} className="flex gap-3">
+                                <div className="flex flex-col items-center">
                                     <button
                                         type="button"
                                         onClick={() => goTo(s.id)}
                                         disabled={!reachable}
-                                        className={`block text-left text-[13.5px] ${active ? "font-semibold text-fg" : reachable ? "font-medium text-fg hover:text-primary-fg" : "font-medium text-fg-subtle"}`}
+                                        aria-current={active ? "step" : undefined}
+                                        aria-label={`Étape ${s.id} : ${s.name}`}
+                                        className={`w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center text-[12px] font-bold transition-colors
+                                            ${faite ? "bg-success text-on-success" : active ? "bg-primary text-on-primary ring-4 ring-primary/15" : "bg-surface border-[1.5px] border-line-strong text-fg-subtle"}`}
+                                    >
+                                        {faite ? <Check size={14} strokeWidth={3} /> : s.id}
+                                    </button>
+                                    {i < STEPS.length - 1 && <div className={`w-0.5 flex-1 min-h-[26px] my-1 rounded ${s.id < maxStep ? "bg-success" : "bg-line"}`} />}
+                                </div>
+                                <div className="min-w-0 pt-1 pb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => goTo(s.id)}
+                                        disabled={!reachable}
+                                        className={`block max-w-full text-left text-[13.5px] ${active ? "font-bold text-primary-fg" : faite ? "font-semibold text-fg" : "font-semibold text-fg-muted"}`}
                                     >
                                         {s.name}
                                     </button>
-                                    {summaries[s.id] && !active && (
-                                        <p className="mt-0.5 text-[12px] leading-snug text-fg-muted line-clamp-2 break-words">{summaries[s.id]}</p>
-                                    )}
-                                    {done && (
-                                        <button type="button" onClick={() => goTo(s.id)} className="mt-1 text-[12px] font-medium text-primary-fg hover:underline">
+                                    <p className={`mt-0.5 text-[12px] leading-snug ${faite ? "text-fg-muted" : "text-fg-subtle"} ${summaries[s.id] ? "line-clamp-2" : "truncate"}`}>
+                                        {summaries[s.id] || s.detail}
+                                    </p>
+                                    {faite && (
+                                        <button type="button" onClick={() => goTo(s.id)} className="mt-1 text-[11.5px] font-semibold text-primary-fg hover:underline">
                                             Modifier
                                         </button>
                                     )}
@@ -504,16 +533,20 @@ export default function NewProjectPage() {
                         );
                     })}
                 </ol>
+
+                <div className="mt-auto flex items-start gap-2 text-[12px] leading-snug text-fg-subtle">
+                    <Info size={15} className="mt-px flex-shrink-0" />
+                    Chaque étape reste modifiable jusqu&apos;à la création.
+                </div>
             </aside>
 
-            {/* Formulaire */}
+            {/* ── Formulaire ── */}
             <div className="flex-1 min-w-0 flex flex-col">
+                {/* Étapes en barre, quand la colonne de gauche ne tient pas */}
                 <div className="lg:hidden flex-shrink-0 border-b border-line bg-surface px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                        <Link href="/projects" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-fg">
-                            <ArrowLeft size={15} /> Nouveau projet
-                        </Link>
-                        <span className="text-[12px] text-fg-muted">Étape {currentStep} sur {LAST_STEP}</span>
+                        <span className="text-[13px] font-semibold text-fg">Nouveau projet</span>
+                        <span className="text-[12px] text-fg-muted">Étape {currentStep} sur {LAST_STEP} · {step.name}</span>
                     </div>
                     <div className="mt-2.5 h-1 rounded-full bg-inset overflow-hidden">
                         <div className="h-full bg-primary transition-all" style={{ width: `${(currentStep / LAST_STEP) * 100}%` }} />
@@ -521,30 +554,30 @@ export default function NewProjectPage() {
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto">
-                    <div className={`mx-auto px-4 sm:px-8 py-7 ${currentStep === 4 ? "max-w-[1040px]" : "max-w-[760px]"}`}>
-                        <p className="text-[12px] font-semibold uppercase tracking-wider text-primary-fg">Étape {currentStep} sur {LAST_STEP}</p>
-                        <h2 className="mt-1 text-[22px] font-semibold text-fg tracking-tight">{step.name}</h2>
-                        <p className="mt-1 text-[13.5px] text-fg-muted">{step.intro}</p>
+                    <div className="max-w-[900px] px-5 sm:px-8 pt-6 pb-5">
+                        <p className="text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">Étape {currentStep} sur {LAST_STEP}</p>
+                        <h2 className="mt-1 text-[21px] font-bold tracking-tight text-fg">{step.name}</h2>
+                        <p className="mt-1.5 text-[13px] leading-relaxed text-fg-muted">{step.intro}</p>
 
-                        <div className="mt-6">
+                        <div className="mt-5">
                             {currentStep === 1 && (
-                                <div className="space-y-5">
+                                <div className="space-y-4">
                                     <Field label="Nom du projet" required error={showInfoErrors ? errors.titre : undefined}>
-                                        <input id="projet-titre" type="text" value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="ex. Aménagement hydroélectrique de Lom Pangar" className={fieldClass} autoFocus />
+                                        <input id="projet-titre" type="text" value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="ex. Ligne 225 kV Mbakaou – Tibati" className={fieldClass} autoFocus />
                                     </Field>
                                     <Field label="Description">
-                                        <textarea id="projet-description" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Objet du projet, ouvrages principaux, bénéficiaires…" className={`${fieldClass} h-auto py-2.5 resize-none`} />
+                                        <textarea id="projet-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Objet du projet, ouvrages principaux, bénéficiaires…" className={`${fieldClass} h-auto py-2.5 resize-none`} />
                                     </Field>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <Field label="Date de début" required error={showInfoErrors ? errors.dateDebut : undefined}>
                                             <input id="projet-debut" type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} className={fieldClass} />
                                         </Field>
-                                        <Field label="Date de fin prévue" required error={showInfoErrors ? errors.dateFin : undefined} hint={duree && !errors.dateFin ? `Durée : ${duree} mois` : undefined}>
+                                        <Field label="Date de fin prévue" required error={showInfoErrors ? errors.dateFin : undefined} hint={duree && !errors.dateFin ? `Durée : ${dureeLabel(duree)}` : undefined}>
                                             <input id="projet-fin" type="date" value={dateFin} min={dateDebut || undefined} onChange={(e) => setDateFin(e.target.value)} className={fieldClass} />
                                         </Field>
                                     </div>
-                                    <div className="flex items-center gap-2 rounded-[var(--radius-md)] bg-inset border border-line px-3 py-2.5 text-[12.5px] text-fg-muted">
-                                        Code attribué automatiquement : <span className="font-mono font-semibold text-fg">{projectCode}</span>
+                                    <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-[12.5px] text-fg-muted">
+                                        <span className="font-mono font-semibold text-fg">{projectCode}</span> code attribué automatiquement, il identifie le projet dans toute l&apos;application.
                                     </div>
                                 </div>
                             )}
@@ -571,14 +604,14 @@ export default function NewProjectPage() {
                             )}
 
                             {currentStep === 5 && (
-                                <div className="space-y-4">
-                                    {(allocation !== "balanced" || !lieu || sources.length === 0) && (
+                                <div className="space-y-3">
+                                    {(allocation === "under" || allocation === "over" || !lieu || sources.length === 0) && (
                                         <div className="rounded-[var(--radius-md)] border border-warning/30 bg-warning-subtle px-4 py-3">
                                             <p className="flex items-center gap-2 text-[13px] font-semibold text-warning"><AlertTriangle size={15} /> À compléter plus tard</p>
                                             <ul className="mt-1.5 ml-6 list-disc space-y-0.5 text-[12.5px] text-fg-muted">
                                                 {!lieu && <li>Localisation non renseignée.</li>}
                                                 {sources.length === 0 && <li>Aucune source de financement : le budget du projet est à 0.</li>}
-                                                {sources.length > 0 && allocation === "under" && <li>Il reste {formatShare(100 - partAllouee)} du budget à répartir sur les composantes.</li>}
+                                                {allocation === "under" && <li>Il reste {formatShare(100 - partAllouee)} du budget à répartir sur les composantes.</li>}
                                                 {allocation === "over" && <li>Les composantes dépassent le budget financé de {formatShare(partAllouee - 100)}.</li>}
                                             </ul>
                                             <p className="mt-1.5 text-[12px] text-fg-subtle">Rien de bloquant : le projet peut être créé.</p>
@@ -588,20 +621,20 @@ export default function NewProjectPage() {
                                     <ReviewSection title="Informations" onEdit={() => goTo(1)}>
                                         <ReviewRow label="Nom" value={titre} />
                                         <ReviewRow label="Code" value={<span className="font-mono">{projectCode}</span>} />
-                                        <ReviewRow label="Période" value={`${formatDate(dateDebut)} → ${formatDate(dateFin)}${duree ? ` (${duree} mois)` : ""}`} />
+                                        <ReviewRow label="Période" value={periode || "—"} />
                                         {description.trim() && <ReviewRow label="Description" value={description} />}
                                     </ReviewSection>
 
                                     <ReviewSection title="Localisation" onEdit={() => goTo(2)}>
-                                        <ReviewRow label="Lieu" value={[localite, ville, departement, region].filter(Boolean).join(", ") || "—"} />
-                                        {lat && lng && <ReviewRow label="GPS" value={<span className="font-mono">{lat}, {lng}</span>} />}
+                                        <ReviewRow label="Lieu" value={[lieu, localite].filter(Boolean).join(" · ") || "—"} />
+                                        {lat && lng && <ReviewRow label="Coordonnées" value={<span className="font-mono">{lat}, {lng}</span>} />}
                                     </ReviewSection>
 
                                     <ReviewSection title="Financement" onEdit={() => goTo(3)}>
                                         <ReviewRow label="Mode" value={financement.type === "MOP" ? "Maîtrise d'ouvrage publique (MOP)" : "Partenariat public-privé (PPP)"} />
                                         <ReviewRow label="Budget total" value={<span className="font-semibold tabular-nums">{fcfa(financementPreview.total)}</span>} />
                                         {sources.map((s) => (
-                                            <ReviewRow key={s.id} label={<span className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${s.color}`} />{s.nom}</span>} value={<span className="tabular-nums">{fcfa(s.amount)} · {formatShare(s.pct)}</span>} />
+                                            <ReviewRow key={s.id} label={<span className="flex items-center gap-2"><span className={`w-2 h-2 rounded-sm ${s.color}`} />{s.nom}</span>} value={<span className="tabular-nums">{fcfa(s.amount)} · {formatShare(s.pct)}</span>} />
                                         ))}
                                     </ReviewSection>
 
@@ -620,7 +653,7 @@ export default function NewProjectPage() {
                                                             {sc.activities.map((a, ai) => (
                                                                 <div key={a.id} className="ml-6 flex items-center gap-2 text-fg-muted">
                                                                     <span className="font-mono text-fg-subtle">{ci + 1}.{si + 1}.{ai + 1}</span>
-                                                                    <span className={`w-2 h-2 rounded-full ${ACTIVITY_TYPES[a.typeActivite ?? "travaux"].pastille}`} />
+                                                                    <span className={`w-2 h-2 rounded-sm ${ACTIVITY_TYPES[a.typeActivite ?? "travaux"].pastille}`} />
                                                                     {a.name}
                                                                 </div>
                                                             ))}
@@ -636,16 +669,16 @@ export default function NewProjectPage() {
                     </div>
                 </div>
 
-                <footer className="flex-shrink-0 h-16 border-t border-line bg-surface px-4 sm:px-8 flex items-center gap-2">
-                    <Link href="/projects" className="px-3 py-2 text-[13px] font-medium text-fg-muted hover:text-fg transition-colors">
-                        Annuler
-                    </Link>
-                    <div className="flex-1" />
+                <footer className="flex-shrink-0 h-16 border-t border-line bg-surface px-5 sm:px-8 flex items-center gap-2.5">
                     {currentStep > 1 && (
-                        <button type="button" onClick={() => setCurrentStep(currentStep - 1)} className="h-9 px-4 inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-line text-[13px] font-medium text-fg hover:bg-hover transition-colors">
+                        <button type="button" onClick={() => setCurrentStep(currentStep - 1)} className="h-9 px-4 inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface text-[13px] font-semibold text-fg hover:bg-hover transition-colors">
                             <ArrowLeft size={14} /> Précédent
                         </button>
                     )}
+                    <div className="flex-1" />
+                    <Link href="/projects" className="h-9 px-3 inline-flex items-center rounded-[var(--radius-md)] text-[13px] font-medium text-fg-muted hover:text-fg hover:bg-hover transition-colors">
+                        Annuler
+                    </Link>
                     <button
                         type="button"
                         onClick={handleNext}
@@ -653,60 +686,53 @@ export default function NewProjectPage() {
                         className="h-9 px-4 inline-flex items-center gap-2 rounded-[var(--radius-md)] bg-primary text-on-primary text-[13px] font-semibold hover:bg-primary-hover disabled:opacity-60 transition-colors"
                     >
                         {currentStep === LAST_STEP && <Check size={15} strokeWidth={2.5} />}
-                        {nextLabel}
+                        {currentStep < LAST_STEP ? `Continuer · ${STEPS[currentStep].name}` : creating ? "Création…" : "Créer le projet"}
                         {currentStep < LAST_STEP && <ArrowRight size={14} />}
                     </button>
                 </footer>
             </div>
 
-            {/* Aperçu */}
-            <aside className="hidden xl:block w-[300px] flex-shrink-0 border-l border-line bg-surface overflow-y-auto px-5 py-6">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">Aperçu du projet</p>
-                <h3 className={`mt-2 text-[16px] font-semibold leading-snug break-words ${titre.trim() ? "text-fg" : "text-fg-subtle"}`}>{titre.trim() || "Sans nom"}</h3>
-                <p className="font-mono text-[12px] text-fg-subtle">{projectCode}</p>
+            {/* ── Aperçu ── */}
+            <aside className="hidden xl:flex w-[300px] flex-shrink-0 flex-col gap-3.5 border-l border-line bg-surface px-5 py-6 overflow-y-auto">
+                <span className="text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">Aperçu du projet</span>
 
-                <dl className="mt-4 space-y-2.5 text-[12.5px]">
-                    <div className="flex items-start gap-2"><CalendarDays size={14} className="mt-0.5 text-fg-subtle flex-shrink-0" /><dd className="text-fg-muted">{dateDebut && dateFin && infoValid ? `${formatDate(dateDebut)} → ${formatDate(dateFin)}${duree ? ` · ${duree} mois` : ""}` : "Période à définir"}</dd></div>
-                    <div className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 text-fg-subtle flex-shrink-0" /><dd className="text-fg-muted">{lieu || "Lieu à définir"}</dd></div>
-                </dl>
-
-                <div className="mt-6 pt-5 border-t border-line">
-                    <div className="flex items-center justify-between">
-                        <p className="text-[12px] font-medium text-fg-muted">Budget total</p>
-                        <span className="rounded-full bg-inset border border-line px-2 py-0.5 text-[11px] font-semibold text-fg-muted">{financement.type}</span>
+                <div className="space-y-2">
+                    <h3 className={`text-[16px] font-bold leading-snug break-words ${titre.trim() ? "text-fg" : "text-fg-subtle italic font-semibold"}`}>{titre.trim() || "Nom à saisir"}</h3>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono text-[11px] px-1.5 py-px rounded-[var(--radius-sm)] border border-line bg-inset text-fg-muted">{projectCode}</span>
+                        <span className="text-[11.5px] text-fg-subtle">code attribué automatiquement</span>
                     </div>
-                    <p className="mt-1 text-[20px] font-semibold tabular-nums text-fg">{formatMoney(financementPreview.total, 0)} <span className="text-[13px] font-medium text-fg-muted">FCFA</span></p>
-                    {sources.length > 0 && financementPreview.total > 0 ? (
-                        <>
-                            <div className="mt-3 flex h-2 rounded-full overflow-hidden bg-inset gap-px">
-                                {sources.filter((s) => s.pct > 0).map((s) => <div key={s.id} className={s.color} style={{ width: `${s.pct}%` }} title={`${s.nom} : ${formatShare(s.pct)}`} />)}
-                            </div>
-                            <ul className="mt-3 space-y-1.5">
-                                {sources.map((s) => (
-                                    <li key={s.id} className="flex items-center gap-2 text-[12px]">
-                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.color}`} />
-                                        <span className="flex-1 min-w-0 truncate text-fg-muted">{s.nom}</span>
-                                        <span className="tabular-nums text-fg">{formatShare(s.pct)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </>
-                    ) : (
-                        <p className="mt-1 text-[12px] text-fg-subtle">Se calcule à partir des sources de financement.</p>
-                    )}
                 </div>
 
-                <div className="mt-6 pt-5 border-t border-line">
-                    <p className="text-[12px] font-medium text-fg-muted">Structure</p>
-                    <p className="mt-1 text-[12.5px] text-fg">{structureLabel}</p>
-                    {financementPreview.total > 0 && (
-                        <>
-                            <div className="mt-3 h-1.5 rounded-full bg-inset overflow-hidden">
-                                <div className={`h-full ${allocation === "over" ? "bg-danger" : allocation === "balanced" ? "bg-success" : "bg-primary"}`} style={{ width: `${Math.min(100, partAllouee)}%` }} />
+                <div className="rounded-[var(--radius-md)] bg-primary-subtle px-3.5 py-3">
+                    <p className="text-[11.5px] font-semibold text-primary-fg">Budget total</p>
+                    <p className="mt-0.5 text-[23px] font-bold tracking-tight tabular-nums text-primary-fg">{financementPreview.total > 0 ? fcfaCourt(financementPreview.total) : "—"}</p>
+                    <p className="mt-0.5 text-[11.5px] text-primary-fg/80">Calculé depuis les sources de financement</p>
+                </div>
+
+                <div>
+                    <ApercuRow icon={CalendarDays} label="Période" value={periode} vide="À définir" />
+                    <ApercuRow icon={MapPin} label="Localisation" value={lieu} vide="Non renseignée" />
+                    <ApercuRow icon={Coins} label="Financement" value={financementLabel} vide="Aucune source">
+                        {sources.length > 0 && financementPreview.total > 0 && (
+                            <div className="mt-2 flex h-2 gap-0.5 overflow-hidden rounded-full bg-inset">
+                                {sources.filter((s) => s.pct > 0).map((s) => <div key={s.id} className={s.color} style={{ width: `${s.pct}%` }} title={`${s.nom} : ${formatShare(s.pct)}`} />)}
                             </div>
-                            <p className="mt-1.5 text-[12px] text-fg-muted">{formatShare(partAllouee)} du budget réparti</p>
-                        </>
-                    )}
+                        )}
+                    </ApercuRow>
+                    <ApercuRow icon={Layers} label="Structure" value={totalActivities > 0 || totalSC > 0 || components.length > 1 ? structureLabel : ""} vide="À définir à l'étape Structure">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                            {typeCounts(components).map(([type, n]) => (
+                                <span key={type} className="inline-flex items-center gap-1.5 h-[22px] px-2 rounded-[var(--radius-sm)] border border-line text-[11.5px] text-fg-muted">
+                                    <span className={`w-[7px] h-[7px] rounded-sm ${ACTIVITY_TYPES[type].pastille}`} />
+                                    {ACTIVITY_TYPES[type].court} · {n}
+                                </span>
+                            ))}
+                        </div>
+                        {financementPreview.total > 0 && budgetAlloue > 0 && (
+                            <p className="mt-2 text-[11.5px] text-fg-subtle">{formatShare(partAllouee)} du budget réparti</p>
+                        )}
+                    </ApercuRow>
                 </div>
             </aside>
 
@@ -724,10 +750,24 @@ export default function NewProjectPage() {
     );
 }
 
+function ApercuRow({ icon: Icon, label, value, vide, children }: { icon: LucideIcon; label: string; value: string; vide: string; children?: React.ReactNode }) {
+    return (
+        <div className="flex gap-2.5 py-2.5 border-t border-line">
+            <Icon size={16} className="mt-0.5 flex-shrink-0 text-fg-subtle" />
+            <div className="min-w-0 flex-1">
+                <p className="text-[11.5px] text-fg-subtle">{label}</p>
+                <p className={`text-[13px] leading-snug ${value ? "font-semibold text-fg" : "italic text-fg-subtle"}`}>{value || vide}</p>
+                {value && children}
+            </div>
+        </div>
+    );
+}
+
 function AllocationGauge({ allocated, total, status, share }: { allocated: number; total: number; status: AllocationStatus; share: number }) {
     if (status === "undefined") {
         return (
-            <div className="rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3 text-[12.5px] text-fg-muted">
+            <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3 text-[12.5px] text-fg-muted">
+                <Coins size={18} className="flex-shrink-0 text-fg-subtle" />
                 Aucun financement saisi : les budgets des composantes seront enregistrés sans pondération.
             </div>
         );
@@ -735,20 +775,22 @@ function AllocationGauge({ allocated, total, status, share }: { allocated: numbe
     const tone = status === "balanced" ? "text-success" : status === "over" ? "text-danger" : "text-warning";
     const bar = status === "balanced" ? "bg-success" : status === "over" ? "bg-danger" : "bg-primary";
     return (
-        <div className="rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
-                <span className="text-fg">
-                    <span className="font-semibold tabular-nums">{fcfa(allocated)}</span>
-                    <span className="text-fg-muted"> répartis sur {fcfa(total)}</span>
-                </span>
-                <span className={`flex items-center gap-1.5 font-semibold ${tone}`}>
-                    {status === "balanced" && <><CheckCircle2 size={14} /> Budget entièrement réparti</>}
-                    {status === "under" && <>Reste {fcfa(total - allocated)} ({formatShare(100 - share)})</>}
-                    {status === "over" && <><AlertTriangle size={14} /> Dépassement de {fcfa(allocated - total)}</>}
-                </span>
-            </div>
-            <div className="mt-2 h-2 rounded-full bg-inset overflow-hidden">
-                <div className={`h-full ${bar} transition-all`} style={{ width: `${Math.min(100, share)}%` }} />
+        <div className="flex items-center gap-3.5 rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3">
+            <Coins size={18} className={`flex-shrink-0 ${status === "balanced" ? "text-success" : "text-fg-subtle"}`} />
+            <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-[12.5px]">
+                    <span className="text-fg-muted">
+                        <span className="font-bold tabular-nums text-fg">{fcfa(allocated)}</span> répartis sur {fcfa(total)}
+                    </span>
+                    <span className={`font-semibold ${tone}`}>
+                        {status === "balanced" && "100 % · budget entièrement réparti"}
+                        {status === "under" && `Reste ${fcfa(total - allocated)} (${formatShare(100 - share)})`}
+                        {status === "over" && `Dépassement de ${fcfa(allocated - total)}`}
+                    </span>
+                </div>
+                <div className="h-2 rounded-full bg-inset overflow-hidden">
+                    <div className={`h-full ${bar} transition-all`} style={{ width: `${Math.min(100, share)}%` }} />
+                </div>
             </div>
         </div>
     );
@@ -759,7 +801,7 @@ function ReviewSection({ title, onEdit, children }: { title: string; onEdit: () 
         <section className="rounded-[var(--radius-lg)] border border-line bg-surface">
             <div className="flex items-center justify-between px-4 h-11 border-b border-line">
                 <h3 className="text-[13.5px] font-semibold text-fg">{title}</h3>
-                <button type="button" onClick={onEdit} className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary-fg hover:underline">
+                <button type="button" onClick={onEdit} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-primary-fg hover:underline">
                     <Pencil size={13} /> Modifier
                 </button>
             </div>
@@ -770,7 +812,7 @@ function ReviewSection({ title, onEdit, children }: { title: string; onEdit: () 
 
 function ReviewRow({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
     return (
-        <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-3 text-[13px]">
+        <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-3 text-[13px]">
             <span className="text-fg-muted">{label}</span>
             <span className="text-fg break-words">{value}</span>
         </div>
