@@ -31,7 +31,7 @@ function ComboBox({ label, placeholder, options, value, onChange, disabled = fal
 
     return (
         <div className="relative">
-            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">
+            <label className="block text-[12.5px] font-semibold text-fg-muted mb-1.5">
                 {label} {required && <span className="text-danger">*</span>}
             </label>
             <div className={`relative ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
@@ -41,20 +41,19 @@ function ComboBox({ label, placeholder, options, value, onChange, disabled = fal
                     onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(""); }}
                     onFocus={() => setOpen(true)}
                     placeholder={placeholder}
-                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all pr-8"
+                    className="w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors pr-8"
                 />
                 <svg className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
             </div>
 
             {open && filtered.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] shadow-[var(--shadow-lg)] max-h-48 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 bg-surface border border-line rounded-[var(--radius-md)] shadow-[var(--shadow-lg)] max-h-48 overflow-y-auto">
                     {filtered.map((opt) => (
                         <button
                             key={opt}
                             type="button"
                             onClick={() => { onChange(opt); setQuery(""); setOpen(false); }}
-                            className={`w-full text-left px-4 py-2.5 text-[13px] hover:bg-[var(--bg-surface-hover)] transition-colors ${opt === value ? "text-[var(--primary-text)] font-semibold bg-[var(--primary-subtle)]" : "text-[var(--text-primary)]"
-                                }`}
+                            className={`w-full text-left px-3 py-2.5 text-[13px] hover:bg-hover transition-colors ${opt === value ? "bg-primary-subtle font-semibold text-primary-fg" : "text-fg"}`}
                         >
                             {opt}
                         </button>
@@ -100,10 +99,10 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
     return (
         <div className="space-y-5">
             {/* Info */}
-            <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-fg flex-shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                <p className="text-[11px] text-primary-fg leading-relaxed">
-                    <strong>Localisation optionnelle :</strong> Vous pouvez localiser votre projet en sélectionnant la région, le département et la ville. Les coordonnées GPS seront <strong>détectées automatiquement</strong>. Vous pouvez aussi laisser vide et compléter plus tard.
+            <div className="flex gap-2.5 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-3">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-px flex-shrink-0 text-fg-subtle"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                <p className="text-[12.5px] leading-relaxed text-fg-muted">
+                    Choisissez la région, le département puis la ville : les coordonnées GPS sont alors renseignées toutes seules. Vous pouvez aussi passer cette étape.
                 </p>
             </div>
 
@@ -136,27 +135,27 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
 
             {/* Localité précise */}
             <div>
-                <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Localité précise</label>
+                <label className="block text-[12.5px] font-semibold text-fg-muted mb-1.5">Localité précise</label>
                 <input
                     type="text"
                     value={localite}
                     onChange={(e) => setLocalite(e.target.value)}
-                    placeholder="ex: Rive droite du fleuve Sanaga, PK 42..."
-                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
+                    placeholder="ex. rive droite du fleuve Sanaga, PK 42"
+                    className="w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors"
                 />
             </div>
 
             {/* GPS Coordinates */}
             <div>
                 <div className="flex items-center gap-2 mb-2">
-                    <label className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Coordonnées GPS</label>
+                    <label className="text-[12.5px] font-semibold text-fg-muted">Coordonnées GPS</label>
                     {autoDetected ? (
-                        <span className="text-[10px] text-success bg-success-subtle px-2 py-0.5 rounded-full font-bold border border-success/20 flex items-center gap-1">
+                        <span className="flex items-center gap-1 rounded-full border border-success/20 bg-success-subtle px-2 py-0.5 text-[11px] font-semibold text-success">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
-                            Auto-détecté
+                            Renseignées automatiquement
                         </span>
                     ) : (
-                        <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--bg-inset)] px-2 py-0.5 rounded-full font-medium border border-[var(--border-default)]">Sélectionnez une ville</span>
+                        <span className="rounded-full border border-line bg-inset px-2 py-0.5 text-[11px] font-medium text-fg-subtle">Choisissez une ville</span>
                     )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -166,10 +165,7 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             value={lat}
                             onChange={(e) => { setLat(e.target.value); setAutoDetected(false); }}
                             placeholder="Latitude (ex: 5.5321)"
-                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
-                                ? "bg-success-subtle border-success/30 text-[var(--text-primary)]"
-                                : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
-                                }`}
+                            className={`w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors font-mono ${autoDetected ? "border-success/40 bg-success-subtle" : ""}`}
                         />
                     </div>
                     <div>
@@ -178,17 +174,13 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             value={lng}
                             onChange={(e) => { setLng(e.target.value); setAutoDetected(false); }}
                             placeholder="Longitude (ex: 13.6163)"
-                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
-                                ? "bg-success-subtle border-success/30 text-[var(--text-primary)]"
-                                : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
-                                }`}
+                            className={`w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors font-mono ${autoDetected ? "border-success/40 bg-success-subtle" : ""}`}
                         />
                     </div>
                 </div>
                 {autoDetected && (
-                    <p className="text-[10px] text-success mt-1.5 flex items-center gap-1">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                        Position approximative de {ville}. Vous pouvez ajuster manuellement si nécessaire.
+                    <p className="mt-1.5 text-[12px] text-fg-muted">
+                        Position approximative de {ville} : ajustez-la si besoin.
                     </p>
                 )}
             </div>
@@ -592,7 +584,13 @@ export default function NewProjectPage() {
 
                             {currentStep === 4 && (
                                 <div className="space-y-4">
-                                    <AllocationGauge allocated={budgetAlloue} total={financementPreview.total} status={allocation} share={partAllouee} />
+                                    <AllocationGauge
+                                        allocated={budgetAlloue}
+                                        total={financementPreview.total}
+                                        status={allocation}
+                                        share={partAllouee}
+                                        parts={components.filter((c) => c.budget).map((c) => shareOf(toFCFA(c.budget, c.devise, financement.tauxChange), financementPreview.total))}
+                                    />
                                     <StructureTreeEditor
                                         value={components}
                                         onChange={setComponents}
@@ -720,7 +718,7 @@ export default function NewProjectPage() {
                             </div>
                         )}
                     </ApercuRow>
-                    <ApercuRow icon={Layers} label="Structure" value={totalActivities > 0 || totalSC > 0 || components.length > 1 ? structureLabel : ""} vide="À définir à l'étape Structure">
+                    <ApercuRow icon={Layers} label="Structure" value={totalActivities > 0 || totalSC > 0 || components.length > 1 ? structureLabel : ""} vide="À définir à l'étape suivante">
                         <div className="mt-2 flex flex-wrap gap-1.5">
                             {typeCounts(components).map(([type, n]) => (
                                 <span key={type} className="inline-flex items-center gap-1.5 h-[22px] px-2 rounded-[var(--radius-sm)] border border-line text-[11.5px] text-fg-muted">
@@ -763,7 +761,7 @@ function ApercuRow({ icon: Icon, label, value, vide, children }: { icon: LucideI
     );
 }
 
-function AllocationGauge({ allocated, total, status, share }: { allocated: number; total: number; status: AllocationStatus; share: number }) {
+function AllocationGauge({ allocated, total, status, share, parts }: { allocated: number; total: number; status: AllocationStatus; share: number; parts: number[] }) {
     if (status === "undefined") {
         return (
             <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3 text-[12.5px] text-fg-muted">
@@ -783,13 +781,16 @@ function AllocationGauge({ allocated, total, status, share }: { allocated: numbe
                         <span className="font-bold tabular-nums text-fg">{fcfa(allocated)}</span> répartis sur {fcfa(total)}
                     </span>
                     <span className={`font-semibold ${tone}`}>
-                        {status === "balanced" && "100 % · budget entièrement réparti"}
+                        {status === "balanced" && "100 % · pondérations complètes"}
                         {status === "under" && `Reste ${fcfa(total - allocated)} (${formatShare(100 - share)})`}
                         {status === "over" && `Dépassement de ${fcfa(allocated - total)}`}
                     </span>
                 </div>
-                <div className="h-2 rounded-full bg-inset overflow-hidden">
-                    <div className={`h-full ${bar} transition-all`} style={{ width: `${Math.min(100, share)}%` }} />
+                {/* Une part par composante, dans l'ordre du tableau. */}
+                <div className="flex h-2 gap-0.5 rounded-full bg-inset overflow-hidden">
+                    {parts.map((part, i) => (
+                        <div key={i} className={`${bar} transition-all`} style={{ width: `${Math.min(100, part)}%`, opacity: 1 - Math.min(0.55, i * 0.28) }} />
+                    ))}
                 </div>
             </div>
         </div>

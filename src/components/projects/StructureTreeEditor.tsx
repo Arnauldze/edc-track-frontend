@@ -12,10 +12,9 @@
 // ══════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, IndentDecrease, IndentIncrease, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, IndentDecrease, IndentIncrease, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { Component } from "@/services/api/projectService";
 import { ACTIVITY_TYPES, ACTIVITY_TYPE_ORDER, type ActivityType } from "@/lib/activityTypes";
-import { CURRENCIES } from "@/lib/helpers/currencyHelpers";
 import { formatMoney } from "@/lib/utils";
 import { formatShare, parseAmount, shareOf, toFCFA, type ExchangeRates } from "@/lib/componentBudget";
 import {
@@ -70,34 +69,68 @@ function flatten(components: Component[], collapsed: Set<string>): Row[] {
 }
 
 const PLACEHOLDER = { 1: "Nom de la composante", 2: "Nom de la sous-composante", 3: "Nom de l'activité" } as const;
-const COLS = "grid-cols-[44px_minmax(0,1fr)_168px_190px_62px_30px]";
+const COLS = "grid-cols-[44px_minmax(0,1fr)_168px_124px_62px_30px]";
 
 const outilClass =
   "h-[30px] px-2.5 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[12.5px] font-medium text-fg hover:bg-hover disabled:opacity-30 disabled:pointer-events-none transition-colors";
 
-function BudgetCell({ budget, devise = "FCFA", onChange }: { budget?: number; devise?: string; onChange: (v: { budget?: number; devise: string }) => void }) {
+/** Budget d'une composante, en FCFA : les devises des sources sont traitées à l'étape Financement. */
+function BudgetCell({ budget, onChange }: { budget?: number; onChange: (budget?: number) => void }) {
   const [draft, setDraft] = useState<string | null>(null);
   return (
-    <div className="flex items-center h-[30px] bg-surface border border-line rounded-[var(--radius-sm)] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-colors">
-      <input
-        type="text"
-        inputMode="decimal"
-        aria-label="Budget de la composante"
-        placeholder="Montant"
-        value={draft ?? (budget ? formatMoney(budget, 0) : "")}
-        onFocus={() => setDraft(budget ? String(budget).replace(".", ",") : "")}
-        onChange={(e) => { setDraft(e.target.value); onChange({ budget: parseAmount(e.target.value), devise }); }}
-        onBlur={() => setDraft(null)}
-        className="min-w-0 flex-1 h-full bg-transparent px-2 text-[12.5px] text-right tabular-nums text-fg placeholder:text-fg-subtle focus:outline-none"
-      />
-      <select
-        aria-label="Devise du budget"
-        value={devise}
-        onChange={(e) => onChange({ budget, devise: e.target.value })}
-        className="h-full bg-transparent border-l border-line pl-1.5 pr-0.5 text-[11.5px] font-semibold text-fg-muted focus:outline-none cursor-pointer"
+    <input
+      type="text"
+      inputMode="decimal"
+      aria-label="Budget de la composante, en FCFA"
+      placeholder="Budget"
+      value={draft ?? (budget ? formatMoney(budget, 0) : "")}
+      onFocus={() => setDraft(budget ? String(budget).replace(".", ",") : "")}
+      onChange={(e) => { setDraft(e.target.value); onChange(parseAmount(e.target.value)); }}
+      onBlur={() => setDraft(null)}
+      className="w-full h-[30px] bg-transparent border border-transparent rounded-[var(--radius-sm)] px-2 font-mono text-[12.5px] font-semibold text-right text-fg placeholder:font-sans placeholder:font-normal placeholder:text-fg-subtle hover:border-line focus:bg-surface focus:border-primary focus:ring-2 focus:ring-primary/15 focus:outline-none transition-colors"
+    />
+  );
+}
+
+interface MenuItem {
+  label: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+  danger?: boolean;
+  run: () => void;
+}
+
+/** Menu « … » d'une ligne : les mêmes commandes que la barre d'outils, sur cette ligne. */
+function RowMenu({ ouvert, onOuvrir, items }: { ouvert: boolean; onOuvrir: (v: boolean) => void; items: MenuItem[] }) {
+  return (
+    <div className="relative flex justify-end">
+      <button
+        type="button"
+        aria-label="Actions sur cette ligne"
+        aria-expanded={ouvert}
+        onClick={() => onOuvrir(!ouvert)}
+        className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-fg-subtle hover:bg-hover hover:text-fg transition-colors"
       >
-        {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
-      </select>
+        <MoreHorizontal size={16} />
+      </button>
+      {ouvert && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => onOuvrir(false)} />
+          <div className="absolute right-0 top-8 z-50 w-60 rounded-[var(--radius-md)] border border-line bg-surface py-1 shadow-[var(--shadow-lg)]">
+            {items.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                disabled={item.disabled}
+                onClick={() => { item.run(); onOuvrir(false); }}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12.5px] hover:bg-hover disabled:opacity-30 disabled:pointer-events-none transition-colors ${item.danger ? "text-danger" : "text-fg"}`}
+              >
+                {item.icon} {item.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -115,6 +148,7 @@ interface StructureTreeEditorProps {
 export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onConfirmRemove }: StructureTreeEditorProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
   const rows = flatten(value, collapsed);
   const numbers = wbsNumbers(value);
   const inputs = useRef(new Map<string, HTMLInputElement>());
@@ -191,22 +225,15 @@ export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onC
           <button type="button" disabled={!cible || !canIndent(value, cible)} onClick={() => cible && apply(cible, indentUnit(value, cible, rates))} className={outilClass} title="Descendre d'un niveau (Tab)">
             <IndentIncrease size={15} /> Descendre
           </button>
-          <span className="w-px h-5 bg-line mx-1" aria-hidden />
-          <button type="button" aria-label="Déplacer vers le haut" disabled={!cible || !canMoveUp(value, cible)} onClick={() => cible && apply(cible, moveUnitUp(value, cible))} className={outilClass} title="Déplacer vers le haut">
-            <ChevronUp size={15} />
-          </button>
-          <button type="button" aria-label="Déplacer vers le bas" disabled={!cible || !canMoveDown(value, cible)} onClick={() => cible && apply(cible, moveUnitDown(value, cible))} className={outilClass} title="Déplacer vers le bas">
-            <ChevronDown size={15} />
-          </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <div className="min-w-[720px]">
+        <div>
+          <div>
             <div className={`grid ${COLS} gap-2.5 items-center h-8 px-3 border-b border-line bg-inset text-[11px] font-semibold uppercase tracking-wider text-fg-subtle`}>
               <span>N°</span>
               <span>Nom</span>
               <span>Type d&apos;activité</span>
-              <span className="text-right">Budget</span>
+              <span className="text-right">Budget FCFA</span>
               <span className="text-right">Pond.</span>
               <span />
             </div>
@@ -273,8 +300,7 @@ export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onC
                     {composante && (
                       <BudgetCell
                         budget={row.budget}
-                        devise={row.devise}
-                        onChange={(v) => onChange(value.map((c) => (c.id === row.id ? { ...c, budget: v.budget, devise: v.devise } : c)))}
+                        onChange={(budget) => onChange(value.map((c) => (c.id === row.id ? { ...c, budget, devise: "FCFA" } : c)))}
                       />
                     )}
                   </div>
@@ -283,16 +309,19 @@ export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onC
                     {composante && referenceFCFA > 0 && row.budget ? formatShare(share) : ""}
                   </span>
 
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => remove(row)}
-                      title="Supprimer cette ligne"
-                      className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-fg-subtle opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-danger-subtle hover:text-danger transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  <RowMenu
+                    ouvert={menu === row.id}
+                    onOuvrir={(v) => setMenu(v ? row.id : null)}
+                    items={[
+                      { label: "Ajouter un sous-niveau", icon: <Plus size={14} />, disabled: !canAddChild(value, row.id), run: () => insert(addChild(value, row.id, "")) },
+                      { label: "Ajouter au même niveau", icon: <Plus size={14} />, run: () => insert(addSibling(value, row.id, "")) },
+                      { label: "Monter d'un niveau", icon: <IndentDecrease size={14} />, disabled: !canOutdent(value, row.id), run: () => apply(row.id, outdentUnit(value, row.id)) },
+                      { label: "Descendre d'un niveau", icon: <IndentIncrease size={14} />, disabled: !canIndent(value, row.id), run: () => apply(row.id, indentUnit(value, row.id, rates)) },
+                      { label: "Déplacer vers le haut", icon: <ArrowUp size={14} />, disabled: !canMoveUp(value, row.id), run: () => apply(row.id, moveUnitUp(value, row.id)) },
+                      { label: "Déplacer vers le bas", icon: <ArrowDown size={14} />, disabled: !canMoveDown(value, row.id), run: () => apply(row.id, moveUnitDown(value, row.id)) },
+                      { label: "Supprimer", icon: <Trash2 size={14} />, danger: true, run: () => remove(row) },
+                    ]}
+                  />
                 </div>
               );
             })}

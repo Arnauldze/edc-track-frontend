@@ -65,6 +65,22 @@ const toNumber = (text: string) => {
   return isNaN(n) ? 0 : n;
 };
 
+/** Interrupteur : le budget national est une source qu'on active, pas une case à cocher. */
+function Interrupteur({ actif, onChange, label }: { actif: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={actif}
+      aria-label={label}
+      onClick={() => onChange(!actif)}
+      className={`w-10 h-[22px] flex-shrink-0 rounded-full p-0.5 transition-colors ${actif ? "bg-primary" : "bg-line-strong"}`}
+    >
+      <span className={`block w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform ${actif ? "translate-x-[18px]" : ""}`} />
+    </button>
+  );
+}
+
 /** Montant d'une source : saisie et devise dans un même champ. */
 function MontantField({ montant, devise, onMontant, onDevise, label }: { montant: string; devise: string; onMontant: (v: string) => void; onDevise: (v: string) => void; label: string }) {
   return (
@@ -76,7 +92,7 @@ function MontantField({ montant, devise, onMontant, onDevise, label }: { montant
         value={montant}
         onChange={(e) => onMontant(e.target.value)}
         placeholder="0"
-        className="min-w-0 flex-1 h-full bg-transparent px-2.5 text-[13px] tabular-nums text-fg placeholder:text-fg-subtle focus:outline-none"
+        className="min-w-0 flex-1 h-full bg-transparent px-2.5 font-mono text-[13px] tabular-nums text-fg placeholder:text-fg-subtle focus:outline-none"
       />
       <select
         aria-label={`Devise — ${label}`}
@@ -220,7 +236,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
           <h3 className="text-[12px] font-semibold text-fg-muted">Sources de financement</h3>
           <p className="text-[12px] text-fg-subtle">
             {foreignCurrencies.length > 0
-              ? foreignCurrencies.map((c) => `1 ${c} = ${formatMoney(value.tauxChange[c] ?? 0, value.tauxChange[c] && value.tauxChange[c] < 10 ? 3 : 0)} FCFA`).join(" · ")
+              ? `Taux : ${foreignCurrencies.map((c) => `1 ${c} = ${formatMoney(value.tauxChange[c] ?? 0, 3)} FCFA`).join(" · ")}`
               : "Montants convertis en FCFA"}
             {" · "}
             <button type="button" onClick={() => setShowRates(true)} className="font-semibold text-primary-fg hover:underline">
@@ -234,16 +250,14 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
             {sourceCard({
               color: sourceColor(0),
               titre: (
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={value.budgetNational.enabled}
-                    onChange={(e) => update({ budgetNational: { ...value.budgetNational, enabled: e.target.checked } })}
-                    className="w-4 h-4 accent-[var(--primary)]"
-                  />
-                  <span className="text-[13px] font-semibold text-fg">Budget national</span>
-                  <span className="text-[11.5px] text-fg-subtle">État du Cameroun</span>
-                </label>
+                <span className="text-[13px] font-semibold text-fg">Budget national</span>
+              ),
+              sousTitre: (
+                <Interrupteur
+                  label="Inscrire le budget national"
+                  actif={value.budgetNational.enabled}
+                  onChange={(enabled) => update({ budgetNational: { ...value.budgetNational, enabled } })}
+                />
               ),
               pct: value.budgetNational.enabled ? pctOf("national") : 0,
               children: value.budgetNational.enabled ? (
@@ -255,10 +269,10 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                     onMontant={(montant) => update({ budgetNational: { ...value.budgetNational, montant } })}
                     onDevise={(devise) => update({ budgetNational: { ...value.budgetNational, devise } })}
                   />
-                  <span className="text-[12px] tabular-nums text-fg-muted">{equivalentFCFA(value.budgetNational.montant, value.budgetNational.devise)}</span>
+                  <span className="font-mono text-[12px] text-fg-muted">{equivalentFCFA(value.budgetNational.montant, value.budgetNational.devise)}</span>
                 </div>
               ) : (
-                <p className="text-[12px] text-fg-subtle">Cochez pour inscrire une part financée par l&apos;État.</p>
+                <p className="text-[12px] text-fg-subtle">Activez pour inscrire la part financée par l&apos;État du Cameroun.</p>
               ),
             })}
 
@@ -281,7 +295,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                             onMontant={(montant) => setContributions(b.id, b.contributions.map((x) => (x.id === c.id ? { ...x, montant } : x)))}
                             onDevise={(devise) => setContributions(b.id, b.contributions.map((x) => (x.id === c.id ? { ...x, devise } : x)))}
                           />
-                          <span className="flex-1 min-w-0 text-[12px] tabular-nums text-fg-muted">{equivalentFCFA(c.montant, c.devise)}</span>
+                          <span className="flex-1 min-w-0 font-mono text-[12px] text-fg-muted">{equivalentFCFA(c.montant, c.devise)}</span>
                           {b.contributions.length > 1 && (
                             <button type="button" onClick={() => setContributions(b.id, b.contributions.filter((x) => x.id !== c.id))} className="text-fg-subtle hover:text-danger transition-colors" title="Retirer cette devise">
                               <X size={14} />
@@ -366,7 +380,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                             onMontant={(montant) => updatePartie(key, p.id, { montant })}
                             onDevise={(devise) => updatePartie(key, p.id, { devise })}
                           />
-                          <span className="text-[12px] tabular-nums text-fg-muted">{equivalentFCFA(p.montant, p.devise)}</span>
+                          <span className="font-mono text-[12px] text-fg-muted">{equivalentFCFA(p.montant, p.devise)}</span>
                         </div>
                       ),
                     })}
@@ -399,8 +413,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-fg-muted">
               {repartition.map((s) => (
                 <span key={s.id} className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-sm ${s.color}`} /> {s.nom} · <span className="tabular-nums">{s.pct.toFixed(1).replace(".", ",")} %</span>
-                  <span className="text-fg-subtle tabular-nums">({formatCurrency(amountOf(s.id), BASE_CURRENCY)})</span>
+                  <span className={`w-2 h-2 rounded-sm ${s.color}`} title={formatCurrency(amountOf(s.id), BASE_CURRENCY)} /> {s.nom} · <span className="tabular-nums">{s.pct.toFixed(1).replace(".", ",")} %</span>
                 </span>
               ))}
             </div>
