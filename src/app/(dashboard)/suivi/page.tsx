@@ -26,15 +26,19 @@ type ProjetSuivi = {
     alerts: number;
     composants: number;
     status: "ok" | "progress" | "retard";
+    /** Dégradé de la tuile ET encre posée dessus : les deux vont ensemble. */
     color: string;
 };
 
+// Cinq familles distinctes pour différencier les cartes, deux teintes d'une
+// même famille par tuile. Un dégradé qui traverse deux familles ne peut pas
+// avoir d'encre lisible aux deux bouts en thème sombre.
 const GRADIENT_COLORS = [
-    "from-success to-success",
-    "from-cat-violet to-cat-violet",
-    "from-primary to-cat-cyan",
-    "from-warning to-warning",
-    "from-cat-rose to-danger",
+    "from-primary to-primary-hover text-on-primary",
+    "from-success to-success-hover text-on-success",
+    "from-warning to-warning-hover text-on-warning",
+    "from-cat-violet to-cat-indigo text-on-cat",
+    "from-cat-cyan to-cat-teal text-on-cat",
 ];
 
 async function mapToSuivi(projects: Project[]): Promise<ProjetSuivi[]> {
@@ -122,7 +126,7 @@ export default function SuiviPage() {
                                 {/* Header row */}
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-9 h-9 rounded-[var(--radius-md)] bg-gradient-to-br ${projet.color} flex items-center justify-center text-white shadow-[var(--shadow-sm)] flex-shrink-0`}>
+                                        <div className={`w-9 h-9 rounded-[var(--radius-md)] bg-gradient-to-br ${projet.color} flex items-center justify-center shadow-[var(--shadow-sm)] flex-shrink-0`}>
                                             <Network size={16} />
                                         </div>
                                         <div>

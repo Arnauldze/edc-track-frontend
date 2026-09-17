@@ -356,7 +356,7 @@ export default function UsersPage() {
             </button>
             <button
               onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
             >
               <Plus size={16} />
               Nouvel utilisateur
@@ -394,7 +394,7 @@ export default function UsersPage() {
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-cat-violet flex items-center justify-center text-white text-sm font-bold">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-on-primary text-sm font-bold">
                       {user.firstName?.[0] || ""}{user.lastName?.[0] || ""}
                     </div>
                     <div>
@@ -637,7 +637,7 @@ export default function UsersPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 flex items-center gap-2"
                 >
                   {submitting ? (
                     <>
@@ -690,7 +690,7 @@ export default function UsersPage() {
                       navigator.clipboard.writeText(showCredentials.login);
                       toast.success("Login copié");
                     }}
-                    className="px-3 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+                    className="px-3 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
                   >
                     Copier
                   </button>
@@ -713,7 +713,7 @@ export default function UsersPage() {
                       navigator.clipboard.writeText(showCredentials.password);
                       toast.success("Mot de passe copié");
                     }}
-                    className="px-3 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+                    className="px-3 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
                   >
                     Copier
                   </button>
@@ -729,7 +729,7 @@ export default function UsersPage() {
 
             <button
               onClick={() => setShowCredentials(null)}
-              className="w-full px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
+              className="w-full px-4 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90"
             >
               J&apos;ai noté les identifiants
             </button>
