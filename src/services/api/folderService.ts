@@ -18,9 +18,10 @@ export interface Folder {
   createdAt: string;
 }
 
-export async function listFolders(projectId: string, context: string): Promise<Folder[]> {
+/** Sans contexte, renvoie tous les dossiers du projet : l'explorateur en a besoin pour son arbre. */
+export async function listFolders(projectId: string, context?: string): Promise<Folder[]> {
   const response = await apiClient.get<ApiResponse<Folder[]>>('/folders', {
-    params: { projectId, context },
+    params: context ? { projectId, context } : { projectId },
   });
   return response.data.data || [];
 }

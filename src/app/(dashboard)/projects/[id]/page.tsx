@@ -9,7 +9,7 @@ import {
   ChevronUp, ChevronDown, ChevronRight, Save, MapPin, DollarSign, Calendar,
   Search, MoreHorizontal, AlertCircle, Info,
 } from "lucide-react";
-import { getProjectById, updateProject, deleteProject, isComponentLowestLevel, isSousComposantLowestLevel, type Project, type Component, type SousComposant } from "@/lib/projectStore";
+import { getProjectById, updateProjectAvecAvertissements, deleteProject, isComponentLowestLevel, isSousComposantLowestLevel, type Project, type Component, type SousComposant } from "@/lib/projectStore";
 import { getProjectTeam, getUserById, getUserDirectory, type TeamAssignment, type DirectoryUser, addTeamAssignment, removeTeamAssignment } from "@/lib/userStore";
 import { PROJECT_ROLE_LABELS, rolePuce, getGrantableRoles, isProjectRole, type ProjectRole } from "@/lib/rbacStore";
 import { toast } from "@/lib/toastStore";
@@ -314,7 +314,8 @@ export default function ProjectConfigPage() {
           ? Math.min(100, round2(shareOf(toFCFA(c.budget, c.devise, exchangeRates), projectBudgetFCFA)))
           : c.ponderation,
       }));
-      const result = await updateProject(projectId, { components: withWeights });
+      const { project: result, avertissements } = await updateProjectAvecAvertissements(projectId, { components: withWeights });
+      avertissements.forEach((avis) => toast.info(avis, 12000));
       console.log('✅ Résultat sauvegarde:', result);
 
       // Recharger le projet depuis le backend pour s'assurer d'avoir les données à jour
