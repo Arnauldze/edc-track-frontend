@@ -79,7 +79,7 @@ export function ProjectTeamCard({ assignments, usersById, loading = false, onInv
               <div key={member._id ?? index} className="flex items-start gap-3">
                 {/* Avatar */}
                 <div
-                  className={`flex-shrink-0 w-10 h-10 rounded-full ${rolePastille(member.projectRole)} flex items-center justify-center text-white text-sm font-bold shadow-sm`}
+                  className={`flex-shrink-0 w-10 h-10 rounded-full ${rolePastille(member.projectRole)} flex items-center justify-center text-sm font-bold shadow-sm`}
                 >
                   {member.userInitials}
                 </div>

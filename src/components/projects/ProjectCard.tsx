@@ -37,7 +37,7 @@ interface ProjectCardProps {
 // Couleurs pour les tags de secteur
 const SECTOR_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   santé: { bg: "bg-danger-subtle", text: "text-danger", border: "border-danger/20" },
-  énergie: { bg: "bg-primary-subtle", text: "text-primary", border: "border-primary/20" },
+  énergie: { bg: "bg-primary-subtle", text: "text-primary-fg", border: "border-primary/20" },
   éducation: { bg: "bg-cat-violet/10", text: "text-cat-violet", border: "border-cat-violet/20" },
   tourisme: { bg: "bg-success-subtle", text: "text-success", border: "border-success/20" },
   infrastructure: { bg: "bg-warning-subtle", text: "text-warning", border: "border-warning/20" },
@@ -160,7 +160,7 @@ export function ProjectCard({ project, teamMembers = [], roleBadge }: ProjectCar
               {teamMembers.slice(0, 3).map((member, index) => (
                 <div
                   key={index}
-                  className={`w-7 h-7 rounded-full ${member.color} border-2 border-[var(--bg-surface)] flex items-center justify-center text-white text-[9px] font-bold shadow-sm`}
+                  className={`w-7 h-7 rounded-full ${member.color} border-2 border-[var(--bg-surface)] flex items-center justify-center text-[9px] font-bold shadow-sm`}
                   title={member.initials}
                 >
                   {member.initials}

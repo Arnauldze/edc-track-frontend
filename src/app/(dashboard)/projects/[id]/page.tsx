@@ -587,7 +587,7 @@ export default function ProjectConfigPage() {
         {/* Titre et boutons */}
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-primary to-primary flex items-center justify-center text-white shadow-[var(--shadow-sm)] flex-shrink-0">
+            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-on-primary shadow-[var(--shadow-sm)] flex-shrink-0">
               <Settings size={20} />
             </div>
             <div>
@@ -688,7 +688,7 @@ export default function ProjectConfigPage() {
                 <span className="px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] text-[var(--text-secondary)]">
                   <strong className="text-[var(--text-primary)]">{totalActivities}</strong> activités
                 </span>
-                <span className="px-2.5 py-1 rounded-full bg-primary-subtle text-primary border border-primary/20 text-[11px] font-semibold flex items-center gap-1.5">
+                <span className="px-2.5 py-1 rounded-full bg-primary-subtle text-primary-fg border border-primary/20 text-[11px] font-semibold flex items-center gap-1.5">
                   <DollarSign size={12} />
                   {project.financement?.type || "MOP"} • {project.financement ? ((project.financement.budgetNational ? 1 : 0) + (project.financement.bailleurs?.length || 0) + (project.financement.partiesPubliques?.length || 0) + (project.financement.partiesPrivees?.length || 0)) : 5} financeurs
                 </span>
@@ -697,7 +697,7 @@ export default function ProjectConfigPage() {
               {can("structure:edit") && (
                 <button
                   onClick={() => setShowEditInfoModal(true)}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                  className="flex items-center gap-2 px-4 py-1.5 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
                 >
                   <Edit2 size={13} />
                   Modifier les informations
@@ -766,7 +766,7 @@ export default function ProjectConfigPage() {
                     {!canEditStructure ? null : !isEditingStructure ? (
                       <button
                         onClick={handleStartEditing}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                        className="flex items-center gap-2 px-4 py-1.5 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-xs font-semibold hover:opacity-90 transition-opacity shadow-sm"
                       >
                         <Edit2 size={13} />
                         Modifier la structure
@@ -785,7 +785,7 @@ export default function ProjectConfigPage() {
                         </button>
                         <button
                           onClick={handleSaveStructure}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-success text-white rounded-[var(--radius-md)] text-xs font-semibold hover:bg-success transition-colors shadow-sm"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-success text-on-success rounded-[var(--radius-md)] text-xs font-semibold hover:bg-success transition-colors shadow-sm"
                         >
                           <Save size={13} />
                           Enregistrer
@@ -813,7 +813,7 @@ export default function ProjectConfigPage() {
                           ) : (
                             <div className="w-[20px] flex-shrink-0" />
                           )}
-                          <div className="mt-0.5 w-7 h-7 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
+                          <div className="mt-0.5 w-7 h-7 bg-primary-subtle text-primary-fg rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
 
                           <div className="flex-1 min-w-0">
                             {/* Ligne 1 : nom, type, actions */}
@@ -1095,7 +1095,7 @@ export default function ProjectConfigPage() {
                       <div key={component.id}>
                         <div className="flex items-center justify-between gap-2 text-[12px]">
                           <span className={`truncate font-semibold ${budget > 0 ? 'text-[var(--text-primary)]' : 'text-warning'}`}>
-                            <span className="text-[10px] font-bold text-primary mr-1.5">C{index + 1}</span>
+                            <span className="text-[10px] font-bold text-primary-fg mr-1.5">C{index + 1}</span>
                             {component.name || 'Sans nom'}
                           </span>
                           <span className="font-bold tabular-nums flex-shrink-0 text-[var(--text-primary)]">{formatShare(percentage)}</span>
@@ -1148,7 +1148,7 @@ export default function ProjectConfigPage() {
                 {can("team:add") && (
                   <button
                     onClick={openInviteModal}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
                   >
                     <Plus size={16} />
                     Ajouter un membre
@@ -1216,7 +1216,7 @@ export default function ProjectConfigPage() {
                         <tr key={`assignment-${index}`} className="hover:bg-[var(--bg-surface-hover)] transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-cat-violet flex items-center justify-center text-white text-xs font-bold">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-on-primary text-xs font-bold">
                                 {user.firstName?.[0] || ""}{user.lastName?.[0] || ""}
                               </div>
                               <div>
@@ -1248,7 +1248,7 @@ export default function ProjectConfigPage() {
                                   setEditingAssignment(assignment);
                                   setShowAddModal(true);
                                 }}
-                                className="p-1.5 rounded-[var(--radius-sm)] hover:bg-primary-subtle text-primary transition-all"
+                                className="p-1.5 rounded-[var(--radius-sm)] hover:bg-primary-subtle text-primary-fg transition-all"
                                 title="Modifier"
                               >
                                 <Edit2 size={14} />
@@ -1475,7 +1475,7 @@ export default function ProjectConfigPage() {
                   }
                 }}
                 disabled={deleteCodeInput !== project.code || deleting}
-                className="px-4 py-2 bg-danger hover:bg-danger-hover text-white text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-danger hover:bg-danger-hover text-on-danger text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Trash2 size={14} />
                 {deleting ? "Suppression..." : "Supprimer définitivement"}
@@ -1544,7 +1544,7 @@ export default function ProjectConfigPage() {
                     setNavigationTarget(null);
                   }
                 }}
-                className="w-full px-4 py-2 bg-success hover:bg-success-hover text-white text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 bg-success hover:bg-success-hover text-on-success text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors flex items-center justify-center gap-2"
               >
                 <Save size={14} />
                 Enregistrer et quitter

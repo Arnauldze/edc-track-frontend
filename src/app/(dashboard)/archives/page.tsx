@@ -126,7 +126,7 @@ export default function ArchivesPage() {
                             onClick={() => setViewMode("grid")}
                             className={`p-1.5 rounded-[var(--radius-sm)] transition-colors ${
                                 viewMode === "grid"
-                                    ? "bg-[var(--primary)] text-white"
+                                    ? "bg-[var(--primary)] text-on-primary"
                                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-inset)]"
                             }`}
                             title="Affichage en grille"
@@ -137,7 +137,7 @@ export default function ArchivesPage() {
                             onClick={() => setViewMode("list")}
                             className={`p-1.5 rounded-[var(--radius-sm)] transition-colors ${
                                 viewMode === "list"
-                                    ? "bg-[var(--primary)] text-white"
+                                    ? "bg-[var(--primary)] text-on-primary"
                                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-inset)]"
                             }`}
                             title="Affichage en liste"

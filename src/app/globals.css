@@ -60,6 +60,14 @@
   --danger-hover: #8F1C13;
   --danger-subtle: #FCEAE8;
 
+  /* Encre posée SUR un fond plein. En clair les teintes d'état sont assez
+     sombres pour porter du blanc ; en sombre elles s'éclaircissent et il
+     faut basculer sur une encre foncée, sinon le texte disparaît. */
+  --on-success: #FFFFFF;
+  --on-warning: #FFFFFF;
+  --on-danger: #FFFFFF;
+  --on-cat: #FFFFFF;
+
   /* Navigation latérale */
   --nav-bg: #1A3882;
   --nav-text: #C9D3EA;
@@ -131,7 +139,7 @@
   --text-inverted: #0C1220;
 
   --primary: #3563CF;
-  --primary-hover: #4A75DA;
+  --primary-hover: #4470D8;
   --primary-subtle: #1A2746;
   --primary-text: #8EB0F2;
   --on-primary: #FFFFFF;
@@ -151,6 +159,11 @@
   --danger: #F07D72;
   --danger-hover: #F59A91;
   --danger-subtle: #2E1817;
+
+  --on-success: #0C1220;
+  --on-warning: #0C1220;
+  --on-danger: #0C1220;
+  --on-cat: #0C1220;
 
   --nav-bg: #0F1A33;
   --nav-text: #B7C3DC;
@@ -231,6 +244,10 @@
   --color-danger: var(--danger);
   --color-danger-hover: var(--danger-hover);
   --color-danger-subtle: var(--danger-subtle);
+  --color-on-success: var(--on-success);
+  --color-on-warning: var(--on-warning);
+  --color-on-danger: var(--on-danger);
+  --color-on-cat: var(--on-cat);
 
   --color-nav: var(--nav-bg);
   --color-nav-fg: var(--nav-text);

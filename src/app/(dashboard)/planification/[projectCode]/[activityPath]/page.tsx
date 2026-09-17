@@ -316,7 +316,7 @@ export default function ActivityPlanningPage() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Spinner className="size-6 text-primary" />
+          <Spinner className="size-6 text-primary-fg" />
           <p className="text-sm text-fg-muted">Chargement de l&apos;activité…</p>
         </div>
       </div>

@@ -76,7 +76,7 @@ export default function ProjectPlanningPage() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Spinner className="size-6 text-primary" />
+          <Spinner className="size-6 text-primary-fg" />
           <p className="text-sm text-fg-muted">Chargement du projet…</p>
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function ProjectPlanningPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3.5">
             <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-primary"
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-primary-fg"
               style={{ background: voile("var(--primary)") }}
             >
               <Calendar size={20} />

@@ -396,7 +396,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                       setCustomBailleur("");
                       setShowCustomBailleur(false);
                     }}
-                    className="px-3 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-[12px] font-semibold hover:opacity-90"
+                    className="px-3 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-[12px] font-semibold hover:opacity-90"
                   >
                     Ajouter
                   </button>
@@ -443,7 +443,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
         <button
           type="button"
           onClick={() => setShowRates(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-subtle text-primary border border-primary/20 rounded-[var(--radius-md)] text-[12px] font-semibold hover:bg-primary-subtle transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary-subtle text-primary-fg border border-primary/20 rounded-[var(--radius-md)] text-[12px] font-semibold hover:bg-primary-subtle transition-colors"
         >
           <DollarSign size={14} />
           Taux de change ({foreignCurrencies.map((c) => `1 ${c} = ${value.tauxChange[c] ?? "?"} FCFA`).join(" · ")})

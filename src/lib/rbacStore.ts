@@ -57,15 +57,18 @@ export interface RoleColors {
   border: string;
   /** Anneau de sélection (cartes de choix de rôle). */
   ring: string;
-  /** Pastille pleine, texte blanc par-dessus (avatars). */
+  /**
+   * Pastille pleine (avatars) : fond ET encre. En thème sombre les teintes
+   * s'éclaircissent, du blanc par-dessus deviendrait illisible.
+   */
   pastille: string;
 }
 
 export const PROJECT_ROLE_COLORS: Record<ProjectRole, RoleColors> = {
-  coordinateur_general: { bg: "bg-cat-violet/10", text: "text-cat-violet", border: "border-cat-violet/20", ring: "ring-cat-violet/30", pastille: "bg-cat-violet" },
-  coordinateur: { bg: "bg-cat-indigo/10", text: "text-cat-indigo", border: "border-cat-indigo/20", ring: "ring-cat-indigo/30", pastille: "bg-cat-indigo" },
-  chef_projet: { bg: "bg-primary-subtle", text: "text-primary", border: "border-primary/20", ring: "ring-primary/30", pastille: "bg-primary" },
-  contributeur: { bg: "bg-warning-subtle", text: "text-warning", border: "border-warning/20", ring: "ring-warning/30", pastille: "bg-warning" },
+  coordinateur_general: { bg: "bg-cat-violet/10", text: "text-cat-violet", border: "border-cat-violet/20", ring: "ring-cat-violet/30", pastille: "bg-cat-violet text-on-cat" },
+  coordinateur: { bg: "bg-cat-indigo/10", text: "text-cat-indigo", border: "border-cat-indigo/20", ring: "ring-cat-indigo/30", pastille: "bg-cat-indigo text-on-cat" },
+  chef_projet: { bg: "bg-primary-subtle", text: "text-primary-fg", border: "border-primary/20", ring: "ring-primary/30", pastille: "bg-primary text-on-primary" },
+  contributeur: { bg: "bg-warning-subtle", text: "text-warning", border: "border-warning/20", ring: "ring-warning/30", pastille: "bg-warning text-on-warning" },
 };
 
 /** Repli pour un rôle inconnu ou une simple consultation : neutre, sans teinte. */
@@ -74,7 +77,7 @@ export const ROLE_COLORS_FALLBACK: RoleColors = {
   text: "text-fg-muted",
   border: "border-line",
   ring: "ring-line",
-  pastille: "bg-fg-subtle",
+  pastille: "bg-fg-muted text-fg-inverted",
 };
 
 /** Pastille pleine d'un rôle, repli neutre compris. */

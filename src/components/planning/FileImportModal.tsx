@@ -231,7 +231,7 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
           {step === "upload" && (
             <div className="space-y-4">
               <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] border border-primary/20 bg-primary-subtle">
-                <AlertCircle size={18} className="mt-0.5 shrink-0 text-primary" />
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-primary-fg" />
                 <div className="text-[12px] leading-relaxed text-primary-fg">
                   <strong>Format attendu :</strong> La première ligne doit contenir les en-têtes de colonnes.
                   Les données commencent à la ligne 2. Vous pourrez mapper les colonnes à l'étape suivante.
@@ -400,7 +400,7 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
               <button
                 onClick={handlePreview}
                 disabled={!validateMappings()}
-                className="px-4 py-2 bg-[var(--primary)] text-white text-[13px] font-semibold rounded-[var(--radius-md)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-[var(--primary)] text-on-primary text-[13px] font-semibold rounded-[var(--radius-md)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Aperçu
               </button>
