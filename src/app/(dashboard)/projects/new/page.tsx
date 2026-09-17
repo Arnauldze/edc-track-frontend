@@ -1,29 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ACTIVITY_TYPES as TYPES_ACTIVITE, ACTIVITY_TYPE_ORDER } from "@/lib/activityTypes";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ArrowLeft, ArrowRight, Plus, Trash2, CheckCircle2, ChevronUp, ChevronDown, Layers, DollarSign } from "lucide-react";
 import Link from "next/link";
-import { addProject, generateProjectCode, ACTIVITY_TYPES, getActivityName, getActivityType, isComponentLowestLevel, isSousComposantLowestLevel, type ComponentData, type SousComposantData, type ActivityDef } from "@/lib/projectStore";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, Check, Coins, Info, Layers, MapPin, Pencil, type LucideIcon } from "lucide-react";
+import { addProject, generateProjectCode, type ComponentData } from "@/lib/projectStore";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { CURRENCIES, formatCurrency } from "@/lib/helpers/currencyHelpers";
-import { FinancementEditor } from "@/components/financing/FinancementEditor";
+import { FinancementEditor, sourceColor } from "@/components/financing/FinancementEditor";
+import { StructureTreeEditor } from "@/components/projects/StructureTreeEditor";
 import { computeFinancementPreview, emptyFinancement, financementToPayload, validateFinancement, type FinancementFormValue } from "@/lib/financement";
 import { CAMEROON_DATA, CITY_COORDS, REGIONS } from "@/lib/cameroonGeo";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { newUnitId } from "@/lib/structureUnits";
-import { canIndent, indentUnit, outdentUnit } from "@/lib/structureOps";
-import { ComponentBudgetInput } from "@/components/projects/ComponentBudgetInput";
-import { allocationStatus, formatShare, round2, shareOf, toFCFA } from "@/lib/componentBudget";
-
-type ConfirmState = {
-  type: "component" | "subcomponent" | "activity";
-  title: string;
-  message: string;
-  onConfirm: () => void;
-} | null;
+import { ACTIVITY_TYPES, ACTIVITY_TYPE_ORDER, type ActivityType } from "@/lib/activityTypes";
+import { allocationStatus, formatShare, round2, shareOf, toFCFA, type AllocationStatus } from "@/lib/componentBudget";
+import { formatDate, formatMoney } from "@/lib/utils";
 
 // ══════════════════════════════════════
 // COMBOBOX COMPONENT
@@ -39,7 +31,7 @@ function ComboBox({ label, placeholder, options, value, onChange, disabled = fal
 
     return (
         <div className="relative">
-            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">
+            <label className="block text-[12.5px] font-semibold text-fg-muted mb-1.5">
                 {label} {required && <span className="text-danger">*</span>}
             </label>
             <div className={`relative ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
@@ -49,20 +41,19 @@ function ComboBox({ label, placeholder, options, value, onChange, disabled = fal
                     onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(""); }}
                     onFocus={() => setOpen(true)}
                     placeholder={placeholder}
-                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all pr-8"
+                    className="w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors pr-8"
                 />
                 <svg className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
             </div>
 
             {open && filtered.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] shadow-[var(--shadow-lg)] max-h-48 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 bg-surface border border-line rounded-[var(--radius-md)] shadow-[var(--shadow-lg)] max-h-48 overflow-y-auto">
                     {filtered.map((opt) => (
                         <button
                             key={opt}
                             type="button"
                             onClick={() => { onChange(opt); setQuery(""); setOpen(false); }}
-                            className={`w-full text-left px-4 py-2.5 text-[13px] hover:bg-[var(--bg-surface-hover)] transition-colors ${opt === value ? "text-[var(--primary-text)] font-semibold bg-[var(--primary-subtle)]" : "text-[var(--text-primary)]"
-                                }`}
+                            className={`w-full text-left px-3 py-2.5 text-[13px] hover:bg-hover transition-colors ${opt === value ? "bg-primary-subtle font-semibold text-primary-fg" : "text-fg"}`}
                         >
                             {opt}
                         </button>
@@ -108,10 +99,10 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
     return (
         <div className="space-y-5">
             {/* Info */}
-            <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-fg flex-shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                <p className="text-[11px] text-primary-fg leading-relaxed">
-                    <strong>Localisation optionnelle :</strong> Vous pouvez localiser votre projet en sélectionnant la région, le département et la ville. Les coordonnées GPS seront <strong>détectées automatiquement</strong>. Vous pouvez aussi laisser vide et compléter plus tard.
+            <div className="flex gap-2.5 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-3">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-px flex-shrink-0 text-fg-subtle"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                <p className="text-[12.5px] leading-relaxed text-fg-muted">
+                    Choisissez la région, le département puis la ville : les coordonnées GPS sont alors renseignées toutes seules. Vous pouvez aussi passer cette étape.
                 </p>
             </div>
 
@@ -144,27 +135,27 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
 
             {/* Localité précise */}
             <div>
-                <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Localité précise</label>
+                <label className="block text-[12.5px] font-semibold text-fg-muted mb-1.5">Localité précise</label>
                 <input
                     type="text"
                     value={localite}
                     onChange={(e) => setLocalite(e.target.value)}
-                    placeholder="ex: Rive droite du fleuve Sanaga, PK 42..."
-                    className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all"
+                    placeholder="ex. rive droite du fleuve Sanaga, PK 42"
+                    className="w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors"
                 />
             </div>
 
             {/* GPS Coordinates */}
             <div>
                 <div className="flex items-center gap-2 mb-2">
-                    <label className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Coordonnées GPS</label>
+                    <label className="text-[12.5px] font-semibold text-fg-muted">Coordonnées GPS</label>
                     {autoDetected ? (
-                        <span className="text-[10px] text-success bg-success-subtle px-2 py-0.5 rounded-full font-bold border border-success/20 flex items-center gap-1">
+                        <span className="flex items-center gap-1 rounded-full border border-success/20 bg-success-subtle px-2 py-0.5 text-[11px] font-semibold text-success">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
-                            Auto-détecté
+                            Renseignées automatiquement
                         </span>
                     ) : (
-                        <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--bg-inset)] px-2 py-0.5 rounded-full font-medium border border-[var(--border-default)]">Sélectionnez une ville</span>
+                        <span className="rounded-full border border-line bg-inset px-2 py-0.5 text-[11px] font-medium text-fg-subtle">Choisissez une ville</span>
                     )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -174,10 +165,7 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             value={lat}
                             onChange={(e) => { setLat(e.target.value); setAutoDetected(false); }}
                             placeholder="Latitude (ex: 5.5321)"
-                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
-                                ? "bg-success-subtle border-success/30 text-[var(--text-primary)]"
-                                : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
-                                }`}
+                            className={`w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors font-mono ${autoDetected ? "border-success/40 bg-success-subtle" : ""}`}
                         />
                     </div>
                     <div>
@@ -186,17 +174,13 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             value={lng}
                             onChange={(e) => { setLng(e.target.value); setAutoDetected(false); }}
                             placeholder="Longitude (ex: 13.6163)"
-                            className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
-                                ? "bg-success-subtle border-success/30 text-[var(--text-primary)]"
-                                : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
-                                }`}
+                            className={`w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors font-mono ${autoDetected ? "border-success/40 bg-success-subtle" : ""}`}
                         />
                     </div>
                 </div>
                 {autoDetected && (
-                    <p className="text-[10px] text-success mt-1.5 flex items-center gap-1">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                        Position approximative de {ville}. Vous pouvez ajuster manuellement si nécessaire.
+                    <p className="mt-1.5 text-[12px] text-fg-muted">
+                        Position approximative de {ville} : ajustez-la si besoin.
                     </p>
                 )}
             </div>
@@ -244,18 +228,89 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
 }
 
 // ══════════════════════════════════════
-// STEPS
+// ÉTAPES
 // ══════════════════════════════════════
 
+const STEPS = [
+    { id: 1, name: "Informations", detail: "Nom, code, dates", intro: "Le code est attribué automatiquement. Le projet n'est créé qu'à la dernière étape." },
+    { id: 2, name: "Localisation", detail: "Région, département, ville", intro: "Où se déroule le projet. Facultatif : vous pourrez le renseigner plus tard depuis la fiche du projet." },
+    { id: 3, name: "Financement", detail: "Mode et sources", intro: "Le budget du projet est la somme des sources. Les sources pourront être complétées plus tard depuis la fiche du projet." },
+    { id: 4, name: "Structure", detail: "Composantes et activités", intro: "Découpez le projet en composantes, sous-composantes et activités. Une unité sans enfant est une activité : c'est elle qui sera planifiée." },
+    { id: 5, name: "Vérification", detail: "Relire puis créer", intro: "Relisez le projet avant de le créer. Tout reste modifiable ensuite depuis sa fiche." },
+] as const;
 
-const steps = [
-    { id: 1, name: "Informations" },
-    { id: 2, name: "Localisation" },
-    { id: 3, name: "Financement" },
-    { id: 4, name: "Structure" },
-    { id: 5, name: "Arborescence" },
-    { id: 6, name: "Résumé" },
-];
+const LAST_STEP = STEPS.length;
+
+const fieldClass =
+    "w-full h-10 bg-surface border border-line rounded-[var(--radius-md)] px-3 text-[14px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors";
+
+function Field({ label, required, error, hint, children }: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) {
+    return (
+        <div>
+            <label className="block text-[12.5px] font-semibold text-fg-muted mb-1.5">
+                {label} {required && <span className="text-danger">*</span>}
+            </label>
+            {children}
+            {error ? <p className="mt-1.5 text-[12px] text-danger">{error}</p> : hint ? <p className="mt-1.5 text-[12px] text-fg-subtle">{hint}</p> : null}
+        </div>
+    );
+}
+
+const monthsBetween = (debut: string, fin: string) => {
+    const a = new Date(debut), b = new Date(fin);
+    if (isNaN(a.getTime()) || isNaN(b.getTime()) || b <= a) return null;
+    return Math.max(1, Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+};
+
+/** « 3 ans 4 mois », « 8 mois ». */
+const dureeLabel = (mois: number) => {
+    const ans = Math.floor(mois / 12), reste = mois % 12;
+    if (ans === 0) return `${mois} mois`;
+    return `${ans} an${ans > 1 ? "s" : ""}${reste ? ` ${reste} mois` : ""}`;
+};
+
+const fcfa = (amount: number) => `${formatMoney(amount, 0)} FCFA`;
+
+/** Montant court pour l'aperçu : 41,52 Md FCFA. */
+const fcfaCourt = (amount: number) => {
+    if (amount >= 1e9) return `${formatMoney(amount / 1e9, 2)} Md FCFA`;
+    if (amount >= 1e6) return `${formatMoney(amount / 1e6, 2)} M FCFA`;
+    return fcfa(amount);
+};
+
+const yearOf = (iso: string) => Number(iso.slice(0, 4));
+
+function infoErrors(titre: string, dateDebut: string, dateFin: string) {
+    const errors: { titre?: string; dateDebut?: string; dateFin?: string } = {};
+    if (!titre.trim()) errors.titre = "Donnez un nom au projet.";
+    if (!dateDebut) errors.dateDebut = "Indiquez la date de début.";
+    else if (yearOf(dateDebut) < 1900 || yearOf(dateDebut) > 2200) errors.dateDebut = "Cette date n'est pas plausible : vérifiez l'année.";
+    if (!dateFin) errors.dateFin = "Indiquez la date de fin prévue.";
+    else if (yearOf(dateFin) < 1900 || yearOf(dateFin) > 2200) errors.dateFin = "Cette date n'est pas plausible : vérifiez l'année.";
+    else if (dateDebut && dateFin <= dateDebut) errors.dateFin = "La fin doit être postérieure au début.";
+    return errors;
+}
+
+/** Nombre d'unités (tous niveaux) encore sans nom. */
+function unnamedUnits(components: ComponentData[]) {
+    return components.reduce((n, c) => n + (c.name.trim() ? 0 : 1) + c.sousComposants.reduce((m, sc) => m + (sc.name.trim() ? 0 : 1) + sc.activities.filter((a) => !a.name.trim()).length, 0), 0);
+}
+
+/** Nombre d'activités par type, pour l'aperçu. */
+function typeCounts(components: ComponentData[]) {
+    const counts = new Map<ActivityType, number>();
+    const add = (t: ActivityType = "travaux") => counts.set(t, (counts.get(t) ?? 0) + 1);
+    for (const c of components) {
+        if (c.sousComposants.length === 0) { add(c.typeActivite); continue; }
+        for (const sc of c.sousComposants) {
+            if (sc.activities.length === 0) { add(sc.typeActivite); continue; }
+            for (const a of sc.activities) add(a.typeActivite);
+        }
+    }
+    return ACTIVITY_TYPE_ORDER.filter((t) => counts.has(t)).map((t) => [t, counts.get(t)!] as const);
+}
+
+const emptyComponent = (): ComponentData => ({ id: newUnitId("component"), name: "", devise: "FCFA", typeActivite: "travaux", sousComposants: [] });
 
 // ══════════════════════════════════════
 // PAGE
@@ -265,7 +320,7 @@ export default function NewProjectPage() {
     const router = useRouter();
     const { data: currentUser } = useCurrentUser();
 
-    // Sans droit de création, inutile de parcourir les six étapes pour se voir
+    // Sans droit de création, inutile de parcourir les étapes pour se voir
     // refuser l'enregistrement à la fin : le serveur rejetterait la création.
     useEffect(() => {
         if (currentUser && !currentUser.canCreateProjects) {
@@ -273,16 +328,20 @@ export default function NewProjectPage() {
             router.replace("/projects");
         }
     }, [currentUser, router]);
-    const [currentStep, setCurrentStep] = useState(1);
-    const [projectCode] = useState(generateProjectCode());
 
-    // Step 1 state
+    const [currentStep, setCurrentStep] = useState(1);
+    const [maxStep, setMaxStep] = useState(1);
+    const [projectCode] = useState(generateProjectCode());
+    const [creating, setCreating] = useState(false);
+
+    // 1. Informations
     const [titre, setTitre] = useState("");
     const [description, setDescription] = useState("");
     const [dateDebut, setDateDebut] = useState("");
     const [dateFin, setDateFin] = useState("");
+    const [showInfoErrors, setShowInfoErrors] = useState(false);
 
-    // Step 2 state (lifted from LocalisationStep)
+    // 2. Localisation
     const [region, setRegion] = useState("");
     const [departement, setDepartement] = useState("");
     const [ville, setVille] = useState("");
@@ -291,767 +350,472 @@ export default function NewProjectPage() {
     const [lng, setLng] = useState("");
     const [autoDetected, setAutoDetected] = useState(false);
 
-    // Step 3 state (financement) — voir lib/financement.ts
+    // 3. Financement — voir lib/financement.ts
     const [financement, setFinancement] = useState<FinancementFormValue>(emptyFinancement);
     const [showFinancementErrors, setShowFinancementErrors] = useState(false);
-    const financementPreview = computeFinancementPreview(financement);
+    const financementPreview = useMemo(() => computeFinancementPreview(financement), [financement]);
 
-    const [confirmState, setConfirmState] = useState<ConfirmState>(null);
+    // 4. Structure
+    const [components, setComponents] = useState<ComponentData[]>(() => [emptyComponent()]);
+    const [pendingRemoval, setPendingRemoval] = useState<{ name: string; apply: () => void } | null>(null);
 
-    // Step 4 state (structure)
-    const [components, setComponents] = useState<ComponentData[]>([
-        { id: newUnitId("component"), name: "Barrage", budget: 0, devise: "FCFA", ponderation: 0, sousComposants: [{ id: newUnitId("subcomponent"), name: "Fondations", activities: [{ id: newUnitId("activity"), name: "Fouilles", typeActivite: "travaux" }, { id: newUnitId("activity"), name: "Béton de propreté", typeActivite: "travaux" }] }] },
-    ]);
+    // ── Dérivés ──
+    const errors = infoErrors(titre, dateDebut, dateFin);
+    const infoValid = Object.keys(errors).length === 0;
+    const financementErrors = validateFinancement(financement);
+    const unnamed = unnamedUnits(components);
+    const duree = monthsBetween(dateDebut, dateFin);
+    const lieu = [region, departement, ville].filter(Boolean).join(" › ");
+    const periode = dateDebut && dateFin && infoValid ? `${formatDate(dateDebut)} → ${formatDate(dateFin)}${duree ? ` · ${dureeLabel(duree)}` : ""}` : "";
 
-    // États pour gérer le pliage/dépliage dans l'arborescence (Step 5)
-    const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
-    const [expandedSousComposants, setExpandedSousComposants] = useState<Set<string>>(new Set());
-
-    // Initialiser tous les éléments comme dépliés par défaut
-    useEffect(() => {
-        const allCompIds = new Set(components.map(c => c.id));
-        const allScIds = new Set(components.flatMap(c => c.sousComposants.map(sc => sc.id)));
-        setExpandedComponents(allCompIds);
-        setExpandedSousComposants(allScIds);
-    }, [components]);
-
-    const toggleComponent = (compId: string) => {
-        setExpandedComponents(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(compId)) {
-                newSet.delete(compId);
-            } else {
-                newSet.add(compId);
-            }
-            return newSet;
-        });
-    };
-
-    const toggleSousComposant = (scId: string) => {
-        setExpandedSousComposants(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(scId)) {
-                newSet.delete(scId);
-            } else {
-                newSet.add(scId);
-            }
-            return newSet;
-        });
-    };
-
-    const addComponent = () => {
-        // Nouvelle composante sans sous-composantes = niveau le plus bas, donc ajouter typeActivite
-        setComponents(prev => [...prev, { id: newUnitId("component"), name: "", budget: 0, devise: "FCFA", ponderation: 0, sousComposants: [], typeActivite: "travaux" }]);
-    };
-    const removeComponent = (idx: number) => {
-        setConfirmState({
-            type: "component",
-            title: "Supprimer le composant",
-            message: "Êtes-vous sûr de vouloir supprimer ce composant ? Cette action est irréversible.",
-            onConfirm: () => {
-                setComponents(prev => prev.filter((_, i) => i !== idx));
-            }
-        });
-    };
-    const updateComponentName = (idx: number, name: string) => {
-        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, name } : c));
-    };
-    const addSousComposant = (compIdx: number) => {
-        setComponents(prev => prev.map((c, i) => {
-            if (i !== compIdx) return c;
-            // Quand on ajoute une sous-composante, retirer le typeActivite de la composante
-            const { typeActivite, ...compWithoutType } = c;
-            return {
-                ...compWithoutType,
-                sousComposants: [...c.sousComposants, { id: newUnitId("subcomponent"), name: "", activities: [] }]
-            };
-        }));
-    };
-    const removeSousComposant = (compIdx: number, scIdx: number) => {
-        setConfirmState({
-            type: "subcomponent",
-            title: "Supprimer le sous-composant",
-            message: "Êtes-vous sûr de vouloir supprimer ce sous-composant ? Cette action est irréversible.",
-            onConfirm: () => {
-                setComponents(prev => prev.map((c, ci) => {
-                    if (ci !== compIdx) return c;
-                    const updatedSCs = c.sousComposants.filter((_, si) => si !== scIdx);
-                    // Si on supprime la dernière sous-composante, ajouter typeActivite à la composante
-                    if (updatedSCs.length === 0) {
-                        return { ...c, sousComposants: updatedSCs, typeActivite: "travaux" };
-                    }
-                    return { ...c, sousComposants: updatedSCs };
-                }));
-            }
-        });
-    };
-    const updateSCName = (compIdx: number, scIdx: number, name: string) => {
-        setComponents(prev => prev.map((c, ci) => ci === compIdx ? { ...c, sousComposants: c.sousComposants.map((sc, si) => si === scIdx ? { ...sc, name } : sc) } : c));
-    };
-    const addActivity = (compIdx: number, scIdx: number, typeActivite: string = "travaux") => {
-        const newAct: ActivityDef = { id: newUnitId("activity"), name: "", typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' };
-        setComponents(prev => prev.map((c, ci) => {
-            if (ci !== compIdx) return c;
-            return {
-                ...c,
-                sousComposants: c.sousComposants.map((sc, si) => {
-                    if (si !== scIdx) return sc;
-                    // Quand on ajoute une activité, retirer le typeActivite de la sous-composante
-                    const { typeActivite: scType, ...scWithoutType } = sc;
-                    return { ...scWithoutType, activities: [...sc.activities, newAct] };
-                })
-            };
-        }));
-    };
-    const updateActivity = (compIdx: number, scIdx: number, actIdx: number, val: string) => {
-        setComponents(prev => prev.map((c, ci) => ci === compIdx ? { ...c, sousComposants: c.sousComposants.map((sc, si) => si === scIdx ? { ...sc, activities: sc.activities.map((a, ai) => ai === actIdx ? { ...a, name: val } : a) } : sc) } : c));
-    };
-    const updateActivityType = (compIdx: number, scIdx: number, actIdx: number, typeActivite: string) => {
-        setComponents(prev => prev.map((c, ci) => ci === compIdx ? { ...c, sousComposants: c.sousComposants.map((sc, si) => si === scIdx ? { ...sc, activities: sc.activities.map((a, ai) => ai === actIdx ? { ...a, typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' } : a) } : sc) } : c));
-    };
-    const removeActivity = (compIdx: number, scIdx: number, actIdx: number) => {
-        setConfirmState({
-            type: "activity",
-            title: "Supprimer l'activité",
-            message: "Êtes-vous sûr de vouloir supprimer cette activité ? Cette action est irréversible.",
-            onConfirm: () => {
-                setComponents(prev => prev.map((c, ci) => {
-                    if (ci !== compIdx) return c;
-                    return {
-                        ...c,
-                        sousComposants: c.sousComposants.map((sc, si) => {
-                            if (si !== scIdx) return sc;
-                            const updatedActivities = sc.activities.filter((_, ai) => ai !== actIdx);
-                            // Si on supprime la dernière activité, ajouter typeActivite à la sous-composante
-                            if (updatedActivities.length === 0) {
-                                return { ...sc, activities: updatedActivities, typeActivite: "travaux" };
-                            }
-                            return { ...sc, activities: updatedActivities };
-                        })
-                    };
-                }));
-            }
-        });
-    };
-
-    // Budget d'un composant : montant ou pourcentage, l'un déduit de l'autre.
-    // La pondération était saisie à part, sans lien avec le montant ; la fiche
-    // projet la calculait à partir du montant et affichait donc une autre valeur.
-    const updateComponentBudget = (idx: number, value: { budget?: number; devise: string }) => {
-        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, budget: value.budget, devise: value.devise } : c));
-    };
-
-    // Calculer le budget total par devise
-    const budgetParDevise = components.reduce((acc, c) => {
-        if (c.budget && c.devise) {
-            acc[c.devise] = (acc[c.devise] || 0) + c.budget;
-        }
-        return acc;
-    }, {} as Record<string, number>);
-
-    // Calculer le budget total converti en FCFA
-    const budgetTotalFCFA = components.reduce((sum, c) => {
-        if (c.budget && c.devise) {
-            const rate = financement.tauxChange[c.devise] || 1;
-            return sum + (c.budget * rate);
-        }
-        return sum;
-    }, 0);
-
-    // Pondération totale : part du budget financé (étape 3) couverte par les composants.
-    const totalPonderation = shareOf(budgetTotalFCFA, financementPreview.total);
-    const allocation = allocationStatus(budgetTotalFCFA, financementPreview.total);
-
-    // TypeActivite pour composantes et sous-composantes
-    const updateComponentType = (idx: number, typeActivite: string) => {
-        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' } : c));
-    };
-    const updateSCType = (compIdx: number, scIdx: number, typeActivite: string) => {
-        setComponents(prev => prev.map((c, ci) => ci === compIdx ? { ...c, sousComposants: c.sousComposants.map((sc, si) => si === scIdx ? { ...sc, typeActivite: typeActivite as 'travaux' | 'fourniture' | 'services' | 'etudes' | 'pi' } : sc) } : c));
-    };
-
-    // ═══ Réordonnancement (même niveau) ═══
-    const moveComponentUp = (idx: number) => {
-        if (idx <= 0) return;
-        setComponents(prev => { const a = [...prev]; [a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; return a; });
-    };
-    const moveComponentDown = (idx: number) => {
-        setComponents(prev => { if (idx >= prev.length - 1) return prev; const a = [...prev]; [a[idx], a[idx + 1]] = [a[idx + 1], a[idx]]; return a; });
-    };
-    const moveSCUp = (ci: number, si: number) => {
-        if (si <= 0) return;
-        setComponents(prev => prev.map((c, i) => { if (i !== ci) return c; const a = [...c.sousComposants]; [a[si - 1], a[si]] = [a[si], a[si - 1]]; return { ...c, sousComposants: a }; }));
-    };
-    const moveSCDown = (ci: number, si: number) => {
-        setComponents(prev => prev.map((c, i) => { if (i !== ci) return c; if (si >= c.sousComposants.length - 1) return c; const a = [...c.sousComposants]; [a[si], a[si + 1]] = [a[si + 1], a[si]]; return { ...c, sousComposants: a }; }));
-    };
-    const moveActivityUp = (ci: number, si: number, ai: number) => {
-        if (ai <= 0) return;
-        setComponents(prev => prev.map((c, i) => i === ci ? { ...c, sousComposants: c.sousComposants.map((sc, j) => { if (j !== si) return sc; const a = [...sc.activities]; [a[ai - 1], a[ai]] = [a[ai], a[ai - 1]]; return { ...sc, activities: a }; }) } : c));
-    };
-    const moveActivityDown = (ci: number, si: number, ai: number) => {
-        setComponents(prev => prev.map((c, i) => i === ci ? { ...c, sousComposants: c.sousComposants.map((sc, j) => { if (j !== si) return sc; if (ai >= sc.activities.length - 1) return sc; const a = [...sc.activities]; [a[ai], a[ai + 1]] = [a[ai + 1], a[ai]]; return { ...sc, activities: a }; }) } : c));
-    };
-
-    // ═══ Changement de niveau ═══
-    // Une unité garde son identifiant en changeant de niveau (voir lib/structureOps.ts).
-    const promoteActivity = (ci: number, si: number, ai: number) => {
-        setComponents(prev => outdentUnit(prev, prev[ci].sousComposants[si].activities[ai].id));
-    };
-    const promoteSC = (ci: number, si: number) => {
-        setComponents(prev => outdentUnit(prev, prev[ci].sousComposants[si].id));
-    };
-    const demoteComponent = (ci: number) => {
-        setComponents(prev => indentUnit(prev, prev[ci].id, financement.tauxChange));
-    };
-    const demoteSC = (ci: number, si: number) => {
-        setComponents(prev => indentUnit(prev, prev[ci].sousComposants[si].id));
-    };
-
-    const totalActivities = components.reduce((sum, c) => sum + c.sousComposants.reduce((s, sc) => s + sc.activities.length, 0), 0);
     const totalSC = components.reduce((sum, c) => sum + c.sousComposants.length, 0);
+    const totalActivities = components.reduce((sum, c) => sum + c.sousComposants.reduce((s, sc) => s + sc.activities.length, 0), 0);
+    const structureLabel = `${components.length} composante${components.length > 1 ? "s" : ""} · ${totalSC} sous-composante${totalSC > 1 ? "s" : ""} · ${totalActivities} activité${totalActivities > 1 ? "s" : ""}`;
+
+    const budgetAlloue = components.reduce((sum, c) => sum + toFCFA(c.budget, c.devise, financement.tauxChange), 0);
+    const allocation = allocationStatus(budgetAlloue, financementPreview.total);
+    const partAllouee = shareOf(budgetAlloue, financementPreview.total);
+
+    const sources = (financement.type === "MOP"
+        ? [
+            ...(financement.budgetNational.enabled ? [{ id: "national", nom: "Budget national" }] : []),
+            ...financement.bailleurs.map((b) => ({ id: b.id, nom: b.nom || "Bailleur sans nom" })),
+        ]
+        : [...financement.partiesPubliques, ...financement.partiesPrivees].map((p) => ({ id: p.id, nom: p.nom || "Partie sans nom" }))
+    ).map((s, i) => ({ ...s, color: sourceColor(i), amount: financementPreview.sources[s.id]?.amount ?? 0, pct: financementPreview.sources[s.id]?.pct ?? 0 }));
+
+    const financementLabel = sources.length === 0
+        ? ""
+        : financement.type === "MOP"
+            ? `MOP · ${[financement.budgetNational.enabled ? "budget national" : "", financement.bailleurs.length ? `${financement.bailleurs.length} bailleur${financement.bailleurs.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" + ")}`
+            : `PPP · ${financement.partiesPubliques.length} publique${financement.partiesPubliques.length > 1 ? "s" : ""} + ${financement.partiesPrivees.length} privée${financement.partiesPrivees.length > 1 ? "s" : ""}`;
+
+    const summaries: Record<number, string> = {
+        1: [titre.trim(), periode].filter(Boolean).join(" · "),
+        2: lieu || (maxStep > 2 ? "Non renseignée" : ""),
+        3: financementPreview.total > 0 ? `${financementLabel} · ${fcfaCourt(financementPreview.total)}` : financementLabel,
+        4: maxStep > 4 ? structureLabel : "",
+        5: "",
+    };
+
+    // ── Navigation ──
+    const stepBlocker = (step: number): string | null => {
+        if (step === 1 && !infoValid) { setShowInfoErrors(true); return "Complétez les informations du projet"; }
+        if (step === 3 && financementErrors.length > 0) { setShowFinancementErrors(true); return "Le financement comporte des erreurs à corriger"; }
+        if (step === 4 && components.length === 0) return "Ajoutez au moins une composante";
+        if (step === 4 && unnamed > 0) return `${unnamed} élément${unnamed > 1 ? "s" : ""} de la structure sans nom`;
+        return null;
+    };
+
+    const goTo = (step: number) => {
+        if (step <= maxStep) setCurrentStep(step);
+    };
+
+    const handleNext = () => {
+        const blocker = stepBlocker(currentStep);
+        if (blocker) { toast.error(blocker); return; }
+        if (currentStep < LAST_STEP) {
+            setCurrentStep(currentStep + 1);
+            setMaxStep((m) => Math.max(m, currentStep + 1));
+        } else {
+            handleCreate();
+        }
+    };
 
     const handleCreate = async () => {
+        for (const step of [1, 3, 4]) {
+            const blocker = stepBlocker(step);
+            if (blocker) { toast.error(blocker); setCurrentStep(step); return; }
+        }
+        setCreating(true);
         try {
-            // Construire l'objet projet au format attendu par le backend
-            const projectData = {
-                name: titre || "Nouveau Projet",
-                description: description || "Projet d'infrastructure",
+            const createdProject = await addProject({
+                name: titre.trim(),
+                description: description.trim() || undefined,
                 progress: 0,
                 localisation: {
                     region: region || undefined,
                     departement: departement || undefined,
                     ville: ville || undefined,
                     localite: localite || undefined,
-                    coordinates: (lat && lng) ? {
-                        lat: parseFloat(lat),
-                        lng: parseFloat(lng)
-                    } : undefined
+                    coordinates: lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : undefined,
                 },
                 // Budget et pourcentages : calculés par le serveur à partir du financement
                 financement: financementToPayload(financement),
-                dateDebut: dateDebut || undefined,
-                dateFin: dateFin || undefined,
-                components: components.map(comp => ({
+                dateDebut,
+                dateFin,
+                components: components.map((comp) => ({
                     id: comp.id,
-                    name: comp.name,
-                    budget: comp.budget ? parseFloat(comp.budget.toString()) : undefined,
-                    // La devise n'était pas envoyée : un budget en EUR était enregistré en FCFA.
+                    name: comp.name.trim(),
+                    budget: comp.budget || undefined,
                     devise: comp.devise || "FCFA",
-                    ponderation: financementPreview.total > 0
+                    ponderation: financementPreview.total > 0 && comp.budget
                         ? Math.min(100, round2(shareOf(toFCFA(comp.budget, comp.devise, financement.tauxChange), financementPreview.total)))
                         : undefined,
-                    typeActivite: comp.typeActivite,
-                    sousComposants: comp.sousComposants.map(sc => ({
+                    typeActivite: comp.sousComposants.length === 0 ? comp.typeActivite : undefined,
+                    sousComposants: comp.sousComposants.map((sc) => ({
                         id: sc.id,
-                        name: sc.name,
-                        typeActivite: sc.typeActivite,
-                        activities: sc.activities.map(act => ({
-                            id: act.id,
-                            name: act.name,
-                            typeActivite: act.typeActivite
-                        }))
-                    }))
-                }))
-            };
-
-            const createdProject = await addProject(projectData);
-            toast.success("Projet créé avec succès. Redirection...");
-            setTimeout(() => router.push(`/projects/${createdProject.code}`), 1500);
-        } catch (error: any) {
-            console.error('Erreur création projet:', error);
-            toast.error(error.message || "Erreur lors de la création du projet");
+                        name: sc.name.trim(),
+                        typeActivite: sc.activities.length === 0 ? sc.typeActivite : undefined,
+                        activities: sc.activities.map((act) => ({ id: act.id, name: act.name.trim(), typeActivite: act.typeActivite })),
+                    })),
+                })),
+            } as Parameters<typeof addProject>[0]);
+            toast.success("Projet créé");
+            router.push(`/projects/${createdProject.code}`);
+        } catch (error) {
+            console.error("Erreur création projet:", error);
+            toast.error(error instanceof Error ? error.message : "Erreur lors de la création du projet");
+            setCreating(false);
         }
     };
 
-    const handleNext = () => {
-        if (currentStep === 3 && validateFinancement(financement).length > 0) {
-            setShowFinancementErrors(true);
-            toast.error("Le financement comporte des erreurs à corriger");
-            return;
-        }
-        if (currentStep < 6) setCurrentStep(currentStep + 1);
-        else handleCreate();
-    };
-    const handlePrev = () => {
-        if (currentStep > 1) setCurrentStep(currentStep - 1);
-    };
+    const step = STEPS[currentStep - 1];
 
+    // ── Rendu ──
     return (
-        <div className="px-[var(--page-px)] py-[var(--page-py)] min-h-full max-w-4xl mx-auto relative">
-            {/* ── Header ── */}
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-1">
-                    <Link href="/projects" className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors">
-                        <ArrowLeft size={18} />
-                    </Link>
-                    <h1 className="text-lg font-semibold text-[var(--text-primary)] tracking-tight">
-                        Nouveau Projet
-                    </h1>
+        <div className="flex h-full min-h-0 bg-canvas">
+            {/* ── Étapes ── */}
+            <aside className="hidden lg:flex w-[250px] flex-shrink-0 flex-col gap-5 border-r border-line bg-surface px-5 py-6 overflow-y-auto">
+                <div>
+                    <h1 className="text-[17px] font-semibold tracking-tight text-fg">Nouveau projet</h1>
+                    <p className="mt-1 text-[12.5px] leading-snug text-fg-muted">Le projet n&apos;est créé qu&apos;à la dernière étape.</p>
                 </div>
-                <p className="text-xs text-[var(--text-secondary)] font-medium ml-[30px]">
-                    Créez un nouveau projet en suivant les étapes ci-dessous
-                </p>
-            </div>
 
-            {/* ── Stepper ── */}
-            <div className="flex items-center justify-between mb-8 px-4">
-                {steps.map((step, index) => (
-                    <div key={step.id} className="flex items-center flex-1 last:flex-none">
-                        {/* Step circle + label */}
-                        <div className="flex flex-col items-center relative z-10">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold border-2 transition-all duration-300
-                                ${step.id < currentStep
-                                    ? "bg-success border-success text-on-success"
-                                    : step.id === currentStep
-                                        ? "bg-[var(--text-primary)] border-[var(--text-primary)] text-[var(--text-inverted)]"
-                                        : "bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--text-tertiary)]"
-                                }`}
-                            >
-                                {step.id < currentStep ? <Check size={14} /> : step.id}
-                            </div>
-                            <span className={`mt-2 text-[11px] font-semibold whitespace-nowrap transition-colors
-                                ${step.id === currentStep
-                                    ? "text-[var(--text-primary)]"
-                                    : step.id < currentStep
-                                        ? "text-success"
-                                        : "text-[var(--text-tertiary)]"
-                                }`}
-                            >
-                                {step.name}
-                            </span>
-                        </div>
-
-                        {/* Connector line */}
-                        {index < steps.length - 1 && (
-                            <div className="flex-1 mx-3 mt-[-20px]">
-                                <div className={`h-[2px] rounded-full transition-colors duration-300
-                                    ${step.id < currentStep ? "bg-success" : "bg-[var(--border-default)]"}`}
-                                />
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-
-            {/* ── Content Card ── */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] p-6 shadow-[var(--shadow-sm)] mb-6">
-
-                {/* Step 1: Informations */}
-                {currentStep === 1 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="col-span-2">
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Titre du projet <span className="text-danger">*</span></label>
-                            <input type="text" value={titre} onChange={e => setTitre(e.target.value)} placeholder="ex: Barrage de Lom Pangar" className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Code du projet</label>
-                            <div className="flex items-center gap-2">
-                                <input type="text" value={projectCode} readOnly className="flex-1 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-tertiary)] cursor-not-allowed opacity-60" />
-                                <span className="bg-[var(--primary-subtle)] text-[var(--primary-text)] text-[10px] px-2.5 py-1.5 rounded-[var(--radius-sm)] border border-[var(--primary)]/20 font-bold">Auto</span>
-                            </div>
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Description</label>
-                            <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Décrivez le projet..." className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all resize-none" />
-                        </div>
-                        <div>
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date début <span className="text-danger">*</span></label>
-                            <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
-                        </div>
-                        <div>
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date fin prévue <span className="text-danger">*</span></label>
-                            <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 2: Localisation */}
-                {currentStep === 2 && <LocalisationStep region={region} setRegion={setRegion} departement={departement} setDepartement={setDepartement} ville={ville} setVille={setVille} localite={localite} setLocalite={setLocalite} lat={lat} setLat={setLat} lng={lng} setLng={setLng} autoDetected={autoDetected} setAutoDetected={setAutoDetected} />}
-
-                {/* Step 3: Financement */}
-                {currentStep === 3 && (
-                    <div className="space-y-6">
-                        <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-fg flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                            <p className="text-[11px] text-primary-fg leading-relaxed">
-                                Définissez le cadre juridique et les sources de financement du projet. Le budget total sera calculé automatiquement à partir des contributions. Les sources pourront être complétées plus tard depuis la fiche du projet.
-                            </p>
-                        </div>
-                        <FinancementEditor value={financement} onChange={setFinancement} showErrors={showFinancementErrors} />
-                    </div>
-                )}
-
-                {currentStep === 4 && (
-                    <div className="space-y-5">
-                        {/* ── Header : Nom du projet ── */}
-                        <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--primary-subtle)] border border-[var(--primary)]/20">
-                            <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--primary)]/10 flex items-center justify-center flex-shrink-0">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--primary-text)]"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
-                            </div>
-                            <div>
-                                <div className="text-[10px] font-bold text-[var(--primary-text)] uppercase tracking-wider">Structure du projet</div>
-                                <div className="text-[15px] font-bold text-[var(--text-primary)]">{titre || "Nouveau Projet"}</div>
-                            </div>
-                        </div>
-
-                        {/* ── Budget Total par devise ── */}
-                        {Object.keys(budgetParDevise).length > 0 && (
-                            <div className="bg-gradient-to-br from-success/10 to-success/10 border border-success/30 rounded-[var(--radius-md)] p-4">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <DollarSign size={16} className="text-success" />
-                                    <div className="text-[11px] font-bold text-success uppercase tracking-wider">Budget Total du Projet</div>
+                <ol>
+                    {STEPS.map((s, i) => {
+                        const active = s.id === currentStep;
+                        const faite = s.id < maxStep && !active;
+                        const reachable = s.id <= maxStep;
+                        return (
+                            <li key={s.id} className="flex gap-3">
+                                <div className="flex flex-col items-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => goTo(s.id)}
+                                        disabled={!reachable}
+                                        aria-current={active ? "step" : undefined}
+                                        aria-label={`Étape ${s.id} : ${s.name}`}
+                                        className={`w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center text-[12px] font-bold transition-colors
+                                            ${faite ? "bg-success text-on-success" : active ? "bg-primary text-on-primary ring-4 ring-primary/15" : "bg-surface border-[1.5px] border-line-strong text-fg-subtle"}`}
+                                    >
+                                        {faite ? <Check size={14} strokeWidth={3} /> : s.id}
+                                    </button>
+                                    {i < STEPS.length - 1 && <div className={`w-0.5 flex-1 min-h-[26px] my-1 rounded ${s.id < maxStep ? "bg-success" : "bg-line"}`} />}
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    {Object.entries(budgetParDevise).map(([devise, montant]) => {
-                                        const currency = CURRENCIES.find(c => c.code === devise);
-                                        return (
-                                            <div key={devise} className="bg-white/50 dark:bg-black/20 rounded-[var(--radius-sm)] p-3">
-                                                <div className="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold mb-1">{currency?.name || devise}</div>
-                                                <div className="text-[15px] font-bold text-[var(--text-primary)]">
-                                                    {montant.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency?.symbol || devise}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                <div className="min-w-0 pt-1 pb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => goTo(s.id)}
+                                        disabled={!reachable}
+                                        className={`block max-w-full text-left text-[13.5px] ${active ? "font-bold text-primary-fg" : faite ? "font-semibold text-fg" : "font-semibold text-fg-muted"}`}
+                                    >
+                                        {s.name}
+                                    </button>
+                                    <p className={`mt-0.5 text-[12px] leading-snug ${faite ? "text-fg-muted" : "text-fg-subtle"} ${summaries[s.id] ? "line-clamp-2" : "truncate"}`}>
+                                        {summaries[s.id] || s.detail}
+                                    </p>
+                                    {faite && (
+                                        <button type="button" onClick={() => goTo(s.id)} className="mt-1 text-[11.5px] font-semibold text-primary-fg hover:underline">
+                                            Modifier
+                                        </button>
+                                    )}
                                 </div>
-                                {/* Budget total converti en FCFA */}
-                                {budgetTotalFCFA > 0 && (
-                                    <div className="mt-3 pt-3 border-t border-success/20">
-                                        <div className="flex items-center justify-between bg-white/50 dark:bg-black/20 rounded-[var(--radius-sm)] p-3">
-                                            <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Total alloué aux composants (FCFA) :</span>
-                                            <span className="text-[16px] font-bold text-success">
-                                                {budgetTotalFCFA.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} FCFA
-                                            </span>
-                                        </div>
-                                        {financementPreview.total > 0 && budgetTotalFCFA > financementPreview.total && (
-                                            <div className="mt-2 p-2 rounded-[var(--radius-sm)] bg-warning-subtle border border-warning/20 text-[11px] text-warning">
-                                                Les composants totalisent {formatCurrency(budgetTotalFCFA, "FCFA")}, soit {formatCurrency(budgetTotalFCFA - financementPreview.total, "FCFA")} de plus que le budget financé ({formatCurrency(financementPreview.total, "FCFA")}).
-                                            </div>
-                                        )}
-                                        <div className="text-[9px] text-[var(--text-tertiary)] mt-1 italic">
-                                            Taux de change utilisés : {Object.entries(financement.tauxChange).filter(([dev]) => dev !== 'FCFA' && budgetParDevise[dev]).map(([dev, rate]) => `1 ${dev} = ${rate.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} FCFA`).join(', ')}
-                                        </div>
+                            </li>
+                        );
+                    })}
+                </ol>
+
+                <div className="mt-auto flex items-start gap-2 text-[12px] leading-snug text-fg-subtle">
+                    <Info size={15} className="mt-px flex-shrink-0" />
+                    Chaque étape reste modifiable jusqu&apos;à la création.
+                </div>
+            </aside>
+
+            {/* ── Formulaire ── */}
+            <div className="flex-1 min-w-0 flex flex-col">
+                {/* Étapes en barre, quand la colonne de gauche ne tient pas */}
+                <div className="lg:hidden flex-shrink-0 border-b border-line bg-surface px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="text-[13px] font-semibold text-fg">Nouveau projet</span>
+                        <span className="text-[12px] text-fg-muted">Étape {currentStep} sur {LAST_STEP} · {step.name}</span>
+                    </div>
+                    <div className="mt-2.5 h-1 rounded-full bg-inset overflow-hidden">
+                        <div className="h-full bg-primary transition-all" style={{ width: `${(currentStep / LAST_STEP) * 100}%` }} />
+                    </div>
+                </div>
+
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                    <div className="max-w-[900px] px-5 sm:px-8 pt-6 pb-5">
+                        <p className="text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">Étape {currentStep} sur {LAST_STEP}</p>
+                        <h2 className="mt-1 text-[21px] font-bold tracking-tight text-fg">{step.name}</h2>
+                        <p className="mt-1.5 text-[13px] leading-relaxed text-fg-muted">{step.intro}</p>
+
+                        <div className="mt-5">
+                            {currentStep === 1 && (
+                                <div className="space-y-4">
+                                    <Field label="Nom du projet" required error={showInfoErrors ? errors.titre : undefined}>
+                                        <input id="projet-titre" type="text" value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="ex. Ligne 225 kV Mbakaou – Tibati" className={fieldClass} autoFocus />
+                                    </Field>
+                                    <Field label="Description">
+                                        <textarea id="projet-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Objet du projet, ouvrages principaux, bénéficiaires…" className={`${fieldClass} h-auto py-2.5 resize-none`} />
+                                    </Field>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <Field label="Date de début" required error={showInfoErrors ? errors.dateDebut : undefined}>
+                                            <input id="projet-debut" type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} className={fieldClass} />
+                                        </Field>
+                                        <Field label="Date de fin prévue" required error={showInfoErrors ? errors.dateFin : undefined} hint={duree && !errors.dateFin ? `Durée : ${dureeLabel(duree)}` : undefined}>
+                                            <input id="projet-fin" type="date" value={dateFin} min={dateDebut || undefined} onChange={(e) => setDateFin(e.target.value)} className={fieldClass} />
+                                        </Field>
                                     </div>
-                                )}
-                                {/* Total pondération */}
-                                <div className="mt-3 pt-3 border-t border-success/20 flex items-center justify-between">
-                                    <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Total des pondérations :</span>
-                                    <span className={`text-[13px] font-bold ${allocation === 'balanced' ? 'text-success' : allocation === 'over' ? 'text-danger' : 'text-warning'}`}>
-                                        {allocation === 'undefined' ? '—' : formatShare(totalPonderation)}
-                                        {allocation === 'balanced' && <CheckCircle2 size={14} className="inline ml-1" />}
-                                    </span>
+                                    <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-[12.5px] text-fg-muted">
+                                        <span className="font-mono font-semibold text-fg">{projectCode}</span> code attribué automatiquement, il identifie le projet dans toute l&apos;application.
+                                    </div>
                                 </div>
-                                {allocation !== 'balanced' && (
-                                    <div className="mt-2 text-[10px] text-warning">
-                                        {allocation === 'undefined'
-                                            ? "Renseignez le financement (étape 3) pour calculer les pondérations."
-                                            : allocation === 'over'
-                                                ? `Les composants dépassent le budget financé de ${formatShare(totalPonderation - 100)}.`
-                                                : `Il reste ${formatShare(100 - totalPonderation)} du budget financé à répartir.`}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                            )}
 
-                        {/* ── Info compteurs ── */}
-                        <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-fg flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                            <div className="text-[11px] text-primary-fg leading-relaxed">
-                                <p>Définissez l&apos;arborescence. <strong>{components.length}</strong> composant{components.length > 1 ? "s" : ""}, <strong>{totalSC}</strong> sous-composant{totalSC > 1 ? "s" : ""}, <strong>{totalActivities}</strong> activité{totalActivities > 1 ? "s" : ""}. Utilisez <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-success-subtle rounded text-success text-[10px] font-bold"><ChevronUp size={9} />Monter d&apos;un niveau</span> et <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-warning-subtle rounded text-warning text-[10px] font-bold"><ChevronDown size={9} />Descendre d&apos;un niveau</span> pour changer le niveau hiérarchique.</p>
-                            </div>
-                        </div>
+                            {currentStep === 2 && (
+                                <LocalisationStep region={region} setRegion={setRegion} departement={departement} setDepartement={setDepartement} ville={ville} setVille={setVille} localite={localite} setLocalite={setLocalite} lat={lat} setLat={setLat} lng={lng} setLng={setLng} autoDetected={autoDetected} setAutoDetected={setAutoDetected} />
+                            )}
 
-                        {/* ── Liste des composants ── */}
-                        <div className="space-y-3">
-                            {components.map((comp, ci) => (
-                                <div key={comp.id} className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3.5">
-                                    {/* ── Composant : Nom + Budget + Devise + Pondération + TypeActivite (si niveau le plus bas) + Actions ── */}
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <div className="w-7 h-7 bg-primary-subtle text-primary-fg rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
-                                        <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '12rem' }} />
+                            {currentStep === 3 && (
+                                <FinancementEditor value={financement} onChange={setFinancement} showErrors={showFinancementErrors} />
+                            )}
 
-                                        {/* Type d'activité (si niveau le plus bas) */}
-                                        {isComponentLowestLevel(comp) && (
-                                            <select value={comp.typeActivite || "travaux"} onChange={e => updateComponentType(ci, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[10px] font-semibold text-[var(--text-secondary)] px-2 py-1.5 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[140px] flex-shrink-0">
-                                                {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
-                                            </select>
-                                        )}
-                                        {/* Actions à droite */}
-                                        <div className="flex items-center gap-1 flex-shrink-0 ml-1 border-l border-[var(--border-subtle)] pl-2">
-                                            <button type="button" onClick={() => demoteComponent(ci)} disabled={!canIndent(components, comp.id)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-warning-subtle text-warning disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
-                                            <button type="button" onClick={() => removeComponent(ci)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={14} /></button>
+                            {currentStep === 4 && (
+                                <div className="space-y-4">
+                                    <AllocationGauge
+                                        allocated={budgetAlloue}
+                                        total={financementPreview.total}
+                                        status={allocation}
+                                        share={partAllouee}
+                                        parts={components.filter((c) => c.budget).map((c) => shareOf(toFCFA(c.budget, c.devise, financement.tauxChange), financementPreview.total))}
+                                    />
+                                    <StructureTreeEditor
+                                        value={components}
+                                        onChange={setComponents}
+                                        referenceFCFA={financementPreview.total}
+                                        rates={financement.tauxChange}
+                                        onConfirmRemove={(name, apply) => setPendingRemoval({ name, apply })}
+                                    />
+                                </div>
+                            )}
+
+                            {currentStep === 5 && (
+                                <div className="space-y-3">
+                                    {(allocation === "under" || allocation === "over" || !lieu || sources.length === 0) && (
+                                        <div className="rounded-[var(--radius-md)] border border-warning/30 bg-warning-subtle px-4 py-3">
+                                            <p className="flex items-center gap-2 text-[13px] font-semibold text-warning"><AlertTriangle size={15} /> À compléter plus tard</p>
+                                            <ul className="mt-1.5 ml-6 list-disc space-y-0.5 text-[12.5px] text-fg-muted">
+                                                {!lieu && <li>Localisation non renseignée.</li>}
+                                                {sources.length === 0 && <li>Aucune source de financement : le budget du projet est à 0.</li>}
+                                                {allocation === "under" && <li>Il reste {formatShare(100 - partAllouee)} du budget à répartir sur les composantes.</li>}
+                                                {allocation === "over" && <li>Les composantes dépassent le budget financé de {formatShare(partAllouee - 100)}.</li>}
+                                            </ul>
+                                            <p className="mt-1.5 text-[12px] text-fg-subtle">Rien de bloquant : le projet peut être créé.</p>
                                         </div>
+                                    )}
 
-                                        {/* Budget : montant ou pourcentage — ligne dédiée, pour ne jamais déborder */}
-                                        <div className="basis-full pl-9">
-                                            <ComponentBudgetInput
-                                                budget={comp.budget}
-                                                devise={comp.devise}
-                                                referenceFCFA={financementPreview.total}
-                                                rates={financement.tauxChange}
-                                                onChange={value => updateComponentBudget(ci, value)}
-                                            />
-                                        </div>
-                                    </div>
+                                    <ReviewSection title="Informations" onEdit={() => goTo(1)}>
+                                        <ReviewRow label="Nom" value={titre} />
+                                        <ReviewRow label="Code" value={<span className="font-mono">{projectCode}</span>} />
+                                        <ReviewRow label="Période" value={periode || "—"} />
+                                        {description.trim() && <ReviewRow label="Description" value={description} />}
+                                    </ReviewSection>
 
-                                    {/* ── Sous-composants ── */}
-                                    <div className="ml-9 pl-3 border-l-2 border-primary/20 space-y-1 mt-3">
-                                        {comp.sousComposants.map((sc, si) => (
-                                            <div key={sc.id}>
-                                                <div className="flex items-center gap-2 py-1.5">
-                                                    <div className="w-5 h-5 bg-warning-subtle text-warning rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
-                                                    <input type="text" value={sc.name} onChange={e => updateSCName(ci, si, e.target.value)} placeholder="Sous-composant..." className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[12px] font-semibold text-[var(--text-secondary)] px-1 py-0.5 transition-colors" />
-                                                    {/* Type d'activité (si niveau le plus bas) */}
-                                                    {isSousComposantLowestLevel(sc) && (
-                                                        <select value={sc.typeActivite || "travaux"} onChange={e => updateSCType(ci, si, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1.5 py-1 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[120px] flex-shrink-0">
-                                                            {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
-                                                        </select>
-                                                    )}
-                                                    {/* Actions à droite */}
-                                                    <div className="flex items-center gap-1 flex-shrink-0 border-l border-[var(--border-subtle)] pl-1.5">
-                                                        <button type="button" onClick={() => promoteSC(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-success-subtle text-success transition-all" title="Transformer en Composant"><ChevronUp size={15} /></button>
-                                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={!canIndent(components, sc.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-warning-subtle text-warning disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={15} /></button>
-                                                        <button type="button" onClick={() => removeSousComposant(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={12} /></button>
-                                                    </div>
-                                                </div>
-                                                {/* ── Activités ── */}
-                                                <div className="ml-7 pl-3 border-l border-warning/15 space-y-0.5 mt-0.5">
-                                                    {sc.activities.map((act, ai) => {
-                                                        const actName = getActivityName(act);
-                                                        const actType = getActivityType(act);
-                                                        const TYPE_COLORS: Record<string, string> = Object.fromEntries(ACTIVITY_TYPE_ORDER.map((t) => [t, TYPES_ACTIVITE[t].pastille]));
-                                                        return (
-                                                            <div key={ai} className="flex items-center gap-1.5 py-0.5 group">
-                                                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${TYPE_COLORS[actType] || "bg-type-travaux/20"}`} />
-                                                                <input type="text" value={actName} onChange={e => updateActivity(ci, si, ai, e.target.value)} placeholder="Activité..." className="flex-1 min-w-0 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] outline-none text-[11px] text-[var(--text-secondary)] px-2 py-1 focus:border-[var(--primary)] transition-colors" />
-                                                                {/* Type selector */}
-                                                                <select value={actType} onChange={e => updateActivityType(ci, si, ai, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1 py-1 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[120px] flex-shrink-0">
-                                                                    {ACTIVITY_TYPES.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
-                                                                </select>
-                                                                {/* Actions (visibles au hover) */}
-                                                                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity border-l border-[var(--border-subtle)] pl-1">
-                                                                    <button type="button" onClick={() => promoteActivity(ci, si, ai)} className="p-0.5 rounded-[var(--radius-sm)] hover:bg-success-subtle text-success transition-all" title="Transformer en Sous-composant"><ChevronUp size={14} /></button>
-                                                                    <button type="button" onClick={() => removeActivity(ci, si, ai)} className="p-0.5 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={11} /></button>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                    <button type="button" onClick={() => addActivity(ci, si)} className="flex items-center gap-1 text-[10px] font-medium text-[var(--primary-text)] hover:underline mt-1 py-1"><Plus size={10} /> Activité</button>
-                                                </div>
-                                            </div>
+                                    <ReviewSection title="Localisation" onEdit={() => goTo(2)}>
+                                        <ReviewRow label="Lieu" value={[lieu, localite].filter(Boolean).join(" · ") || "—"} />
+                                        {lat && lng && <ReviewRow label="Coordonnées" value={<span className="font-mono">{lat}, {lng}</span>} />}
+                                    </ReviewSection>
+
+                                    <ReviewSection title="Financement" onEdit={() => goTo(3)}>
+                                        <ReviewRow label="Mode" value={financement.type === "MOP" ? "Maîtrise d'ouvrage publique (MOP)" : "Partenariat public-privé (PPP)"} />
+                                        <ReviewRow label="Budget total" value={<span className="font-semibold tabular-nums">{fcfa(financementPreview.total)}</span>} />
+                                        {sources.map((s) => (
+                                            <ReviewRow key={s.id} label={<span className="flex items-center gap-2"><span className={`w-2 h-2 rounded-sm ${s.color}`} />{s.nom}</span>} value={<span className="tabular-nums">{fcfa(s.amount)} · {formatShare(s.pct)}</span>} />
                                         ))}
-                                        <button type="button" onClick={() => addSousComposant(ci)} className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)] mt-2 pt-1"><Plus size={12} /> Sous-composant</button>
-                                    </div>
-                                </div>
-                            ))}
-                            <button type="button" onClick={addComponent} className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-[var(--border-default)] rounded-[var(--radius-md)] text-[12px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-all">
-                                <Plus size={14} /> Ajouter un composant
-                            </button>
-                        </div>
-                    </div>
-                )}
+                                    </ReviewSection>
 
-                {/* Step 5: Arborescence (Prévisualisation) */}
-                {currentStep === 5 && (
-                    <div className="space-y-5">
-                        <div className="flex items-center gap-3 p-4 rounded-[var(--radius-md)] bg-[var(--primary-subtle)] border border-[var(--primary)]/20">
-                            <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--primary)]/10 flex items-center justify-center flex-shrink-0">
-                                <Layers size={16} className="text-[var(--primary-text)]" />
-                            </div>
-                            <div>
-                                <div className="text-[10px] font-bold text-[var(--primary-text)] uppercase tracking-wider">Arborescence du projet</div>
-                                <div className="text-[13px] font-medium text-[var(--text-primary)]">Aperçu de la structure que vous venez de créer</div>
-                            </div>
-                        </div>
-
-                        <div className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] p-5">
-                            <ul className="space-y-4">
-                                {components.map((comp, ci) => {
-                                    const isCompExpanded = expandedComponents.has(comp.id);
-                                    return (
-                                        <li key={comp.id}>
-                                            <div className="flex items-center gap-2">
-                                                {/* Bouton plier/déplier composante */}
-                                                {comp.sousComposants.length > 0 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleComponent(comp.id)}
-                                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-[var(--bg-surface-hover)] transition-colors flex-shrink-0"
-                                                        title={isCompExpanded ? "Replier" : "Déplier"}
-                                                    >
-                                                        {isCompExpanded ? (
-                                                            <ChevronDown size={14} className="text-[var(--text-tertiary)]" />
-                                                        ) : (
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-tertiary)]">
-                                                                <path d="M9 18l6-6-6-6" />
-                                                            </svg>
-                                                        )}
-                                                    </button>
-                                                )}
-                                                {comp.sousComposants.length === 0 && <div className="w-5" />}
-
-                                                <div className="w-6 h-6 bg-primary-subtle text-primary-fg rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
-                                                <span className="text-[14px] font-bold text-[var(--text-primary)]">
-                                                    {comp.name || `Composant ${ci + 1}`}
-                                                </span>
-                                                {comp.sousComposants.length > 0 && (
-                                                    <span className="text-[10px] text-[var(--text-tertiary)] font-medium">
-                                                        ({comp.sousComposants.length} SC, {comp.sousComposants.reduce((sum, sc) => sum + sc.activities.length, 0)} Act)
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {isCompExpanded && comp.sousComposants.length > 0 && (
-                                                <ul className="mt-2 ml-3 pl-4 border-l-2 border-[var(--border-subtle)] space-y-3">
-                                                    {comp.sousComposants.map((sc, si) => {
-                                                        const isScExpanded = expandedSousComposants.has(sc.id);
-                                                        return (
-                                                            <li key={sc.id}>
-                                                                <div className="flex items-center gap-2">
-                                                                    {/* Bouton plier/déplier sous-composante */}
-                                                                    {sc.activities.length > 0 && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => toggleSousComposant(sc.id)}
-                                                                            className="w-4 h-4 flex items-center justify-center rounded hover:bg-[var(--bg-surface-hover)] transition-colors flex-shrink-0"
-                                                                            title={isScExpanded ? "Replier" : "Déplier"}
-                                                                        >
-                                                                            {isScExpanded ? (
-                                                                                <ChevronDown size={12} className="text-[var(--text-tertiary)]" />
-                                                                            ) : (
-                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-tertiary)]">
-                                                                                    <path d="M9 18l6-6-6-6" />
-                                                                                </svg>
-                                                                            )}
-                                                                        </button>
-                                                                    )}
-                                                                    {sc.activities.length === 0 && <div className="w-4" />}
-
-                                                                    <div className="w-5 h-5 bg-warning-subtle text-warning rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
-                                                                    <span className="text-[13px] font-semibold text-[var(--text-secondary)]">
-                                                                        {sc.name || `Sous-composant ${si + 1}`}
-                                                                    </span>
-                                                                    {sc.activities.length > 0 && (
-                                                                        <span className="text-[9px] text-[var(--text-tertiary)] font-medium">
-                                                                            ({sc.activities.length} Act)
-                                                                        </span>
-                                                                    )}
+                                    <ReviewSection title="Structure" onEdit={() => goTo(4)}>
+                                        <p className="pb-2 text-[12.5px] text-fg-muted">{structureLabel}</p>
+                                        <ul className="space-y-1 text-[13px]">
+                                            {components.map((c, ci) => (
+                                                <li key={c.id}>
+                                                    <div className="flex items-baseline justify-between gap-3">
+                                                        <span className="font-semibold text-fg"><span className="font-mono text-fg-subtle mr-2">{ci + 1}</span>{c.name}</span>
+                                                        {c.budget ? <span className="text-[12.5px] tabular-nums text-fg-muted">{formatMoney(c.budget, 0)} {c.devise}</span> : null}
+                                                    </div>
+                                                    {c.sousComposants.map((sc, si) => (
+                                                        <div key={sc.id} className="ml-6">
+                                                            <div className="text-fg"><span className="font-mono text-fg-subtle mr-2">{ci + 1}.{si + 1}</span>{sc.name}</div>
+                                                            {sc.activities.map((a, ai) => (
+                                                                <div key={a.id} className="ml-6 flex items-center gap-2 text-fg-muted">
+                                                                    <span className="font-mono text-fg-subtle">{ci + 1}.{si + 1}.{ai + 1}</span>
+                                                                    <span className={`w-2 h-2 rounded-sm ${ACTIVITY_TYPES[a.typeActivite ?? "travaux"].pastille}`} />
+                                                                    {a.name}
                                                                 </div>
-
-                                                                {isScExpanded && sc.activities.length > 0 && (
-                                                                    <ul className="mt-2 ml-2 pl-4 border-l border-[var(--border-subtle)] space-y-1.5">
-                                                                        {sc.activities.map((act, ai) => {
-                                                                            const actType = getActivityType(act);
-                                                                            const TYPE_COLORS: Record<string, string> = Object.fromEntries(ACTIVITY_TYPE_ORDER.map((t) => [t, TYPES_ACTIVITE[t].pastille]));
-                                                                            return (
-                                                                                <li key={ai} className="flex items-center gap-2 text-[12px] text-[var(--text-tertiary)]">
-                                                                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${TYPE_COLORS[actType] || "bg-fg-subtle"}`} />
-                                                                                    {getActivityName(act) || `Activité ${ai + 1}`}
-                                                                                    <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] uppercase">
-                                                                                        {ACTIVITY_TYPES.find(t => t.id === actType)?.label || "Activité"}
-                                                                                    </span>
-                                                                                </li>
-                                                                            );
-                                                                        })}
-                                                                    </ul>
-                                                                )}
-                                                            </li>
-                                                        );
-                                                    })}
-                                                </ul>
-                                            )}
-                                        </li>
-                                    );
-                                })}
-                            </ul>
+                                                            ))}
+                                                        </div>
+                                                    ))}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </ReviewSection>
+                                </div>
+                            )}
                         </div>
                     </div>
-                )}
+                </div>
 
-                {currentStep === 6 && (
-                    <div className="text-center py-12">
-                        <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
-                            <Check size={24} className="text-success" />
-                        </div>
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Projet prêt à être créé</h3>
-                        <p className="text-[11px] text-[var(--text-tertiary)] max-w-xs mx-auto">Vérifiez les informations puis cliquez sur &quot;Créer le projet&quot;.</p>
-                        <div className="grid grid-cols-2 gap-3 mt-8 text-left max-w-lg mx-auto">
-                            <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-3 border border-[var(--border-default)]">
-                                <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Nom</div>
-                                <div className="text-[13px] font-semibold text-[var(--text-primary)]">{titre || "—"}</div>
-                            </div>
-                            <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-3 border border-[var(--border-default)]">
-                                <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Code</div>
-                                <div className="text-[13px] font-semibold text-[var(--text-primary)]">{projectCode}</div>
-                            </div>
-                            <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-3 border border-[var(--border-default)]">
-                                <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Localisation</div>
-                                <div className="text-[13px] font-semibold text-[var(--text-primary)]">{ville || region || "—"}</div>
-                            </div>
-                            <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-3 border border-[var(--border-default)]">
-                                <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Budget Total</div>
-                                <div className="text-[13px] font-semibold text-[var(--text-primary)]">
-                                    {financementPreview.total > 0 ? formatCurrency(financementPreview.total, "FCFA") : "À définir"}
-                                </div>
-                            </div>
-                            <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-3 border border-[var(--border-default)]">
-                                <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Financement</div>
-                                <div className="text-[13px] font-semibold text-[var(--text-primary)]">
-                                    {financement.type === "MOP"
-                                        ? `MOP — ${financement.bailleurs.length > 0 ? financement.bailleurs.map(b => b.nom).join(", ") : "—"}${financement.budgetNational.enabled ? " + Budget National" : ""}`
-                                        : `PPP — ${financement.partiesPubliques.length} public, ${financement.partiesPrivees.length} privé`
-                                    }
-                                </div>
-                            </div>
-                            <div className="bg-[var(--bg-inset)] rounded-[var(--radius-md)] p-3 border border-[var(--border-default)]">
-                                <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Structure</div>
-                                <div className="text-[13px] font-semibold text-[var(--text-primary)]">{components.length} Comp. <span className="text-[11px] text-[var(--text-tertiary)] font-normal">({totalSC} SC, {totalActivities} Act)</span></div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* ── Footer Actions ── */}
-            <div className="flex justify-between items-center">
-                <button
-                    onClick={handlePrev}
-                    disabled={currentStep === 1}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] text-[13px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                >
-                    <ArrowLeft size={14} />
-                    Précédent
-                </button>
-
-                <div className="flex items-center gap-3">
-                    <Link href="/projects" className="px-5 py-2.5 rounded-[var(--radius-md)] text-[13px] font-semibold text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors">
+                <footer className="flex-shrink-0 h-16 border-t border-line bg-surface px-5 sm:px-8 flex items-center gap-2.5">
+                    {currentStep > 1 && (
+                        <button type="button" onClick={() => setCurrentStep(currentStep - 1)} className="h-9 px-4 inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface text-[13px] font-semibold text-fg hover:bg-hover transition-colors">
+                            <ArrowLeft size={14} /> Précédent
+                        </button>
+                    )}
+                    <div className="flex-1" />
+                    <Link href="/projects" className="h-9 px-3 inline-flex items-center rounded-[var(--radius-md)] text-[13px] font-medium text-fg-muted hover:text-fg hover:bg-hover transition-colors">
                         Annuler
                     </Link>
                     <button
+                        type="button"
                         onClick={handleNext}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] text-[13px] font-semibold shadow-[var(--shadow-sm)] transition-all ${currentStep === 6 ? "bg-success hover:bg-success-hover text-on-success" : "bg-[var(--text-primary)] text-[var(--text-inverted)] hover:opacity-90"}`}
+                        disabled={creating}
+                        className="h-9 px-4 inline-flex items-center gap-2 rounded-[var(--radius-md)] bg-primary text-on-primary text-[13px] font-semibold hover:bg-primary-hover disabled:opacity-60 transition-colors"
                     >
-                        {currentStep === 6 ? "✓ Créer le projet" : "Suivant"}
-                        {currentStep < 6 && <ArrowRight size={14} />}
+                        {currentStep === LAST_STEP && <Check size={15} strokeWidth={2.5} />}
+                        {currentStep < LAST_STEP ? `Continuer · ${STEPS[currentStep].name}` : creating ? "Création…" : "Créer le projet"}
+                        {currentStep < LAST_STEP && <ArrowRight size={14} />}
                     </button>
-                </div>
+                </footer>
             </div>
 
+            {/* ── Aperçu ── */}
+            <aside className="hidden xl:flex w-[300px] flex-shrink-0 flex-col gap-3.5 border-l border-line bg-surface px-5 py-6 overflow-y-auto">
+                <span className="text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">Aperçu du projet</span>
+
+                <div className="space-y-2">
+                    <h3 className={`text-[16px] font-bold leading-snug break-words ${titre.trim() ? "text-fg" : "text-fg-subtle italic font-semibold"}`}>{titre.trim() || "Nom à saisir"}</h3>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono text-[11px] px-1.5 py-px rounded-[var(--radius-sm)] border border-line bg-inset text-fg-muted">{projectCode}</span>
+                        <span className="text-[11.5px] text-fg-subtle">code attribué automatiquement</span>
+                    </div>
+                </div>
+
+                <div className="rounded-[var(--radius-md)] bg-primary-subtle px-3.5 py-3">
+                    <p className="text-[11.5px] font-semibold text-primary-fg">Budget total</p>
+                    <p className="mt-0.5 text-[23px] font-bold tracking-tight tabular-nums text-primary-fg">{financementPreview.total > 0 ? fcfaCourt(financementPreview.total) : "—"}</p>
+                    <p className="mt-0.5 text-[11.5px] text-primary-fg/80">Calculé depuis les sources de financement</p>
+                </div>
+
+                <div>
+                    <ApercuRow icon={CalendarDays} label="Période" value={periode} vide="À définir" />
+                    <ApercuRow icon={MapPin} label="Localisation" value={lieu} vide="Non renseignée" />
+                    <ApercuRow icon={Coins} label="Financement" value={financementLabel} vide="Aucune source">
+                        {sources.length > 0 && financementPreview.total > 0 && (
+                            <div className="mt-2 flex h-2 gap-0.5 overflow-hidden rounded-full bg-inset">
+                                {sources.filter((s) => s.pct > 0).map((s) => <div key={s.id} className={s.color} style={{ width: `${s.pct}%` }} title={`${s.nom} : ${formatShare(s.pct)}`} />)}
+                            </div>
+                        )}
+                    </ApercuRow>
+                    <ApercuRow icon={Layers} label="Structure" value={totalActivities > 0 || totalSC > 0 || components.length > 1 ? structureLabel : ""} vide="À définir à l'étape suivante">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                            {typeCounts(components).map(([type, n]) => (
+                                <span key={type} className="inline-flex items-center gap-1.5 h-[22px] px-2 rounded-[var(--radius-sm)] border border-line text-[11.5px] text-fg-muted">
+                                    <span className={`w-[7px] h-[7px] rounded-sm ${ACTIVITY_TYPES[type].pastille}`} />
+                                    {ACTIVITY_TYPES[type].court} · {n}
+                                </span>
+                            ))}
+                        </div>
+                        {financementPreview.total > 0 && budgetAlloue > 0 && (
+                            <p className="mt-2 text-[11.5px] text-fg-subtle">{formatShare(partAllouee)} du budget réparti</p>
+                        )}
+                    </ApercuRow>
+                </div>
+            </aside>
+
             <ConfirmDialog
-                isOpen={confirmState !== null}
-                title={confirmState?.title || ""}
-                message={confirmState?.message || ""}
+                isOpen={pendingRemoval !== null}
+                title="Supprimer cet élément ?"
+                message={`« ${pendingRemoval?.name ?? ""} » et tout ce qu'il contient seront retirés de la structure.`}
                 confirmLabel="Supprimer"
                 cancelLabel="Annuler"
                 variant="danger"
-                onConfirm={() => {
-                    confirmState?.onConfirm();
-                    setConfirmState(null);
-                }}
-                onCancel={() => setConfirmState(null)}
+                onConfirm={() => { pendingRemoval?.apply(); setPendingRemoval(null); }}
+                onCancel={() => setPendingRemoval(null)}
             />
+        </div>
+    );
+}
 
+function ApercuRow({ icon: Icon, label, value, vide, children }: { icon: LucideIcon; label: string; value: string; vide: string; children?: React.ReactNode }) {
+    return (
+        <div className="flex gap-2.5 py-2.5 border-t border-line">
+            <Icon size={16} className="mt-0.5 flex-shrink-0 text-fg-subtle" />
+            <div className="min-w-0 flex-1">
+                <p className="text-[11.5px] text-fg-subtle">{label}</p>
+                <p className={`text-[13px] leading-snug ${value ? "font-semibold text-fg" : "italic text-fg-subtle"}`}>{value || vide}</p>
+                {value && children}
+            </div>
+        </div>
+    );
+}
+
+function AllocationGauge({ allocated, total, status, share, parts }: { allocated: number; total: number; status: AllocationStatus; share: number; parts: number[] }) {
+    if (status === "undefined") {
+        return (
+            <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3 text-[12.5px] text-fg-muted">
+                <Coins size={18} className="flex-shrink-0 text-fg-subtle" />
+                Aucun financement saisi : les budgets des composantes seront enregistrés sans pondération.
+            </div>
+        );
+    }
+    const tone = status === "balanced" ? "text-success" : status === "over" ? "text-danger" : "text-warning";
+    const bar = status === "balanced" ? "bg-success" : status === "over" ? "bg-danger" : "bg-primary";
+    return (
+        <div className="flex items-center gap-3.5 rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3">
+            <Coins size={18} className={`flex-shrink-0 ${status === "balanced" ? "text-success" : "text-fg-subtle"}`} />
+            <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-[12.5px]">
+                    <span className="text-fg-muted">
+                        <span className="font-bold tabular-nums text-fg">{fcfa(allocated)}</span> répartis sur {fcfa(total)}
+                    </span>
+                    <span className={`font-semibold ${tone}`}>
+                        {status === "balanced" && "100 % · pondérations complètes"}
+                        {status === "under" && `Reste ${fcfa(total - allocated)} (${formatShare(100 - share)})`}
+                        {status === "over" && `Dépassement de ${fcfa(allocated - total)}`}
+                    </span>
+                </div>
+                {/* Une part par composante, dans l'ordre du tableau. */}
+                <div className="flex h-2 gap-0.5 rounded-full bg-inset overflow-hidden">
+                    {parts.map((part, i) => (
+                        <div key={i} className={`${bar} transition-all`} style={{ width: `${Math.min(100, part)}%`, opacity: 1 - Math.min(0.55, i * 0.28) }} />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ReviewSection({ title, onEdit, children }: { title: string; onEdit: () => void; children: React.ReactNode }) {
+    return (
+        <section className="rounded-[var(--radius-lg)] border border-line bg-surface">
+            <div className="flex items-center justify-between px-4 h-11 border-b border-line">
+                <h3 className="text-[13.5px] font-semibold text-fg">{title}</h3>
+                <button type="button" onClick={onEdit} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-primary-fg hover:underline">
+                    <Pencil size={13} /> Modifier
+                </button>
+            </div>
+            <div className="px-4 py-3 space-y-1.5">{children}</div>
+        </section>
+    );
+}
+
+function ReviewRow({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
+    return (
+        <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-3 text-[13px]">
+            <span className="text-fg-muted">{label}</span>
+            <span className="text-fg break-words">{value}</span>
         </div>
     );
 }
