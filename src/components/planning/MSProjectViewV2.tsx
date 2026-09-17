@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ChevronRight, ChevronDown, Save, X, Calendar, Filter, Columns3, Search, RotateCcw,
-  ArrowDown, ArrowUp, CalendarClock, CornerDownRight, ZoomIn, ZoomOut, FolderPlus, IndentDecrease, IndentIncrease, ListTree, Pencil, Plus, Trash2,
+  ArrowDown, ArrowUp, CornerDownRight, FolderPlus, IndentDecrease, IndentIncrease, ListTree, Pencil, Plus, Trash2,
 } from "lucide-react";
 import type { Project } from "@/lib/projectStore";
 import type { Planning, Livrable } from "@/services/api/planningService";
@@ -24,6 +24,7 @@ import { checkStructureChange, hasPlannedDescendant } from "@/lib/structureRules
 import { useStructureEditor } from "@/hooks/useStructureEditor";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button } from "@/components/ui/button";
 import { StructureEditBar, StructureRowMenu, type StructureAction } from "./StructureEditBar";
 import { PROJECT_ROOT_ID, formatBudget, formatDuration, rollupStructure, type Metrics } from "@/lib/planningRollup";
 import { TIME_SCALES, buildTimeline, daysBetween, dateToX, suggestScale, xToDate, type TimeScale } from "@/lib/timescale";
@@ -32,7 +33,7 @@ import { TIME_SCALES, buildTimeline, daysBetween, dateToX, suggestScale, xToDate
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const ROW_HEIGHT = 28;
+const ROW_HEIGHT = 34;
 const HEADER_HEIGHT = 44;
 /** En-tête du Gantt : bandeau supérieur + graduation = hauteur de l'en-tête du tableau. */
 const GANTT_TOP_HEIGHT = 18;
@@ -59,17 +60,12 @@ const MSP_BAR_BLUE = "var(--type-travaux)";
 const MSP_SUMMARY_COLOR = "var(--summary-bar)";
 const MSP_TODAY_COLOR = "var(--success)";
 const MSP_PROJECT_COLOR = "var(--primary)";
-const MSP_PROJECT_GRADIENT = "var(--primary-hover)";
 const MSP_ALERTE_COLOR = "var(--warning)";
 const MSP_PROBLEME_COLOR = "var(--danger)";
 /** Chemin critique : un contour. La teinte reste réservée au type d'activité. */
 const MSP_CRITIQUE_COLOR = "var(--danger)";
 /** Référence de base : une barre grise sous la barre courante, comme MS Project. */
 const MSP_REFERENCE_COLOR = "var(--text-tertiary)";
-/** Niveaux de la WBS : une intensité décroissante, pas une teinte de plus. */
-const MSP_NIVEAU_COMPOSANT = "var(--text-primary)";
-const MSP_NIVEAU_SOUS_COMPOSANT = "var(--text-secondary)";
-const MSP_NIVEAU_FEUILLE = "var(--text-tertiary)";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COLUMN DEFINITIONS (configurable)
@@ -88,25 +84,25 @@ interface ColumnDef {
 }
 
 const COLUMN_DEFS: ColumnDef[] = [
-  { id: "numero", label: "N°", width: "60px", align: "center", defaultVisible: true, filterType: "text", field: "numero" },
-  { id: "nom", label: "Nom", width: "minmax(200px, 1fr)", align: "left", defaultVisible: true, filterType: "level", field: "nom" },
-  { id: "type", label: "Type", width: "110px", align: "center", defaultVisible: true, filterType: "text", field: "activityType" },
-  { id: "ponderation", label: "Pond.", width: "70px", align: "center", defaultVisible: false, filterType: "number", field: "ponderation" },
-  { id: "dateDebut", label: "Début", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateDebut" },
-  { id: "dateFin", label: "Fin", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateFin" },
-  { id: "duree", label: "Durée", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "duree" },
-  { id: "avancement", label: "Avanc.", width: "90px", align: "center", defaultVisible: true, filterType: "number", field: "progress" },
-  { id: "budget", label: "Budget", width: "80px", align: "right", defaultVisible: false, filterType: "number", field: "budget" },
-  { id: "delai", label: "Délai", width: "70px", align: "center", defaultVisible: false, filterType: "number", field: "delai" },
-  { id: "dateEcheance", label: "Échéance", width: "90px", align: "center", defaultVisible: false, filterType: "date", field: "dateEcheance" },
-  { id: "predecesseur", label: "Préd.", width: "60px", align: "center", defaultVisible: false, filterType: "ref", field: "predecesseur" },
-  { id: "successeur", label: "Succ.", width: "60px", align: "center", defaultVisible: false, filterType: "ref", field: "successeur" },
-  { id: "marge", label: "Marge", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "margeTotale" },
-  { id: "ecart", label: "Écart réf.", width: "80px", align: "center", defaultVisible: true, filterType: "number", field: "ecartReference" },
+  { id: "numero", label: "N°", width: "46px", align: "center", defaultVisible: true, filterType: "text", field: "numero" },
+  { id: "nom", label: "Nom", width: "minmax(232px, 1fr)", align: "left", defaultVisible: true, filterType: "level", field: "nom" },
+  { id: "type", label: "Type", width: "90px", align: "left", defaultVisible: true, filterType: "text", field: "activityType" },
+  { id: "ponderation", label: "Pond.", width: "62px", align: "right", defaultVisible: true, filterType: "number", field: "ponderation" },
+  { id: "dateDebut", label: "Début", width: "76px", align: "left", defaultVisible: true, filterType: "date", field: "dateDebut" },
+  { id: "dateFin", label: "Fin", width: "76px", align: "left", defaultVisible: true, filterType: "date", field: "dateFin" },
+  { id: "duree", label: "Durée", width: "62px", align: "right", defaultVisible: true, filterType: "number", field: "duree" },
+  { id: "avancement", label: "Avancement", width: "96px", align: "left", defaultVisible: true, filterType: "number", field: "progress" },
+  { id: "budget", label: "Budget", width: "64px", align: "right", defaultVisible: true, filterType: "number", field: "budget" },
+  { id: "delai", label: "Délai", width: "62px", align: "right", defaultVisible: false, filterType: "number", field: "delai" },
+  { id: "dateEcheance", label: "Échéance", width: "76px", align: "left", defaultVisible: false, filterType: "date", field: "dateEcheance" },
+  { id: "predecesseur", label: "Préd.", width: "56px", align: "center", defaultVisible: false, filterType: "ref", field: "predecesseur" },
+  { id: "successeur", label: "Succ.", width: "56px", align: "center", defaultVisible: false, filterType: "ref", field: "successeur" },
+  { id: "marge", label: "Marge", width: "62px", align: "right", defaultVisible: false, filterType: "number", field: "margeTotale" },
+  { id: "ecart", label: "Écart réf.", width: "76px", align: "right", defaultVisible: false, filterType: "number", field: "ecartReference" },
 ];
 
-/** Clé de stockage local du choix de colonnes (le défaut tient dans le volet de 800 px). */
-const CLE_COLONNES = "planning.colonnesVisibles";
+/** Clé de stockage local du choix de colonnes ; par défaut, celles de la maquette. */
+const CLE_COLONNES = "planning.colonnesVisibles.v2";
 
 interface ColumnFilter {
   columnId: string;
@@ -137,6 +133,8 @@ interface MSProjectViewV2Props {
   canEditStructure?: boolean;
   /** Structure enregistrée : le parent recharge projet et planifications. */
   onStructureSaved?: (project: Project) => void;
+  /** En-tête de l'écran : titre, code et décompte des activités planifiées. */
+  entete?: { titre: string; code: string; planifiees: number; total: number };
 }
 
 interface TaskRow {
@@ -221,12 +219,14 @@ function ProgressCell({ value, summary, planned, total }: { value?: number; summ
   return (
     <div
       title={summary && total ? `${planned ?? 0} unité(s) planifiée(s) sur ${total}` : undefined}
-      style={{ display: "flex", alignItems: "center", gap: 5, height: ROW_HEIGHT, padding: "0 6px" }}
+      style={{ display: "flex", alignItems: "center", gap: 7, height: ROW_HEIGHT, padding: "0 8px" }}
     >
-      <div style={{ flex: 1, height: 5, borderRadius: 3, background: "var(--msp-border)", overflow: "hidden" }}>
-        {value !== undefined && <div style={{ width: `${pct}%`, height: "100%", background: pct >= 100 ? MSP_TODAY_COLOR : MSP_BAR_BLUE }} />}
-      </div>
-      <span style={{ fontSize: 10, minWidth: 30, textAlign: "right", color: value === undefined ? "var(--msp-text-muted)" : "inherit" }}>
+      {value !== undefined && (
+        <div style={{ flex: 1, height: 5, borderRadius: 999, background: "var(--bg-inset)", border: "1px solid var(--border-default)", overflow: "hidden" }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: pct >= 100 ? "var(--success)" : "var(--primary)" }} />
+        </div>
+      )}
+      <span style={{ fontSize: 11, width: value === undefined ? undefined : 30, textAlign: value === undefined ? "left" : "right", color: value === undefined ? "var(--text-tertiary)" : "inherit" }}>
         {value === undefined ? "—" : `${Math.round(value)} %`}
       </span>
     </div>
@@ -245,6 +245,7 @@ export function MSProjectViewV2({
   focusedActivityPath,
   canEditStructure = false,
   onStructureSaved,
+  entete,
 }: MSProjectViewV2Props) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const initialExpanded = new Set<string>();
@@ -330,7 +331,10 @@ export function MSProjectViewV2({
   const rightHeaderRef = useRef<HTMLDivElement>(null);
   
   // État pour le redimensionnement
-  const [leftWidth, setLeftWidth] = useState(50);
+  // Largeur du tableau en pixels ; par défaut, la somme des colonnes affichées.
+  const [leftWidth, setLeftWidth] = useState<number | null>(null);
+  const [vue, setVue] = useState<"tableau" | "gantt">("tableau");
+  const [menuPlanifier, setMenuPlanifier] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1095,8 +1099,8 @@ export function MSProjectViewV2({
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
-      if (pct >= 20 && pct <= 80) setLeftWidth(pct);
+      const px = e.clientX - rect.left;
+      if (px >= 240 && px <= rect.width - 200) setLeftWidth(px);
     };
     const handleMouseUp = () => setIsResizing(false);
 
@@ -1131,9 +1135,9 @@ export function MSProjectViewV2({
   // RENDU DES CELLULES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const getIndent = (level: number) => level * 18;
+  const getIndent = (level: number) => level * 14;
 
-  const renderCell = (task: TaskRow, field: string) => {
+  const renderCell = (task: TaskRow, field: string, align: ColumnDef["align"] = "left") => {
     const value = (task as any)[field];
     const isLivrable = task.type === "livrable";
     const isEditing = editingCell?.rowId === task.id && editingCell?.field === field;
@@ -1290,9 +1294,9 @@ export function MSProjectViewV2({
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          padding: "0 4px",
+          padding: "0 8px",
           lineHeight: `${ROW_HEIGHT}px`,
-          background: isCalculated ? "var(--msp-bg-header)" : "transparent",
+          textAlign: align,
           color:
             field === 'margeTotale' && task.critique
               ? MSP_CRITIQUE_COLOR
@@ -1316,12 +1320,23 @@ export function MSProjectViewV2({
     );
   };
 
+  /** Unités planifiables qui n'ont pas encore de planification. */
+  const activitesAPlanifier = units.filter((u) => u.isLeaf && !plannedIds.has(u.id));
+  const periodeProjet = metrics.get(PROJECT_ROOT_ID);
+  const dateLongue = (d: Date) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  const sousTitre = entete
+    ? [
+        `${entete.planifiees} activité${entete.planifiees > 1 ? "s" : ""} planifiée${entete.planifiees > 1 ? "s" : ""} sur ${entete.total}`,
+        periodeProjet?.start && periodeProjet?.finish ? `${dateLongue(periodeProjet.start)} → ${dateLongue(periodeProjet.finish)}` : null,
+      ].filter(Boolean).join(" · ")
+    : "";
+
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDU
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="msp-root" style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", position: "relative" }}>
+    <div className="msp-root" style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", position: "relative" }}>
       {/* MS Project Scoped Styles */}
       <style>{`
         .msp-root {
@@ -1392,25 +1407,96 @@ export function MSProjectViewV2({
         .msp-summary-bar::after {
           content: '';
           position: absolute;
-          bottom: -4px;
+          top: 100%;
           width: 0;
           height: 0;
+          border-bottom: 5px solid transparent;
         }
         .msp-summary-bar::before {
           left: 0;
-          border-left: 5px solid ${MSP_SUMMARY_COLOR};
-          border-right: 5px solid transparent;
-          border-top: 4px solid ${MSP_SUMMARY_COLOR};
-          border-bottom: 4px solid transparent;
+          border-left: 5px solid var(--msp-summary);
         }
         .msp-summary-bar::after {
           right: 0;
-          border-right: 5px solid ${MSP_SUMMARY_COLOR};
-          border-left: 5px solid transparent;
-          border-top: 4px solid ${MSP_SUMMARY_COLOR};
-          border-bottom: 4px solid transparent;
+          border-right: 5px solid var(--msp-summary);
         }
       `}</style>
+
+      {/* ─── En-tête : projet et actions ─── */}
+      {entete && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, flexShrink: 0,
+          padding: "20px 24px 16px", background: "var(--bg-surface)", borderBottom: "1px solid var(--border-default)",
+        }}>
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary-subtle text-primary-fg">
+              <Calendar size={20} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.75">
+              <h1 className="flex min-w-0 items-center gap-2.5">
+                <span className="truncate text-xl font-bold text-fg">{entete.titre}</span>
+                <span className="shrink-0 rounded border border-line bg-inset px-1.5 py-px font-mono text-[11px] font-normal text-fg-muted">{entete.code}</span>
+              </h1>
+              <p className="text-[12.5px] text-fg-muted">{sousTitre}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            {canEditStructure && !editor.isEditing && (
+              <Button
+                variant="secondary"
+                onClick={startStructureEdit}
+                disabled={hasChanges}
+                title={hasChanges ? "Enregistrez d'abord les modifications des livrables" : "Ajouter, déplacer, décomposer ou supprimer des unités"}
+              >
+                <ListTree /> Modifier la structure
+              </Button>
+            )}
+            {onActivityClick && !editor.isEditing && (
+              <div style={{ position: "relative" }}>
+                <Button
+                  aria-expanded={menuPlanifier}
+                  onClick={() => setMenuPlanifier(!menuPlanifier)}
+                  disabled={activitesAPlanifier.length === 0}
+                  title={activitesAPlanifier.length === 0 ? "Toutes les activités sont planifiées" : undefined}
+                >
+                  <Plus /> Planifier une activité
+                </Button>
+                {menuPlanifier && (
+                  <>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 999 }} onClick={() => setMenuPlanifier(false)} />
+                    <div
+                      role="menu"
+                      className="rounded-lg border border-line bg-surface py-1.5 shadow-lg"
+                      style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 1000, minWidth: 280, maxHeight: 360, overflowY: "auto" }}
+                    >
+                      <div className="px-3 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-fg-subtle uppercase">Activités à planifier</div>
+                      {activitesAPlanifier.map((unite) => (
+                        <button
+                          key={unite.id}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => { setMenuPlanifier(false); onActivityClick(unite.id); }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-hover"
+                        >
+                          <span aria-hidden className="size-1.75 shrink-0 rounded-xs" style={{ background: ACTIVITY_COLORS[unite.typeActivite || "travaux"] || MSP_BAR_BLUE }} />
+                          <span className="flex min-w-0 flex-col">
+                            <span className="truncate text-[13px] font-medium text-fg">{unite.name}</span>
+                            {unite.ancestors.length > 0 && (
+                              <span className="truncate text-xs text-fg-muted">
+                                {unite.ancestors.map((id) => units.find((u) => u.id === id)?.name).filter(Boolean).join(" › ")}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ─── Édition de la structure ──────────────── */}
       {editor.isEditing && (
@@ -1446,195 +1532,133 @@ export function MSProjectViewV2({
               : <span style={{ fontSize: 10, opacity: 0.7 }}>• Cliquez pour éditer • Entrée pour valider</span>}
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button
-              onClick={handleCancel}
-              style={{
-                display: "flex", alignItems: "center", gap: 4, padding: "4px 10px",
-                background: "#666", color: "#fff", border: "none", borderRadius: 2,
-                fontSize: 11, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              <X size={12} /> Annuler
-            </button>
-            <button
-              onClick={handleSave}
-              style={{
-                display: "flex", alignItems: "center", gap: 4, padding: "4px 10px",
-                background: MSP_TODAY_COLOR, color: "#fff", border: "none", borderRadius: 2,
-                fontSize: 11, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              <Save size={12} /> Sauvegarder
-            </button>
+            <Button variant="secondary" size="sm" onClick={handleCancel}>
+              <X /> Annuler
+            </Button>
+            <Button size="sm" onClick={handleSave}>
+              <Save /> Sauvegarder
+            </Button>
           </div>
         </div>
       )}
 
-      {/* ─── Column & Filter Toolbar ──────────────────────────────── */}
+      {/* ─── Barre d'outils : vue, colonnes, filtres, échelle ─── */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "4px 12px", background: "var(--msp-bg-header)",
-        borderBottom: "1px solid var(--msp-border)", fontSize: 11, gap: 8, flexShrink: 0,
+        display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, flexShrink: 0,
+        padding: "10px 24px", background: "var(--bg-surface)", borderBottom: "1px solid var(--border-default)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button
-            onClick={() => setShowColumnPicker(!showColumnPicker)}
-            style={{
-              display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
-              background: showColumnPicker ? "var(--primary-subtle)" : "transparent",
-              border: "1px solid var(--msp-border)", borderRadius: 3,
-              color: "var(--msp-text)", fontSize: 10, fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            <Columns3 size={12} /> Colonnes
-          </button>
-
-          <div role="group" aria-label="Échelle de temps" style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: 6 }}>
+        <div role="group" aria-label="Affichage" className="inline-flex gap-0.5 rounded-lg border border-line bg-inset p-0.75">
+          {(["tableau", "gantt"] as const).map((option) => (
             <button
-              onClick={() => zoom(-1)}
-              disabled={scale === TIME_SCALES[TIME_SCALES.length - 1].id}
-              title="Dézoomer (Ctrl + molette)"
-              className="msp-tool"
-              style={{ display: "flex", padding: 3, background: "transparent", border: "none", borderRadius: 3, color: "var(--msp-text)", cursor: "pointer" }}
+              key={option}
+              type="button"
+              aria-pressed={vue === option}
+              onClick={() => setVue(option)}
+              className={vue === option ? "flex h-6.5 items-center rounded-md bg-surface px-3 text-xs font-semibold text-fg shadow-sm" : "flex h-6.5 items-center rounded-md px-3 text-xs font-medium text-fg-muted transition-colors hover:text-fg"}
             >
-              <ZoomOut size={13} />
+              {option === "tableau" ? "Tableau" : "Gantt"}
             </button>
-            <div style={{ display: "flex", border: "1px solid var(--msp-border)", borderRadius: 3, overflow: "hidden" }}>
-              {TIME_SCALES.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => changeScale(option.id)}
-                  aria-pressed={scale === option.id}
-                  style={{
-                    padding: "3px 8px", border: "none", fontSize: 10, fontWeight: 600, cursor: "pointer",
-                    background: scale === option.id ? "var(--primary)" : "transparent",
-                    color: scale === option.id ? "#fff" : "var(--msp-text)",
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => zoom(1)}
-              disabled={scale === TIME_SCALES[0].id}
-              title="Zoomer (Ctrl + molette)"
-              className="msp-tool"
-              style={{ display: "flex", padding: 3, background: "transparent", border: "none", borderRadius: 3, color: "var(--msp-text)", cursor: "pointer" }}
-            >
-              <ZoomIn size={13} />
-            </button>
-            <button
-              onClick={() => scrollToDate(new Date())}
-              title="Aller à aujourd'hui"
-              className="msp-tool"
-              style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 6px", background: "transparent", border: "none", borderRadius: 3, color: "var(--msp-text)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
-            >
-              <CalendarClock size={12} /> Aujourd&apos;hui
-            </button>
-          </div>
-
-          {canEditStructure && !editor.isEditing && (
-            <button
-              onClick={startStructureEdit}
-              disabled={hasChanges}
-              title={hasChanges ? "Enregistrez d'abord les modifications des livrables" : "Ajouter, déplacer, décomposer ou supprimer des unités"}
-              style={{
-                display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
-                background: "transparent", border: "1px solid var(--msp-border)", borderRadius: 3,
-                color: "var(--msp-text)", fontSize: 10, fontWeight: 600,
-                cursor: hasChanges ? "not-allowed" : "pointer", opacity: hasChanges ? 0.5 : 1,
-              }}
-            >
-              <ListTree size={12} /> Modifier la structure
-            </button>
-          )}
-
-
-          {levelFilter !== "all" && (
-            <button
-              onClick={() => setLevelFilter("all")}
-              style={{
-                display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
-                background: voile(MSP_PROJECT_COLOR, 10), border: `1px solid ${voile(MSP_PROJECT_COLOR, 30)}`,
-                borderRadius: 3, color: MSP_PROJECT_COLOR, fontSize: 10, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              <X size={10} /> Niveau : {levelFilter === "components" ? "Composantes" : levelFilter === "subcomponents" ? "Sous-composantes" : levelFilter === "activities" ? "Activités" : "Livrables"}
-            </button>
-          )}
-
-          {activeFilters.size > 0 && (
-            <button
-              onClick={clearAllFilters}
-              style={{
-                display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
-                background: voile(MSP_ALERTE_COLOR, 10), border: `1px solid ${voile(MSP_ALERTE_COLOR, 30)}`,
-                borderRadius: 3, color: MSP_ALERTE_COLOR, fontSize: 10, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              <X size={10} /> {activeFilters.size} filtre{activeFilters.size > 1 ? "s" : ""} actif{activeFilters.size > 1 ? "s" : ""}
-            </button>
-          )}
+          ))}
         </div>
-        <span style={{ fontSize: 10, color: "var(--msp-text-muted)" }}>
-          {editor.isEditing
-            ? "Clic : sélectionner • double-clic ou F2 : renommer • clic droit : actions"
-            : "Clic droit sur en-tête = gérer les colonnes"}
-        </span>
-      </div>
-
-      {/* Column picker dropdown */}
-      {showColumnPicker && (
-        <div style={{
-          position: "absolute", top: 80, left: 12, zIndex: 1000,
-          background: "var(--bg-surface)", border: "1px solid var(--msp-border-header)",
-          borderRadius: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.15)", padding: "6px 0",
-          minWidth: 200, fontSize: 11,
-        }}>
-          <div style={{ padding: "4px 12px", fontSize: 10, fontWeight: 700, color: "var(--msp-text-header)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-            Colonnes visibles
-          </div>
-          {COLUMN_DEFS.map(col => {
-            const isLocked = col.id === "numero" || col.id === "nom";
-            const isVisible = visibleColumns.has(col.id);
-            return (
+        <div style={{ position: "relative" }}>
+          <Button variant="secondary" size="sm" aria-expanded={showColumnPicker} onClick={() => setShowColumnPicker(!showColumnPicker)}>
+            <Columns3 /> Colonnes
+          </Button>
+          {showColumnPicker && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 1000,
+              background: "var(--bg-surface)", border: "1px solid var(--msp-border-header)",
+              borderRadius: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.15)", padding: "6px 0",
+              minWidth: 200, fontSize: 11,
+            }}>
+              <div style={{ padding: "4px 12px", fontSize: 10, fontWeight: 700, color: "var(--msp-text-header)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Colonnes visibles
+              </div>
+              {COLUMN_DEFS.map(col => {
+                const isLocked = col.id === "numero" || col.id === "nom";
+                const isVisible = visibleColumns.has(col.id);
+                return (
+                  <button
+                    key={col.id}
+                    onClick={() => !isLocked && toggleColumn(col.id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%",
+                      padding: "5px 12px", background: "none", border: "none",
+                      color: isLocked ? "var(--msp-text-muted)" : "var(--msp-text)",
+                      cursor: isLocked ? "not-allowed" : "pointer", fontSize: 11, textAlign: "left",
+                    }}
+                  >
+                    <span style={{
+                      width: 14, height: 14, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center",
+                      border: `1.5px solid ${isVisible ? MSP_TODAY_COLOR : "var(--msp-border)"}`,
+                      background: isVisible ? MSP_TODAY_COLOR : "transparent",
+                      color: "#fff", fontSize: 9, fontWeight: 700,
+                    }}>
+                      {isVisible ? "✓" : ""}
+                    </span>
+                    {col.label}
+                    {isLocked && <span style={{ fontSize: 9, color: "var(--msp-text-muted)", marginLeft: "auto" }}>verrouillé</span>}
+                  </button>
+                );
+              })}
+              <div style={{ borderTop: "1px solid var(--msp-border)", margin: "4px 0" }} />
               <button
-                key={col.id}
-                onClick={() => !isLocked && toggleColumn(col.id)}
+                onClick={() => { resetColumns(); setShowColumnPicker(false); }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                  display: "flex", alignItems: "center", gap: 6, width: "100%",
                   padding: "5px 12px", background: "none", border: "none",
-                  color: isLocked ? "var(--msp-text-muted)" : "var(--msp-text)",
-                  cursor: isLocked ? "not-allowed" : "pointer", fontSize: 11, textAlign: "left",
+                  color: "var(--primary-text)", cursor: "pointer", fontSize: 11,
                 }}
               >
-                <span style={{
-                  width: 14, height: 14, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center",
-                  border: `1.5px solid ${isVisible ? MSP_TODAY_COLOR : "var(--msp-border)"}`,
-                  background: isVisible ? MSP_TODAY_COLOR : "transparent",
-                  color: "#fff", fontSize: 9, fontWeight: 700,
-                }}>
-                  {isVisible ? "✓" : ""}
-                </span>
-                {col.label}
-                {isLocked && <span style={{ fontSize: 9, color: "var(--msp-text-muted)", marginLeft: "auto" }}>verrouillé</span>}
+                <RotateCcw size={11} /> Réinitialiser
               </button>
-            );
-          })}
-          <div style={{ borderTop: "1px solid var(--msp-border)", margin: "4px 0" }} />
+            </div>
+          )}
+        </div>
+        {levelFilter !== "all" && (
           <button
-            onClick={() => { resetColumns(); setShowColumnPicker(false); }}
+            onClick={() => setLevelFilter("all")}
             style={{
-              display: "flex", alignItems: "center", gap: 6, width: "100%",
-              padding: "5px 12px", background: "none", border: "none",
-              color: "var(--primary-text)", cursor: "pointer", fontSize: 11,
+              display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
+              background: voile(MSP_PROJECT_COLOR, 10), border: `1px solid ${voile(MSP_PROJECT_COLOR, 30)}`,
+              borderRadius: 3, color: MSP_PROJECT_COLOR, fontSize: 10, fontWeight: 600, cursor: "pointer",
             }}
           >
-            <RotateCcw size={11} /> Réinitialiser
+            <X size={10} /> Niveau : {levelFilter === "components" ? "Composantes" : levelFilter === "subcomponents" ? "Sous-composantes" : levelFilter === "activities" ? "Activités" : "Livrables"}
           </button>
+        )}
+
+        {activeFilters.size > 0 && (
+          <button
+            onClick={clearAllFilters}
+            style={{
+              display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
+              background: voile(MSP_ALERTE_COLOR, 10), border: `1px solid ${voile(MSP_ALERTE_COLOR, 30)}`,
+              borderRadius: 3, color: MSP_ALERTE_COLOR, fontSize: 10, fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            <X size={10} /> {activeFilters.size} filtre{activeFilters.size > 1 ? "s" : ""} actif{activeFilters.size > 1 ? "s" : ""}
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        <div role="group" aria-label="Échelle de temps" className="inline-flex gap-0.5 rounded-lg border border-line bg-inset p-0.75">
+          {TIME_SCALES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={scale === option.id}
+              onClick={() => changeScale(option.id)}
+              title="Ctrl + molette sur le Gantt pour zoomer"
+              className={scale === option.id ? "flex h-6.5 items-center rounded-md bg-primary px-2.5 text-xs font-semibold text-on-primary" : "flex h-6.5 items-center rounded-md px-2.5 text-xs font-medium text-fg-muted transition-colors hover:text-fg"}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-      )}
+        <Button variant="ghost" size="sm" onClick={() => scrollToDate(new Date())}>
+          Aujourd&apos;hui
+        </Button>
+      </div>
 
       {/* Right-click context menu */}
       {contextMenu && (
@@ -1680,21 +1704,20 @@ export function MSProjectViewV2({
           display: "flex",
           flex: 1,
           overflow: "hidden",
-          background: "var(--msp-bg)",
-          border: "1px solid var(--msp-border-header)",
-          color: "var(--msp-text)",
-          fontSize: 11,
+          background: "var(--bg-surface)",
+          color: "var(--text-primary)",
+          fontSize: 12,
         }}
       >
         {/* ════════════ LEFT PANEL — Table ════════════ */}
         <div
           style={{
-            width: `${leftWidth}%`,
-            display: "flex",
+            width: leftWidth ?? largeurColonnes,
+            maxWidth: "75%",
+            display: vue === "gantt" ? "none" : "flex",
             flexDirection: "column",
             overflow: "hidden",
             flexShrink: 0,
-            borderRight: "2px solid var(--msp-border-header)",
           }}
         >
           <div
@@ -1703,34 +1726,32 @@ export function MSProjectViewV2({
             onScroll={handleLeftScroll}
             style={{ flex: 1, overflowY: "auto", overflowX: "auto", position: "relative" }}
           >
-            <div style={{ minWidth: Math.max(800, largeurColonnes), display: "flex", flexDirection: "column" }}>
+            <div style={{ minWidth: largeurColonnes, display: "flex", flexDirection: "column" }}>
               {/* Table Header — dynamic columns */}
               <div
                 onContextMenu={handleHeaderContextMenu}
                 style={{
                   display: "grid",
                   gridTemplateColumns: gridTemplate,
-                  background: "var(--msp-bg-header)",
-                  borderBottom: "2px solid var(--msp-border-header)",
+                  background: "var(--bg-inset)",
+                  borderBottom: "1px solid var(--border-strong)",
                   position: "sticky",
                   top: 0,
                   zIndex: 10,
                 }}
               >
-                {columnsVisible.map((col, colIdx) => {
-                  const hasFilter = activeFilters.has(col.id);
+                {columnsVisible.map((col) => {
                   const isFilterOpen = filterDropdown === col.id;
-                  const isLast = colIdx === columnsVisible.length - 1;
 
                   return (
                     <div
                       key={col.id}
                       style={{
-                        display: "flex", alignItems: "center", justifyContent: col.id === "nom" ? "flex-start" : "center",
-                        gap: 3, borderRight: isLast ? "none" : "1px solid var(--msp-border)",
-                        padding: col.id === "nom" ? "0 8px" : "0 2px",
-                        height: HEADER_HEIGHT, color: "var(--msp-text-header)",
-                        fontWeight: 700, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.3px",
+                        display: "flex", alignItems: "center",
+                        justifyContent: col.align === "left" ? "flex-start" : col.align === "right" ? "flex-end" : "center",
+                        gap: 3, padding: "0 8px",
+                        height: HEADER_HEIGHT, color: "var(--text-tertiary)",
+                        fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.4px",
                         position: "relative",
                       }}
                     >
@@ -1884,12 +1905,10 @@ export function MSProjectViewV2({
               </div>
 
               {/* Table Body — dynamic columns */}
-              {filteredTasks.map((task, index) => {
+              {filteredTasks.map((task) => {
                 const isSummary = task.type === "project" || task.type === "component" || task.type === "subcomponent";
                 const isProject = task.type === "project";
-                const rowBg = isProject
-                  ? `linear-gradient(90deg, ${voile(MSP_PROJECT_COLOR, 8)}, ${voile(MSP_PROJECT_COLOR, 3)})`
-                  : index % 2 === 0 ? "var(--msp-bg-row-even)" : "var(--msp-bg-row-odd)";
+                const rowBg = isProject ? "var(--primary-subtle)" : "var(--bg-surface)";
                 const isSelected = editor.isEditing && !!task.unitId && task.unitId === selectedId;
                 const isRenaming = !!task.unitId && renaming?.id === task.unitId;
 
@@ -1909,19 +1928,17 @@ export function MSProjectViewV2({
                       gridTemplateColumns: gridTemplate,
                       height: ROW_HEIGHT,
                       background: rowBg,
-                      borderBottom: isProject ? "2px solid var(--msp-border-header)" : "1px solid var(--msp-border)",
+                      borderBottom: "1px solid var(--border-default)",
                       cursor: "default",
-                      fontWeight: isSummary ? 700 : 400,
+                      fontWeight: isSummary ? 600 : 400,
                     }}
                   >
-                    {columnsVisible.map((col, colIdx) => {
-                      const isLast = colIdx === columnsVisible.length - 1;
-                      const borderStyle = isLast ? "none" : "1px solid var(--msp-border)";
+                    {columnsVisible.map((col) => {
 
                       // N° column
                       if (col.id === "numero") {
                         return (
-                          <div key={col.id} style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRight: borderStyle, fontSize: 10, fontWeight: 600, color: isProject ? MSP_PROJECT_COLOR : "var(--msp-text-muted)" }}>
+                          <div key={col.id} className="font-mono" style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 400, color: "var(--text-tertiary)" }}>
                             {task.numero}
                           </div>
                         );
@@ -1930,32 +1947,20 @@ export function MSProjectViewV2({
                       // Nom column — special rendering with expand/collapse + icons
                       if (col.id === "nom") {
                         return (
-                          <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 3, borderRight: borderStyle, paddingLeft: getIndent(task.level) + 6, paddingRight: 4, overflow: "hidden" }}>
+                          <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: getIndent(task.level) + 8, paddingRight: 8, overflow: "hidden" }}>
                             {task.hasChildren ? (
                               <button
                                 onClick={() => toggleExpand(task.id)}
-                                style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "var(--msp-text)", display: "flex", alignItems: "center", flexShrink: 0 }}
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--text-tertiary)", display: "flex", alignItems: "center", flexShrink: 0 }}
                               >
                                 {task.isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                               </button>
                             ) : (
-                              <span style={{ width: 15, flexShrink: 0 }} />
+                              <span style={{ width: 13, flexShrink: 0 }} />
                             )}
 
-                            {isProject && (
-                              <span style={{ width: 12, height: 12, borderRadius: 3, flexShrink: 0, background: `linear-gradient(135deg, ${MSP_PROJECT_COLOR}, ${MSP_PROJECT_GRADIENT})`, display: "inline-block" }} />
-                            )}
-                            {task.type === "component" && (
-                              <span style={{ width: 10, height: 10, borderRadius: 2, flexShrink: 0, background: `linear-gradient(135deg, ${MSP_NIVEAU_COMPOSANT}, ${MSP_NIVEAU_SOUS_COMPOSANT})`, display: "inline-block" }} />
-                            )}
-                            {task.type === "subcomponent" && (
-                              <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: `linear-gradient(135deg, ${MSP_NIVEAU_SOUS_COMPOSANT}, ${MSP_NIVEAU_FEUILLE})`, display: "inline-block" }} />
-                            )}
-                            {task.activityType && task.type === "activity" && (
-                              <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: ACTIVITY_COLORS[task.activityType] || MSP_BAR_BLUE, display: "inline-block" }} />
-                            )}
-                            {task.type === "livrable" && (
-                              <span style={{ width: 5, height: 5, borderRadius: "50%", flexShrink: 0, background: "var(--msp-text-muted)", display: "inline-block" }} />
+                            {task.milestone && task.type === "livrable" && (
+                              <span aria-hidden style={{ width: 8, height: 8, transform: "rotate(45deg)", background: "var(--text-primary)", flexShrink: 0 }} />
                             )}
 
                             {isRenaming && renaming ? (
@@ -1980,9 +1985,9 @@ export function MSProjectViewV2({
                                 title={!editor.isEditing && task.activityPath ? "Ouvrir la planification" : undefined}
                                 style={{
                                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                  fontSize: isProject ? 12.5 : task.type === "component" ? 12 : 11,
+                                  fontSize: 12,
                                   cursor: editor.isEditing ? "default" : task.activityPath ? "pointer" : "default",
-                                  color: isProject ? MSP_PROJECT_COLOR : "inherit",
+                                  color: isProject ? "var(--primary-text)" : "inherit",
                                 }}
                               >
                                 {task.nom}
@@ -1997,7 +2002,7 @@ export function MSProjectViewV2({
                         const type = task.type === "activity" ? (task.activityType as ActivityType) : undefined;
                         const locked = !!task.unitId && plannedIds.has(task.unitId);
                         return (
-                          <div key={col.id} style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRight: borderStyle, padding: "0 4px", overflow: "hidden" }}>
+                          <div key={col.id} style={{ display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
                             {type && editor.isEditing && !locked ? (
                               <select
                                 value={type}
@@ -2013,9 +2018,9 @@ export function MSProjectViewV2({
                             ) : type ? (
                               <span
                                 title={editor.isEditing && locked ? "Planifiée : le type ne peut plus changer" : undefined}
-                                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                               >
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: ACTIVITY_COLORS[type] || MSP_BAR_BLUE }} />
+                                <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0, background: ACTIVITY_COLORS[type] || MSP_BAR_BLUE }} />
                                 {ACTIVITY_TYPE_LABELS[type] ?? type}
                               </span>
                             ) : null}
@@ -2025,7 +2030,7 @@ export function MSProjectViewV2({
 
                       // All other columns — generic render
                       return (
-                        <div key={col.id} style={{ borderRight: borderStyle }}>{renderCell(task, col.field)}</div>
+                        <div key={col.id} style={{ minWidth: 0 }}>{renderCell(task, col.field, col.align)}</div>
                       );
                     })}
                   </div>
@@ -2038,17 +2043,22 @@ export function MSProjectViewV2({
         {/* ════════════ DIVIDER ════════════ */}
         <div
           onMouseDown={handleMouseDown}
+          title="Glisser pour élargir le tableau"
           style={{
-            width: 4,
-            background: "var(--msp-border-header)",
+            width: 1,
+            background: "var(--border-strong)",
             cursor: "col-resize",
             flexShrink: 0,
             position: "relative",
+            display: vue === "gantt" ? "none" : "block",
             transition: "background 0.15s",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = MSP_BAR_BLUE)}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--msp-border-header)")}
-        />
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--primary)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--border-strong)")}
+        >
+          {/* Zone de saisie plus large que le trait */}
+          <div style={{ position: "absolute", top: 0, bottom: 0, left: -3, right: -3, zIndex: 5 }} />
+        </div>
 
         {/* ════════════ RIGHT PANEL — Gantt ════════════ */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -2056,19 +2066,18 @@ export function MSProjectViewV2({
           <div
             ref={rightHeaderRef}
             className="msp-header-sync"
-            style={{ overflow: "hidden", flexShrink: 0, background: "var(--msp-bg-header)", borderBottom: "2px solid var(--msp-border-header)" }}
+            style={{ overflow: "hidden", flexShrink: 0, background: "var(--bg-inset)", borderBottom: "1px solid var(--border-strong)" }}
           >
             {/* Bandeau supérieur : période large */}
-            <div style={{ position: "relative", width: totalGanttWidth, height: GANTT_TOP_HEIGHT, borderBottom: "1px solid var(--msp-border)" }}>
+            <div style={{ position: "relative", width: totalGanttWidth, height: GANTT_TOP_HEIGHT }}>
               {timeline.top.map((cell) => (
                 <div
                   key={cell.key}
                   title={cell.title}
                   style={{
                     position: "absolute", left: cell.left, width: cell.width, height: "100%",
-                    borderRight: "1px solid var(--msp-border-header)",
                     display: "flex", alignItems: "center",
-                    fontSize: 10, fontWeight: 600, color: "var(--msp-text-header)",
+                    fontSize: 10.5, fontWeight: 600, color: "var(--text-tertiary)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -2088,14 +2097,14 @@ export function MSProjectViewV2({
                   title={cell.title}
                   style={{
                     position: "absolute", left: cell.left, width: cell.width, height: "100%",
-                    borderRight: "1px solid var(--msp-border)",
+                    borderLeft: "1px solid var(--border-default)",
                     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    fontSize: 9.5, lineHeight: "11px", fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap",
-                    color: cell.weekend ? "var(--msp-text-muted)" : "var(--msp-text-header)",
+                    fontSize: 11, lineHeight: "12px", fontWeight: 400, overflow: "hidden", whiteSpace: "nowrap",
+                    color: cell.weekend ? "var(--text-tertiary)" : "var(--text-secondary)",
                     background: cell.weekend ? "var(--msp-weekend)" : "transparent",
                   }}
                 >
-                  <span style={{ fontWeight: cell.sub ? 400 : 600 }}>{cell.width >= 14 ? cell.label : ""}</span>
+                  <span>{cell.width >= 14 ? cell.label : ""}</span>
                   {cell.sub && <span style={{ fontWeight: 700 }}>{cell.sub}</span>}
                 </div>
               ))}
@@ -2117,7 +2126,7 @@ export function MSProjectViewV2({
                     key={cell.key}
                     style={{
                       position: "absolute", left: cell.left, top: 0, width: cell.width, height: "100%",
-                      borderRight: "1px solid var(--msp-border)",
+                      borderLeft: "1px solid var(--grid-line)",
                       background: cell.weekend ? "var(--msp-weekend)" : "transparent",
                     }}
                   />
@@ -2130,15 +2139,27 @@ export function MSProjectViewV2({
                   title="Aujourd'hui"
                   style={{
                     position: "absolute", left: timeline.todayX - 1, top: 0, width: 2, height: "100%",
-                    background: MSP_TODAY_COLOR, zIndex: 10, pointerEvents: "none",
+                    background: "var(--accent)", zIndex: 10, pointerEvents: "none",
                   }}
                 />
+              )}
+              {timeline.todayX !== null && (
+                <div
+                  style={{
+                    position: "absolute", top: 0, left: timeline.todayX - 30, height: 18, padding: "0 6px",
+                    borderRadius: "0 0 5px 5px", background: "var(--accent)", color: "var(--on-accent)",
+                    fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", whiteSpace: "nowrap",
+                    zIndex: 11, pointerEvents: "none",
+                  }}
+                >
+                  {new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                </div>
               )}
 
               {/* Task bars */}
               {filteredTasks.map((task, index) => {
                 const barPos = calculateBarPosition(task.dateDebut, task.dateFin);
-                if (!barPos) return <div key={task.id} style={{ height: ROW_HEIGHT }} />;
+                if (!barPos) return <div key={task.id} className="msp-gantt-row" style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--border-default)" }} />;
 
                 const isProject = task.type === "project";
                 const isSummary = isProject || task.type === "component" || task.type === "subcomponent";
@@ -2161,15 +2182,15 @@ export function MSProjectViewV2({
 
                 if (task.milestone && !isSummary) {
                   return (
-                    <div key={task.id} className="msp-gantt-row" style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid var(--msp-border)" }}>
+                    <div key={task.id} className="msp-gantt-row" style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid var(--border-default)" }}>
                       <div
                         title={`${task.nom}\nJalon : ${formatDate(task.dateFin)}`}
                         style={{
                           position: "absolute", left: barPos.left - 6, top: ROW_HEIGHT / 2 - 6, width: 12, height: 12,
-                          background: task.type === "livrable" ? "var(--msp-text)" : color, transform: "rotate(45deg)", borderRadius: 1,
+                          background: task.type === "livrable" ? "var(--text-primary)" : color, transform: "rotate(45deg)", borderRadius: 2,
                         }}
                       />
-                      <span style={{ position: "absolute", left: barPos.left + 12, top: 0, lineHeight: `${ROW_HEIGHT}px`, fontSize: 10, color: "var(--msp-text-muted)", whiteSpace: "nowrap" }}>
+                      <span style={{ position: "absolute", left: barPos.left + 12, top: 0, lineHeight: `${ROW_HEIGHT}px`, fontSize: 11, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
                         {formatDate(task.dateFin)}
                       </span>
                     </div>
@@ -2183,7 +2204,7 @@ export function MSProjectViewV2({
                     style={{
                       height: ROW_HEIGHT,
                       position: "relative",
-                      borderBottom: isProject ? "2px solid var(--msp-border-header)" : "1px solid var(--msp-border)",
+                      borderBottom: "1px solid var(--border-default)",
                     }}
                   >
                     <div
@@ -2192,25 +2213,21 @@ export function MSProjectViewV2({
                       style={{
                         position: "absolute",
                         left: barPos.left,
-                        top: isSummary ? ROW_HEIGHT / 2 - (isProject ? 3 : 2) : ROW_HEIGHT / 2 - 6,
+                        top: isSummary ? ROW_HEIGHT / 2 - 3 : ROW_HEIGHT / 2 - 7,
                         width: barPos.width,
-                        height: isSummary ? (isProject ? 6 : 4) : 12,
+                        height: isSummary ? 6 : 14,
                         // Barre d'unité : couleur atténuée, la part réalisée en plein
                         background: isSummary
                           ? (isProject ? MSP_PROJECT_COLOR : MSP_SUMMARY_COLOR)
-                          : `linear-gradient(to right, ${color} ${progress}%, color-mix(in srgb, ${color} 40%, transparent) ${progress}%)`,
-                        borderRadius: isSummary ? 0 : 2,
-                        boxShadow: isSummary ? "none" : "0 1px 2px rgba(0,0,0,0.1)",
+                          : `linear-gradient(to right, ${color} ${progress}%, color-mix(in srgb, ${color} 28%, transparent) ${progress}%)`,
+                        ["--msp-summary" as string]: isProject ? MSP_PROJECT_COLOR : MSP_SUMMARY_COLOR,
+                        borderRadius: isSummary ? 1 : 4,
                         // Chemin critique : un liseré, pour ne pas confisquer la
                         // teinte qui désigne le type d'activité.
                         outline: task.critique && !isSummary ? `1.5px solid ${MSP_CRITIQUE_COLOR}` : undefined,
                         outlineOffset: task.critique && !isSummary ? 1 : undefined,
                       }}
                     >
-                      {/* Synthèse : trait d'avancement sous la barre */}
-                      {isSummary && task.progress !== undefined && (
-                        <div style={{ position: "absolute", left: 0, top: "100%", marginTop: 1, height: 2, width: `${progress}%`, background: MSP_TODAY_COLOR }} />
-                      )}
                     </div>
                     {/* Référence de base : barre grise sous la barre courante, comme
                         MS Project. La dérive se lit au décalage entre les deux. */}
@@ -2220,7 +2237,7 @@ export function MSProjectViewV2({
                         style={{
                           position: "absolute",
                           left: referencePos.left,
-                          top: ROW_HEIGHT / 2 + (isSummary ? 4 : 7),
+                          top: ROW_HEIGHT / 2 + (isSummary ? 6 : 9),
                           width: referencePos.width,
                           height: 3,
                           background: MSP_REFERENCE_COLOR,
@@ -2232,8 +2249,8 @@ export function MSProjectViewV2({
                     {task.progress !== undefined && (
                       <span
                         style={{
-                          position: "absolute", left: barPos.left + barPos.width + 6, top: 0, lineHeight: `${ROW_HEIGHT}px`,
-                          fontSize: 10, fontWeight: isSummary ? 600 : 400, color: "var(--msp-text-muted)", whiteSpace: "nowrap", pointerEvents: "none",
+                          position: "absolute", left: barPos.left + barPos.width + 8, top: 0, lineHeight: `${ROW_HEIGHT}px`,
+                          fontSize: 11, fontWeight: isSummary ? 600 : 400, color: "var(--text-secondary)", whiteSpace: "nowrap", pointerEvents: "none",
                         }}
                       >
                         {Math.round(task.progress)} %
