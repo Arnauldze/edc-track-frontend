@@ -370,48 +370,30 @@ export default function ActivityPlanningPage() {
   return (
     <div className="flex flex-col h-full">
       {/* ── 1. L'activité ── */}
-      <div className="flex shrink-0 flex-col border-b border-line bg-surface px-6 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex min-w-0 items-center gap-3.5">
-              <div
-                className="flex size-10 shrink-0 items-center justify-center rounded-lg"
-                style={{ background: voile(typeInfo.couleur), color: typeInfo.couleur }}
-              >
-                <ActivityIcon size={20} />
-              </div>
-              <div className="flex min-w-0 flex-col gap-0.75">
-                <h1 className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-fg">
-                  {numero && (
-                    <span className="rounded border border-line bg-inset px-1.5 py-px font-mono text-[11px] font-medium text-fg-muted">
-                      {numero}
-                    </span>
-                  )}
-                  <span className="truncate">{activityName}</span>
-                </h1>
-                <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-fg-muted">
-                  <span className="truncate">{[project.name, ...chemin].join(" › ")}</span>
-                  <span className="text-fg-subtle">·</span>
-                  <span aria-hidden className="size-1.75 shrink-0 rounded-xs" style={{ background: typeInfo.couleur }} />
-                  <span className="whitespace-nowrap">{typeInfo.label}</span>
-                </div>
-              </div>
+      <div className="flex shrink-0 flex-col gap-2 border-b border-line bg-surface px-6 pt-3 pb-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: voile(typeInfo.couleur), color: typeInfo.couleur }}
+            >
+              <ActivityIcon size={20} />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <ActivityGeneralStrip
-                dateT0={dateT0}
-                onDateT0={setDateT0}
-                budgets={budgetInitial}
-                onBudgets={setBudgetInitial}
-                budgetTotalFCFA={budgetTotalFCFA}
-                responsable={responsablePrincipal}
-                onResponsable={setResponsablePrincipal}
-                readOnly={readOnly}
-              />
-              {modifiees.general && <span className="size-2 rounded-full bg-accent" title="Modifications non enregistrées" />}
-              {readOnly && !permissionsLoading && (
-                <span className="text-[11px] text-fg-subtle">Consultation : seul le chef de projet modifie la planification.</span>
-              )}
+            <div className="flex min-w-0 flex-col gap-0.75">
+              <h1 className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-fg">
+                {numero && (
+                  <span className="rounded border border-line bg-inset px-1.5 py-px font-mono text-[11px] font-medium text-fg-muted">
+                    {numero}
+                  </span>
+                )}
+                <span className="truncate">{activityName}</span>
+              </h1>
+              <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-fg-muted">
+                <span className="truncate">{[project.name, ...chemin].join(" › ")}</span>
+                <span className="text-fg-subtle">·</span>
+                <span aria-hidden className="size-1.75 shrink-0 rounded-xs" style={{ background: typeInfo.couleur }} />
+                <span className="whitespace-nowrap">{typeInfo.label}</span>
+              </div>
             </div>
           </div>
 
@@ -461,6 +443,22 @@ export default function ActivityPlanningPage() {
           </div>
         </div>
 
+        <div className="-ml-2.5 flex flex-wrap items-center gap-2">
+          <ActivityGeneralStrip
+            dateT0={dateT0}
+            onDateT0={setDateT0}
+            budgets={budgetInitial}
+            onBudgets={setBudgetInitial}
+            budgetTotalFCFA={budgetTotalFCFA}
+            responsable={responsablePrincipal}
+            onResponsable={setResponsablePrincipal}
+            readOnly={readOnly}
+          />
+          {modifiees.general && <span className="size-2 rounded-full bg-accent" title="Modifications non enregistrées" />}
+          {readOnly && !permissionsLoading && (
+            <span className="ml-auto text-[11px] text-fg-subtle">Consultation : seul le chef de projet modifie la planification.</span>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
