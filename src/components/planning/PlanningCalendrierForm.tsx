@@ -67,6 +67,8 @@ interface Props<T extends LigneCalendrier> {
   /** Date T0 de l'activité (AAAA-MM-JJ). */
   dateT0: string;
   readOnly: boolean;
+  /** Action placée dans l'en-tête de la carte (retirer la phase…). */
+  action?: ReactNode;
 }
 
 const UNITES: { value: Unite; label: string }[] = [
@@ -112,7 +114,7 @@ const formatJour = (day?: string) =>
 
 const formatMontant = (value: number) => Math.round(value).toLocaleString("fr-FR");
 
-export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, lignes, onChange, dateT0, readOnly }: Props<T>) {
+export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, lignes, onChange, dateT0, readOnly, action }: Props<T>) {
   const [showImportModal, setShowImportModal] = useState(false);
   const calendrier = useMemo(() => calculerCalendrierEtude(lignes, dateT0), [lignes, dateT0]);
 
@@ -216,16 +218,17 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
       <FileImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} onImport={importer} importType={phase.importType} />
 
       <section className="bg-surface rounded-lg border border-line overflow-hidden">
-        <header className="p-5 border-b border-line-subtle flex flex-wrap items-start justify-between gap-4">
+        <header className="px-4 py-2.5 border-b border-line-subtle flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-fg flex items-center gap-2">
               {phase.icone} {phase.titre}
             </h2>
-            <p className="text-[11px] text-fg-muted mt-1">{phase.description}</p>
+            <p className="text-[11px] text-fg-muted mt-0.5">{phase.description}</p>
           </div>
 
           {/* Synthèse de la phase */}
-          <dl className="flex flex-wrap gap-2 text-[11px]">
+          <div className="flex flex-wrap items-center gap-2">
+          <dl className="flex flex-wrap gap-1.5 text-[11px]">
             {[
               { label: "T0", value: dateT0 ? formatJour(dateT0) : "Non définie", alert: !dateT0 },
               { label: "Début", value: formatJour(calendrier.debut) },
@@ -235,29 +238,31 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
             ].map((item) => (
               <div
                 key={item.label}
-                className={`px-2.5 py-1.5 rounded-md border ${"alert" in item && item.alert ? "border-warning/30 bg-warning-subtle text-warning" : "border-line bg-inset"}`}
+                className={`px-2 py-1 rounded-md border ${"alert" in item && item.alert ? "border-warning/30 bg-warning-subtle text-warning" : "border-line bg-inset"}`}
               >
                 <dt className="text-[9px] uppercase tracking-wider font-bold opacity-70">{item.label}</dt>
                 <dd className="font-semibold">{item.value}</dd>
               </div>
             ))}
-            <div className={`px-2.5 py-1.5 rounded-md border ${pondValide ? "border-success/30 bg-success-subtle text-success" : "border-warning/30 bg-warning-subtle text-warning"}`}>
+            <div className={`px-2 py-1 rounded-md border ${pondValide ? "border-success/30 bg-success-subtle text-success" : "border-warning/30 bg-warning-subtle text-warning"}`}>
               <dt className="text-[9px] uppercase tracking-wider font-bold opacity-70">Pondération</dt>
               <dd className="font-semibold">{formatQuantite(calendrier.totalPonderation)} % {pondValide ? "✓" : "/ 100 %"}</dd>
             </div>
           </dl>
+          {action}
+          </div>
         </header>
 
-        <div className="p-5 space-y-4">
+        <div className="p-3 space-y-3">
           {readOnly && (
-            <div className="flex gap-2 p-3 rounded-md border border-warning/20 bg-warning-subtle text-[11px] text-warning">
+            <div className="flex gap-2 px-3 py-2 rounded-md border border-warning/20 bg-warning-subtle text-[11px] text-warning">
               <AlertCircle size={15} className="shrink-0 mt-px" />
               <span><strong>Consultation :</strong> seul le chef de projet peut modifier la planification.</span>
             </div>
           )}
 
           {!dateT0 && (
-            <div className="flex gap-2 p-3 rounded-md border border-primary/20 bg-primary-subtle text-[11px] text-primary-fg">
+            <div className="flex gap-2 px-3 py-2 rounded-md border border-primary/20 bg-primary-subtle text-[11px] text-primary-fg">
               <Info size={15} className="shrink-0 mt-px" />
               <span>Renseignez la <strong>date T0</strong> de l&apos;activité : les {motPluriel} sans prédécesseur ni date de début démarrent à T0, et les délais se comptent depuis T0.</span>
             </div>
@@ -428,7 +433,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
 
           {/* Problèmes à corriger avant d'enregistrer */}
           {(problemesLignes.length > 0 || (!pondValide && lignes.length > 0)) && (
-            <div className="flex gap-2 p-3 rounded-md border border-warning/20 bg-warning-subtle text-[11px] text-warning">
+            <div className="flex gap-2 px-3 py-2 rounded-md border border-warning/20 bg-warning-subtle text-[11px] text-warning">
               <AlertCircle size={15} className="shrink-0 mt-px" />
               <ul className="space-y-0.5">
                 {problemesLignes.map((message) => <li key={message}>{message}</li>)}

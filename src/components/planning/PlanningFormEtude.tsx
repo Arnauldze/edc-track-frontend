@@ -2,6 +2,7 @@
 
 // Planification de l'étude préalable : livrables R1, R2… (voir PlanningCalendrierForm).
 
+import type { ReactNode } from "react";
 import { FileText } from "lucide-react";
 import type { Livrable } from "@/services/api/planningService";
 import { PlanningCalendrierForm, nouvelleLigne, type PhaseCalendrier } from "./PlanningCalendrierForm";
@@ -25,8 +26,10 @@ interface Props {
   onChange: (livrables: Livrable[]) => void;
   dateT0: string;
   readOnly: boolean;
+  /** Action placée dans l'en-tête de la carte. */
+  action?: ReactNode;
 }
 
-export function PlanningFormEtude({ livrables, onChange, dateT0, readOnly }: Props) {
-  return <PlanningCalendrierForm phase={ETUDE} lignes={livrables} onChange={onChange} dateT0={dateT0} readOnly={readOnly} />;
+export function PlanningFormEtude({ livrables, onChange, dateT0, readOnly, action }: Props) {
+  return <PlanningCalendrierForm phase={ETUDE} lignes={livrables} onChange={onChange} dateT0={dateT0} readOnly={readOnly} action={action} />;
 }

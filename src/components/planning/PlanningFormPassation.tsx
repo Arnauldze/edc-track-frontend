@@ -8,7 +8,7 @@
 // La ligne est saisie en texte ; lib/passationApi.ts la convertit pour l'API.
 // ══════════════════════════════════════════════════════════════
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState , type ReactNode } from "react";
 import { Briefcase, ChevronLeft, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
 import { FileImportModal } from "./FileImportModal";
 import { Button } from "@/components/ui/button";
@@ -144,9 +144,11 @@ interface Props {
   data: PassationData | null;
   onChange: (data: PassationData) => void;
   readOnly?: boolean;
+  /** Action placée dans l'en-tête de la carte (retirer la phase…). */
+  action?: ReactNode;
 }
 
-export function PlanningFormPassation({ data, onChange, readOnly = false }: Props) {
+export function PlanningFormPassation({ data, onChange, readOnly = false, action }: Props) {
   const [importOuvert, setImportOuvert] = useState(false);
   const [groupeVise, setGroupeVise] = useState(COL_GROUPS[0].label);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -283,7 +285,7 @@ export function PlanningFormPassation({ data, onChange, readOnly = false }: Prop
       <FileImportModal isOpen={importOuvert} onClose={() => setImportOuvert(false)} onImport={importer} importType="passation" />
 
       <Card>
-        <div className="flex items-center justify-between gap-4 border-b border-line px-4.5 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-2.5">
           <div className="flex items-center gap-3">
             <div
               className="flex size-8 shrink-0 items-center justify-center rounded-md"
@@ -298,26 +300,29 @@ export function PlanningFormPassation({ data, onChange, readOnly = false }: Prop
               </p>
             </div>
           </div>
-          {!readOnly && (
-            <Button variant="secondary" size="sm" onClick={() => setImportOuvert(true)}>
-              <Upload /> Importer depuis Excel
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {!readOnly && (
+              <Button variant="secondary" size="sm" onClick={() => setImportOuvert(true)}>
+                <Upload /> Importer depuis Excel
+              </Button>
+            )}
+            {action}
+          </div>
         </div>
 
         {/* Synthèse de la phase */}
         <div className="flex flex-wrap border-b border-line">
           {chiffres.map((chiffre) => (
-            <div key={chiffre.label} className="flex min-w-50 flex-1 flex-col gap-0.75 border-r border-line px-4 py-3 last:border-r-0">
+            <div key={chiffre.label} className="flex min-w-50 flex-1 flex-col gap-0.5 border-r border-line px-4 py-2 last:border-r-0">
               <span className="text-[11px] font-semibold tracking-wide text-fg-subtle uppercase">{chiffre.label}</span>
-              <span className="text-[17px] font-bold text-fg">{chiffre.valeur}</span>
+              <span className="text-[15px] font-bold text-fg">{chiffre.valeur}</span>
               <span className="text-xs text-fg-muted">{chiffre.detail}</span>
             </div>
           ))}
         </div>
 
         {/* Groupes de colonnes et défilement */}
-        <div className="flex flex-wrap items-center gap-2.5 px-4.5 py-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 px-4 py-2">
           <div className="inline-flex gap-0.5 rounded-md border border-line bg-inset p-0.75">
             {COL_GROUPS.map((groupe) => (
               <button

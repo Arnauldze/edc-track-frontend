@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, ChevronLeft, Flag, FlagOff, Plus, Save, Trash2, X } from "lucide-react";
+import { BarChart3, Flag, FlagOff, Plus, Save, Trash2, X } from "lucide-react";
 import { getProjectById, getLeafActivities, type Project } from "@/lib/projectStore";
 import { planningService, type CreatePlanningDto, type LignePassation, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
@@ -359,41 +359,59 @@ export default function ActivityPlanningPage() {
   const typeInfo = typeActivite(activityType);
   const ActivityIcon = typeInfo.icon;
   const phaseOuverte = phases.find((p) => p.key === selected)!;
+  // Placé dans l'en-tête de la carte de la phase, pour ne pas consommer une ligne.
+  const boutonRetirer =
+    phaseOuverte.active && !readOnly ? (
+      <Button variant="ghost" size="sm" onClick={() => retirerPhase(selected)} className="hover:bg-danger-subtle hover:text-danger">
+        <X /> Retirer cette phase
+      </Button>
+    ) : null;
 
   return (
     <div className="flex flex-col h-full">
       {/* ── 1. L'activité ── */}
-      <div className="flex shrink-0 flex-col gap-2.5 border-b border-line bg-surface px-8 pt-3.5 pb-3">
-        <Link
-          href={`/planification/${projectCode}`}
-          className="inline-flex w-fit items-center gap-1 text-xs font-semibold text-fg-muted hover:text-primary-fg"
-        >
-          <ChevronLeft size={14} /> Retour au projet
-        </Link>
-
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3.5">
-            <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg"
-              style={{ background: voile(typeInfo.couleur), color: typeInfo.couleur }}
-            >
-              <ActivityIcon size={20} />
-            </div>
-            <div className="flex min-w-0 flex-col gap-0.75">
-              <h1 className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-fg">
-                {numero && (
-                  <span className="rounded border border-line bg-inset px-1.5 py-px font-mono text-[11px] font-medium text-fg-muted">
-                    {numero}
-                  </span>
-                )}
-                <span className="truncate">{activityName}</span>
-              </h1>
-              <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-fg-muted">
-                <span className="truncate">{[project.name, ...chemin].join(" › ")}</span>
-                <span className="text-fg-subtle">·</span>
-                <span aria-hidden className="size-1.75 shrink-0 rounded-xs" style={{ background: typeInfo.couleur }} />
-                <span className="whitespace-nowrap">{typeInfo.label}</span>
+      <div className="flex shrink-0 flex-col border-b border-line bg-surface px-6 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex min-w-0 items-center gap-3.5">
+              <div
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+                style={{ background: voile(typeInfo.couleur), color: typeInfo.couleur }}
+              >
+                <ActivityIcon size={20} />
               </div>
+              <div className="flex min-w-0 flex-col gap-0.75">
+                <h1 className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-fg">
+                  {numero && (
+                    <span className="rounded border border-line bg-inset px-1.5 py-px font-mono text-[11px] font-medium text-fg-muted">
+                      {numero}
+                    </span>
+                  )}
+                  <span className="truncate">{activityName}</span>
+                </h1>
+                <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-fg-muted">
+                  <span className="truncate">{[project.name, ...chemin].join(" › ")}</span>
+                  <span className="text-fg-subtle">·</span>
+                  <span aria-hidden className="size-1.75 shrink-0 rounded-xs" style={{ background: typeInfo.couleur }} />
+                  <span className="whitespace-nowrap">{typeInfo.label}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <ActivityGeneralStrip
+                dateT0={dateT0}
+                onDateT0={setDateT0}
+                budgets={budgetInitial}
+                onBudgets={setBudgetInitial}
+                budgetTotalFCFA={budgetTotalFCFA}
+                responsable={responsablePrincipal}
+                onResponsable={setResponsablePrincipal}
+                readOnly={readOnly}
+              />
+              {modifiees.general && <span className="size-2 rounded-full bg-accent" title="Modifications non enregistrées" />}
+              {readOnly && !permissionsLoading && (
+                <span className="text-[11px] text-fg-subtle">Consultation : seul le chef de projet modifie la planification.</span>
+              )}
             </div>
           </div>
 
@@ -443,25 +461,9 @@ export default function ActivityPlanningPage() {
           </div>
         </div>
 
-        <div className="-ml-2.5 flex items-center gap-2">
-          <ActivityGeneralStrip
-            dateT0={dateT0}
-            onDateT0={setDateT0}
-            budgets={budgetInitial}
-            onBudgets={setBudgetInitial}
-            budgetTotalFCFA={budgetTotalFCFA}
-            responsable={responsablePrincipal}
-            onResponsable={setResponsablePrincipal}
-            readOnly={readOnly}
-          />
-          {modifiees.general && <span className="size-2 rounded-full bg-accent" title="Modifications non enregistrées" />}
-          {readOnly && !permissionsLoading && (
-            <span className="ml-auto text-[11px] text-fg-subtle">Consultation : seul le chef de projet modifie la planification.</span>
-          )}
-        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-5 space-y-5">
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
         {/* ── 2. Ses phases ── */}
         <ActivityPhaseBar phases={phases} selected={selected} onSelect={setSelected} dateT0={dateT0 || undefined} />
 
@@ -477,30 +479,22 @@ export default function ActivityPlanningPage() {
           </div>
         )}
 
-        {phaseOuverte.active && !readOnly && (
-          <div className={`-mb-3 flex justify-end ${selected === "passation" ? "" : "max-w-6xl"}`}>
-            <Button variant="ghost" size="sm" onClick={() => retirerPhase(selected)} className="hover:bg-danger-subtle hover:text-danger">
-              <X /> Retirer cette phase
-            </Button>
-          </div>
-        )}
-
         {/* Les phases prévues restent montées : leur saisie est conservée d'un onglet à l'autre. */}
         {hasEtudePrealable && (
-          <div hidden={selected !== "etude"} className="max-w-6xl">
-            <PlanningFormEtude livrables={livrables} onChange={setLivrables} dateT0={dateT0} readOnly={readOnly} />
+          <div hidden={selected !== "etude"}>
+            <PlanningFormEtude livrables={livrables} onChange={setLivrables} dateT0={dateT0} readOnly={readOnly} action={boutonRetirer} />
           </div>
         )}
 
         {hasPassation && (
           <div hidden={selected !== "passation"}>
-            <PlanningFormPassation data={passationData} onChange={setPassationData} readOnly={readOnly} />
+            <PlanningFormPassation data={passationData} onChange={setPassationData} readOnly={readOnly} action={boutonRetirer} />
           </div>
         )}
 
         {hasExecution && (
-          <div hidden={selected !== "execution"} className="max-w-6xl">
-            <PlanningFormExecution taches={taches} onChange={setTaches} dateT0={dateT0} readOnly={readOnly} />
+          <div hidden={selected !== "execution"}>
+            <PlanningFormExecution taches={taches} onChange={setTaches} dateT0={dateT0} readOnly={readOnly} action={boutonRetirer} />
           </div>
         )}
       </div>

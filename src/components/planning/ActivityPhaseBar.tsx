@@ -56,8 +56,8 @@ export function ActivityPhaseBar({ phases, selected, onSelect, dateT0 }: Props) 
   const recouvrements = chevauchements(Object.fromEntries(datees.map((p) => [p.key, p.periode])));
 
   return (
-    <div className="space-y-2.5">
-      <div role="tablist" aria-label="Phases de l'activité" className="grid grid-cols-1 items-stretch gap-2.5 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
+    <div className="space-y-2">
+      <div role="tablist" aria-label="Phases de l'activité" className="grid grid-cols-1 items-stretch gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
         {PHASE_ORDER.map((key, index) => {
           const phase = phases.find((p) => p.key === key)!;
           const couleur = COULEURS[key];
@@ -78,15 +78,14 @@ export function ActivityPhaseBar({ phases, selected, onSelect, dateT0 }: Props) 
                 onClick={() => onSelect(key)}
                 style={ouverte ? { borderColor: couleur, background: voile(couleur) } : undefined}
                 className={[
-                  "flex flex-col gap-2 rounded-lg p-3 text-left transition-[background-color,border-color,box-shadow] duration-150",
+                  "flex min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-left transition-[background-color,border-color,box-shadow] duration-150",
                   "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-focus",
                   ouverte ? "border-2" : "m-px border bg-surface hover:border-line-strong",
                   ouverte || phase.active ? "" : "border-dashed border-line-strong",
                   !ouverte && phase.active ? "border-line shadow-sm" : "",
                 ].join(" ")}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`flex items-center gap-2 text-sm font-semibold ${phase.active ? "text-fg" : "text-fg-muted"}`}>
+                <span className={`flex shrink-0 items-center gap-2 text-sm font-semibold ${phase.active ? "text-fg" : "text-fg-muted"}`}>
                     <span
                       aria-hidden
                       className="flex size-5 items-center justify-center rounded-full text-[11px] font-bold text-fg-inverted"
@@ -96,17 +95,14 @@ export function ActivityPhaseBar({ phases, selected, onSelect, dateT0 }: Props) 
                     </span>
                     {PHASE_LABELS[key]}
                   </span>
-                  {phase.dirty && <span className="size-2 shrink-0 rounded-full bg-accent" title="Modifications non enregistrées" />}
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`flex items-center gap-1.5 text-[12.5px] font-semibold ${tone.className}`}>
+                  <span className={`flex min-w-0 items-center gap-1.5 truncate text-[12px] font-semibold ${tone.className}`}>
                     {phase.active ? <ToneIcon size={14} /> : <Plus size={14} />}
                     {phase.status}
                   </span>
-                  <span className="truncate text-xs text-fg-muted">
+                  <span className="ml-auto truncate text-xs text-fg-muted">
                     {phase.active ? `${court(phase.periode.debut)} → ${court(phase.periode.fin)}` : "Cliquez pour la planifier"}
                   </span>
-                </div>
+                  {phase.dirty && <span className="size-2 shrink-0 rounded-full bg-accent" title="Modifications non enregistrées" />}
               </button>
             </div>
           );
