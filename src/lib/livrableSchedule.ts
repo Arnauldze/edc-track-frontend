@@ -59,6 +59,13 @@ export interface LivrableCalcule {
   predecesseur?: string;
   /** Numéros des livrables qui suivent celui-ci, séparés par des virgules. */
   successeur?: string;
+  /**
+   * Report, en jours, que cette ligne peut absorber sans décaler la fin de la
+   * phase. Absent si la ligne n'a pas d'échéance calculable.
+   */
+  margeTotale?: number;
+  /** Marge nulle ou négative : tout retard ici décale la fin de la phase. */
+  critique?: boolean;
 }
 
 export type ChampLivrable = 'numero' | 'predecesseur' | 'dateDebut' | 'dateFin' | 'duree' | 'delai' | 'ponderation';
@@ -263,6 +270,49 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
       .filter((n): n is string => !!n);
     livrable.successeur = suivants.length ? suivants.join(', ') : undefined;
   });
+
+  // ── Passe arrière : marge totale et chemin critique ──
+  // La phase se termine à la plus tardive des échéances. Une ligne sans
+  // successeur doit donc finir là ; une ligne qui en a doit finir avant que le
+  // premier de ses successeurs ne commence, puisque l'enchaînement est
+  // fin → début. La marge totale est le report qu'une ligne peut absorber sans
+  // décaler la fin de la phase : une marge nulle la met sur le chemin critique.
+  const finPhase = resultats
+    .map((l) => l.dateFin)
+    .filter((d): d is string => !!d)
+    .sort()
+    .pop();
+
+  if (finPhase) {
+    const successeursDe: number[][] = livrables.map(() => []);
+    predecesseurs.forEach((pred, i) => {
+      if (pred !== undefined && !enBoucle.has(i)) successeursDe[pred].push(i);
+    });
+
+    // Calculée pour les successeurs avant leurs prédécesseurs : l'ordre
+    // topologique parcouru à l'envers.
+    const debutAuPlusTard: Array<string | undefined> = new Array(livrables.length);
+    for (const index of [...ordre].reverse()) {
+      const ligne = resultats[index];
+      if (!ligne?.dateFin) continue;
+
+      const contraintes = successeursDe[index]
+        .map((i) => debutAuPlusTard[i])
+        .filter((d): d is string => !!d)
+        .sort();
+      const finAuPlusTard = contraintes.length ? contraintes[0] : finPhase;
+
+      ligne.margeTotale = ecart(ligne.dateFin, finAuPlusTard, 'jours');
+      ligne.critique = ligne.margeTotale <= 0;
+      // Durée ramenée à zéro si l'échéance précède le début : la contrainte est
+      // intenable et déjà signalée, elle ne doit pas inventer de la marge pour
+      // le prédécesseur en remontant.
+      const dureeJours = ligne.dateDebut
+        ? Math.max(0, ecart(ligne.dateDebut, ligne.dateFin, 'jours'))
+        : 0;
+      debutAuPlusTard[index] = ajouter(finAuPlusTard, -dureeJours, 'jours');
+    }
+  }
 
   const totalPonderation = round2(livrables.reduce((sum, l) => sum + (Number(l.ponderation) || 0), 0));
   if (livrables.length > 0 && Math.abs(totalPonderation - 100) > 0.01) {
