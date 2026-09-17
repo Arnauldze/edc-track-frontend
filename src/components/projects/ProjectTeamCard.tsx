@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import type { TeamAssignment } from "@/services/api/teamService";
 import type { DirectoryUser } from "@/services/api/userService";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { PROJECT_ROLE_LABELS, type ProjectRole } from "@/lib/rbacStore";
+import { PROJECT_ROLE_LABELS, rolePastille, type ProjectRole } from "@/lib/rbacStore";
 
 // Carte de présentation : les données et la modale d'ajout appartiennent à la
 // page, qui les partage avec l'onglet Équipe. Un ajout fait depuis l'une des
@@ -22,14 +22,6 @@ interface TeamMemberDisplay extends TeamAssignment {
   userInitials: string;
 }
 
-const ROLE_COLORS: Record<string, string> = {
-  coordinateur_general: "bg-cat-violet",
-  coordinateur: "bg-cat-indigo",
-  chef_projet: "bg-primary",
-  contributeur: "bg-warning",
-  view: "bg-fg-subtle",
-};
-
 export function ProjectTeamCard({ assignments, usersById, loading = false, onInvite }: ProjectTeamCardProps) {
   const members: TeamMemberDisplay[] = assignments.map((assignment) => {
     const user = usersById.get(assignment.userId);
@@ -39,10 +31,6 @@ export function ProjectTeamCard({ assignments, usersById, loading = false, onInv
       userInitials: user ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() : "??",
     };
   });
-
-  const getRoleColor = (role: string) => {
-    return ROLE_COLORS[role] || "bg-fg-subtle";
-  };
 
   const getAssignmentText = (member: TeamMemberDisplay) => {
     if (member.level === "project") {
@@ -91,9 +79,7 @@ export function ProjectTeamCard({ assignments, usersById, loading = false, onInv
               <div key={member._id ?? index} className="flex items-start gap-3">
                 {/* Avatar */}
                 <div
-                  className={`flex-shrink-0 w-10 h-10 rounded-full ${getRoleColor(
-                    member.projectRole
-                  )} flex items-center justify-center text-white text-sm font-bold shadow-sm`}
+                  className={`flex-shrink-0 w-10 h-10 rounded-full ${rolePastille(member.projectRole)} flex items-center justify-center text-sm font-bold shadow-sm`}
                 >
                   {member.userInitials}
                 </div>

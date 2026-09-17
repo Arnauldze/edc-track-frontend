@@ -73,16 +73,16 @@ export function SecurityPasswordModal({
   };
 
   const btnColors = variant === "red"
-    ? "bg-danger hover:bg-danger-hover"
+    ? "bg-danger hover:bg-danger-hover text-on-danger"
     : variant === "amber"
-      ? "bg-warning hover:bg-warning-hover"
-      : "bg-[var(--primary)] hover:opacity-90";
+      ? "bg-warning hover:bg-warning-hover text-on-warning"
+      : "bg-[var(--primary)] hover:opacity-90 text-on-primary";
 
   const iconColors = variant === "red"
     ? "bg-danger-subtle text-danger"
     : variant === "amber"
       ? "bg-warning-subtle text-warning"
-      : "bg-primary-subtle text-primary";
+      : "bg-primary-subtle text-primary-fg";
 
   return (
     <div
@@ -149,7 +149,7 @@ export function SecurityPasswordModal({
             <button
               type="submit"
               disabled={loading || !password.trim()}
-              className={`px-4 py-2 ${btnColors} text-white text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors disabled:opacity-50 flex items-center gap-1.5`}
+              className={`px-4 py-2 ${btnColors} text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors disabled:opacity-50 flex items-center gap-1.5`}
             >
               <Lock size={12} />
               {confirmLabel}

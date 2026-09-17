@@ -23,7 +23,7 @@ export type ConfirmDialogProps = {
 };
 
 const VARIANTS = {
-  danger: { icon: AlertTriangle, pastille: "bg-danger-subtle text-danger", confirm: "border-danger bg-danger text-white hover:border-danger hover:bg-danger/90 dark:text-canvas" },
+  danger: { icon: AlertTriangle, pastille: "bg-danger-subtle text-danger", confirm: "border-danger bg-danger text-on-danger hover:border-danger hover:bg-danger/90" },
   warning: { icon: AlertTriangle, pastille: "bg-warning-subtle text-warning", confirm: "" },
   info: { icon: Info, pastille: "bg-primary-subtle text-primary-fg", confirm: "" },
 } as const;

@@ -263,7 +263,7 @@ function ReasonModal({
           <button
             onClick={() => onConfirm(reason.trim())}
             disabled={!reason.trim()}
-            className="px-4 py-2 bg-[var(--primary)] text-white text-xs font-bold rounded-[var(--radius-md)] disabled:opacity-50"
+            className="px-4 py-2 bg-[var(--primary)] text-on-primary text-xs font-bold rounded-[var(--radius-md)] disabled:opacity-50"
           >
             {confirmLabel}
           </button>
@@ -511,7 +511,7 @@ export default function ProjectConfigPage() {
     const styles: Record<string, string> = {
       pdf: "bg-danger-subtle text-danger",
       xls: "bg-success-subtle text-success",
-      doc: "bg-primary-subtle text-primary",
+      doc: "bg-primary-subtle text-primary-fg",
       plan: "bg-cat-violet/10 text-cat-violet",
     };
     return (
@@ -528,7 +528,7 @@ export default function ProjectConfigPage() {
       dwg: { color: "text-cat-violet", icon: <File size={14} /> },
       zip: { color: "text-warning", icon: <File size={14} /> },
       xls: { color: "text-success", icon: <File size={14} /> },
-      doc: { color: "text-primary", icon: <File size={14} /> },
+      doc: { color: "text-primary-fg", icon: <File size={14} /> },
       img: { color: "text-cat-teal", icon: <ImageIcon size={14} /> },
     };
     const s = styles[type] || {
@@ -929,7 +929,7 @@ export default function ProjectConfigPage() {
       <div className="relative" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => setOpenActionMenu(isOpen ? null : fileKey)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold border transition-all ${isOpen ? "bg-[var(--primary)] text-white border-transparent" : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--text-tertiary)]"}`}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold border transition-all ${isOpen ? "bg-[var(--primary)] text-on-primary border-transparent" : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-default)] hover:border-[var(--text-tertiary)]"}`}
         >
           <MoreHorizontal size={13} />
         </button>
@@ -968,7 +968,7 @@ export default function ProjectConfigPage() {
                   handleRollbackValidation(phase, docIdx, fileIdx);
                   setOpenActionMenu(null);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-primary hover:bg-primary-subtle transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-primary-fg hover:bg-primary-subtle transition-colors"
               >
                 <Edit2 size={14} /> Débloquer (remettre en revue)
               </button>
@@ -1129,7 +1129,7 @@ export default function ProjectConfigPage() {
                     <>
                       <button
                         onClick={() => handleUploadClick(phase, idx)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-[var(--shadow-sm)] transition-all"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-[11px] font-semibold bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-on-primary shadow-[var(--shadow-sm)] transition-all"
                       >
                         <Upload size={12} /> Déposer
                       </button>
@@ -1294,7 +1294,7 @@ export default function ProjectConfigPage() {
                 );
                 setShowValidateModal(null);
               }}
-              className="px-4 py-2 bg-success hover:bg-success-hover text-white text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 bg-success hover:bg-success-hover text-on-success text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors flex items-center gap-1.5"
             >
               <Lock size={12} /> Valider définitivement
             </button>
@@ -1405,7 +1405,7 @@ export default function ProjectConfigPage() {
             <button
               onClick={handleCreateFolder}
               disabled={!newFolderName.trim()}
-              className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-on-primary text-xs font-bold rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] transition-colors disabled:opacity-50"
             >
               Créer
             </button>
@@ -1427,7 +1427,7 @@ export default function ProjectConfigPage() {
       activity.status === "done"
         ? "bg-success-subtle text-success border-success/20"
         : activity.status === "exec"
-          ? "bg-primary-subtle text-primary border-primary/20"
+          ? "bg-primary-subtle text-primary-fg border-primary/20"
           : "bg-[var(--bg-inset)] text-[var(--text-tertiary)] border-[var(--border-default)]";
     const barColor =
       activity.pct === 100
@@ -1579,7 +1579,7 @@ export default function ProjectConfigPage() {
         {/* Titre et bouton */}
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-success to-success flex items-center justify-center text-white shadow-[var(--shadow-sm)] flex-shrink-0">
+            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-success to-success-hover flex items-center justify-center text-on-success shadow-[var(--shadow-sm)] flex-shrink-0">
               <svg
                 width="20"
                 height="20"
@@ -1610,7 +1610,7 @@ export default function ProjectConfigPage() {
             <Trash2 size={16} />
             Corbeille
             {trashedDocs.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 bg-danger text-white text-[10px] font-bold rounded-full">
+              <span className="ml-1 px-1.5 py-0.5 bg-danger text-on-danger text-[10px] font-bold rounded-full">
                 {trashedDocs.length}
               </span>
             )}
@@ -1658,8 +1658,8 @@ export default function ProjectConfigPage() {
               }}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[12px] font-bold transition-all flex-shrink-0 ${
                 showComposantes || currentComp
-                  ? "bg-primary-subtle text-primary border border-primary/30 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
-                  : "text-[var(--text-secondary)] hover:text-primary hover:bg-primary-subtle border border-transparent"
+                  ? "bg-primary-subtle text-primary-fg border border-primary/30 shadow-[0_0_8px_rgba(59,130,246,0.1)]"
+                  : "text-[var(--text-secondary)] hover:text-primary-fg hover:bg-primary-subtle border border-transparent"
               }`}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1911,7 +1911,7 @@ export default function ProjectConfigPage() {
                   </div>
                   <div className="mb-2">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-6 h-6 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
+                      <div className="w-6 h-6 bg-primary-subtle text-primary-fg rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
                       <h2 className="text-sm font-semibold text-[var(--text-primary)]">{currentPhase === "etude" ? "Étude" : currentPhase === "passation" ? "Passation" : "Exécution"} — {comp.name}</h2>
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents de {currentPhase} du composant.</p>
@@ -1932,7 +1932,7 @@ export default function ProjectConfigPage() {
                   </div>
                   <div className="mb-2 mt-4">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-6 h-6 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
+                      <div className="w-6 h-6 bg-primary-subtle text-primary-fg rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0"><FileText size={13} /></div>
                       <h2 className="text-sm font-semibold text-[var(--text-primary)]">Étude — {comp.name}</h2>
                     </div>
                     <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 ml-8">Documents d&apos;étude du composant. Sélectionnez un sous-composant pour voir son étude spécifique.</p>

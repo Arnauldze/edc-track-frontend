@@ -85,7 +85,7 @@ export function BailleurMultiCurrency({
               {bailleurNom}
             </span>
             {contributions.length > 1 && (
-              <span className="px-1.5 py-0.5 bg-primary-subtle text-primary text-[10px] font-bold rounded">
+              <span className="px-1.5 py-0.5 bg-primary-subtle text-primary-fg text-[10px] font-bold rounded">
                 {contributions.length} devises
               </span>
             )}

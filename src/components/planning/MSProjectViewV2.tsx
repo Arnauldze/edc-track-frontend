@@ -62,6 +62,8 @@ const MSP_PROJECT_COLOR = "var(--primary)";
 const MSP_PROJECT_GRADIENT = "var(--primary-hover)";
 const MSP_ALERTE_COLOR = "var(--warning)";
 const MSP_PROBLEME_COLOR = "var(--danger)";
+/** Chemin critique : un contour. La teinte reste réservée au type d'activité. */
+const MSP_CRITIQUE_COLOR = "var(--danger)";
 /** Niveaux de la WBS : une intensité décroissante, pas une teinte de plus. */
 const MSP_NIVEAU_COMPOSANT = "var(--text-primary)";
 const MSP_NIVEAU_SOUS_COMPOSANT = "var(--text-secondary)";
@@ -97,6 +99,7 @@ const COLUMN_DEFS: ColumnDef[] = [
   { id: "dateEcheance", label: "Échéance", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateEcheance" },
   { id: "predecesseur", label: "Préd.", width: "60px", align: "center", defaultVisible: true, filterType: "ref", field: "predecesseur" },
   { id: "successeur", label: "Succ.", width: "60px", align: "center", defaultVisible: true, filterType: "ref", field: "successeur" },
+  { id: "marge", label: "Marge", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "margeTotale" },
 ];
 
 interface ColumnFilter {
@@ -155,6 +158,10 @@ interface TaskRow {
   dateEcheance?: string | Date;
   predecesseur?: string;
   successeur?: string;
+  /** Report possible, en jours, sans décaler la fin de la phase. */
+  margeTotale?: number;
+  /** Marge nulle : la ligne est sur le chemin critique.  */
+  critique?: boolean;
   
   // Synthèse (voir lib/planningRollup.ts)
   /** Durée calculée, déjà mise en forme (unités de structure). */
@@ -356,8 +363,17 @@ export function MSProjectViewV2({
     });
 
     /** Lignes d'une phase sous l'activité : livrables d'étude, puis tâches d'exécution. */
-    const pushLivrables = (activityPath: string, phase: PhaseLignes, livrables: LigneCalendrier[], level: number) => {
-      livrables.forEach((liv) => {
+    // Marge et chemin critique sont déduits, jamais enregistrés : le moteur
+    // commun les recalcule ici, sur les lignes affichées.
+    const pushLivrables = (
+      activityPath: string,
+      phase: PhaseLignes,
+      livrables: LigneCalendrier[],
+      level: number,
+      t0?: string,
+    ) => {
+      const { livrables: avecMarge } = calculerCalendrierEtude(livrables, t0);
+      avecMarge.forEach((liv) => {
         rows.push({
           id: `${activityPath}.${phase}.${liv.numero}`,
           numero: liv.numero,
@@ -385,6 +401,8 @@ export function MSProjectViewV2({
           dateEcheance: toDay(liv.dateEcheance ?? liv.dateFin),
           predecesseur: liv.predecesseur,
           successeur: liv.successeur,
+          margeTotale: liv.margeTotale,
+          critique: liv.critique,
         });
       });
     };
@@ -415,8 +433,8 @@ export function MSProjectViewV2({
             ...fromMetrics(metrics.get(node.id)),
           });
           if (expandedIds.has(node.id)) {
-            pushLivrables(node.id, "etude", livrables, level + 1);
-            pushLivrables(node.id, "execution", tachesExecution, level + 1);
+            pushLivrables(node.id, "etude", livrables, level + 1, t0De(planning));
+            pushLivrables(node.id, "execution", tachesExecution, level + 1, t0De(planning));
           }
           return;
         }
@@ -1080,9 +1098,10 @@ export function MSProjectViewV2({
       : field === 'dateFin' || field === 'dateEcheance' ? liv?.modeFin !== 'fin'
       : field === 'duree' ? liv?.modeFin !== 'duree'
       : field === 'delai' ? liv?.modeFin !== 'delai'
-      : field === 'successeur'
+      : field === 'successeur' || field === 'margeTotale'
     );
-    const isLocked = field === 'successeur' || (field === 'dateDebut' && !!liv?.predecesseur);
+    const isLocked =
+      field === 'successeur' || field === 'margeTotale' || (field === 'dateDebut' && !!liv?.predecesseur);
 
     if (isEditing && isLivrable && !isLocked) {
       if (field === 'predecesseur') {
@@ -1182,10 +1201,23 @@ export function MSProjectViewV2({
       displayValue = value !== undefined && value !== null ? `${Number(value).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}${suffix}` : '—';
     }
 
+    // La marge se lit en jours ; à zéro, la ligne est sur le chemin critique.
+    if (field === 'margeTotale') {
+      displayValue = value === undefined || value === null ? '—' : `${Number(value).toLocaleString('fr-FR')} j`;
+    }
+
     return (
       <div
         onClick={() => isLivrable && !isLocked && !editor.isEditing && setEditingCell({ rowId: task.id, field })}
-        title={isLivrable && isCalculated && !isLocked ? "Valeur déduite — la saisir la rend déterminante" : undefined}
+        title={
+          field === 'margeTotale'
+            ? task.critique
+              ? "Chemin critique : tout retard ici décale la fin de la phase"
+              : "Report possible, en jours, sans décaler la fin de la phase"
+            : isLivrable && isCalculated && !isLocked
+              ? "Valeur déduite — la saisir la rend déterminante"
+              : undefined
+        }
         style={{
           cursor: isLivrable && !isLocked && !editor.isEditing ? "text" : "default",
           overflow: "hidden",
@@ -1194,7 +1226,8 @@ export function MSProjectViewV2({
           padding: "0 4px",
           lineHeight: `${ROW_HEIGHT}px`,
           background: isCalculated ? "var(--msp-bg-header)" : "transparent",
-          color: isCalculated ? "var(--msp-text-muted)" : "inherit",
+          color: field === 'margeTotale' && task.critique ? MSP_CRITIQUE_COLOR : isCalculated ? "var(--msp-text-muted)" : "inherit",
+          fontWeight: field === 'margeTotale' && task.critique ? 600 : undefined,
           fontStyle: isCalculated ? "italic" : "normal",
         }}
       >
@@ -2035,6 +2068,11 @@ export function MSProjectViewV2({
                   task.nom,
                   `${formatDate(task.dateDebut)} → ${formatDate(task.dateFin)}`,
                   task.progress !== undefined ? `Avancement : ${task.progress.toLocaleString("fr-FR")} %` : undefined,
+                  task.critique
+                    ? "Chemin critique : aucune marge"
+                    : task.margeTotale !== undefined
+                      ? `Marge : ${task.margeTotale.toLocaleString("fr-FR")} j`
+                      : undefined,
                 ].filter(Boolean).join("\n");
 
                 if (task.milestone && !isSummary) {
@@ -2079,6 +2117,10 @@ export function MSProjectViewV2({
                           : `linear-gradient(to right, ${color} ${progress}%, color-mix(in srgb, ${color} 40%, transparent) ${progress}%)`,
                         borderRadius: isSummary ? 0 : 2,
                         boxShadow: isSummary ? "none" : "0 1px 2px rgba(0,0,0,0.1)",
+                        // Chemin critique : un liseré, pour ne pas confisquer la
+                        // teinte qui désigne le type d'activité.
+                        outline: task.critique && !isSummary ? `1.5px solid ${MSP_CRITIQUE_COLOR}` : undefined,
+                        outlineOffset: task.critique && !isSummary ? 1 : undefined,
                       }}
                     >
                       {/* Synthèse : trait d'avancement sous la barre */}

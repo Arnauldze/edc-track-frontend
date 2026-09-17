@@ -52,8 +52,8 @@ export function ExchangeRateModal({
         {/* Header */}
         <div className="p-6 border-b border-[var(--border-default)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[var(--radius-md)] bg-gradient-to-br from-success to-success flex items-center justify-center">
-              <DollarSign size={20} className="text-white" />
+            <div className="w-10 h-10 rounded-[var(--radius-md)] bg-gradient-to-br from-success to-success-hover flex items-center justify-center">
+              <DollarSign size={20} className="text-on-success" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-[var(--text-primary)]">
@@ -76,8 +76,8 @@ export function ExchangeRateModal({
         <div className="p-6 space-y-5">
           {/* Info */}
           <div className="flex gap-3 p-4 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-            <AlertCircle size={16} className="text-primary flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-primary">
+            <AlertCircle size={16} className="text-primary-fg flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-primary-fg">
               <strong>Important :</strong> Utilisez les taux de change officiels
               mentionnés dans la convention de financement. Ces taux seront utilisés
               pour calculer le budget total en FCFA.
@@ -171,7 +171,7 @@ export function ExchangeRateModal({
             </button>
             <button
               onClick={handleSave}
-              className="px-5 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+              className="px-5 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
             >
               Enregistrer les taux
             </button>

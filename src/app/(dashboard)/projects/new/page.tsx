@@ -109,8 +109,8 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
         <div className="space-y-5">
             {/* Info */}
             <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary flex-shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                <p className="text-[11px] text-primary leading-relaxed">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-fg flex-shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                <p className="text-[11px] text-primary-fg leading-relaxed">
                     <strong>Localisation optionnelle :</strong> Vous pouvez localiser votre projet en sélectionnant la région, le département et la ville. Les coordonnées GPS seront <strong>détectées automatiquement</strong>. Vous pouvez aussi laisser vide et compléter plus tard.
                 </p>
             </div>
@@ -602,7 +602,7 @@ export default function NewProjectPage() {
                         <div className="flex flex-col items-center relative z-10">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold border-2 transition-all duration-300
                                 ${step.id < currentStep
-                                    ? "bg-success border-success text-white"
+                                    ? "bg-success border-success text-on-success"
                                     : step.id === currentStep
                                         ? "bg-[var(--text-primary)] border-[var(--text-primary)] text-[var(--text-inverted)]"
                                         : "bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--text-tertiary)]"
@@ -673,8 +673,8 @@ export default function NewProjectPage() {
                 {currentStep === 3 && (
                     <div className="space-y-6">
                         <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                            <p className="text-[11px] text-primary leading-relaxed">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-fg flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                            <p className="text-[11px] text-primary-fg leading-relaxed">
                                 Définissez le cadre juridique et les sources de financement du projet. Le budget total sera calculé automatiquement à partir des contributions. Les sources pourront être complétées plus tard depuis la fiche du projet.
                             </p>
                         </div>
@@ -756,8 +756,8 @@ export default function NewProjectPage() {
 
                         {/* ── Info compteurs ── */}
                         <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                            <div className="text-[11px] text-primary leading-relaxed">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-fg flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                            <div className="text-[11px] text-primary-fg leading-relaxed">
                                 <p>Définissez l&apos;arborescence. <strong>{components.length}</strong> composant{components.length > 1 ? "s" : ""}, <strong>{totalSC}</strong> sous-composant{totalSC > 1 ? "s" : ""}, <strong>{totalActivities}</strong> activité{totalActivities > 1 ? "s" : ""}. Utilisez <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-success-subtle rounded text-success text-[10px] font-bold"><ChevronUp size={9} />Monter d&apos;un niveau</span> et <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-warning-subtle rounded text-warning text-[10px] font-bold"><ChevronDown size={9} />Descendre d&apos;un niveau</span> pour changer le niveau hiérarchique.</p>
                             </div>
                         </div>
@@ -768,7 +768,7 @@ export default function NewProjectPage() {
                                 <div key={comp.id} className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3.5">
                                     {/* ── Composant : Nom + Budget + Devise + Pondération + TypeActivite (si niveau le plus bas) + Actions ── */}
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <div className="w-7 h-7 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
+                                        <div className="w-7 h-7 bg-primary-subtle text-primary-fg rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
                                         <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '12rem' }} />
 
                                         {/* Type d'activité (si niveau le plus bas) */}
@@ -891,7 +891,7 @@ export default function NewProjectPage() {
                                                 )}
                                                 {comp.sousComposants.length === 0 && <div className="w-5" />}
 
-                                                <div className="w-6 h-6 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
+                                                <div className="w-6 h-6 bg-primary-subtle text-primary-fg rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
                                                 <span className="text-[14px] font-bold text-[var(--text-primary)]">
                                                     {comp.name || `Composant ${ci + 1}`}
                                                 </span>
@@ -1030,7 +1030,7 @@ export default function NewProjectPage() {
                     </Link>
                     <button
                         onClick={handleNext}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] text-[13px] font-semibold shadow-[var(--shadow-sm)] transition-all ${currentStep === 6 ? "bg-success hover:bg-success-hover text-white" : "bg-[var(--text-primary)] text-[var(--text-inverted)] hover:opacity-90"}`}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] text-[13px] font-semibold shadow-[var(--shadow-sm)] transition-all ${currentStep === 6 ? "bg-success hover:bg-success-hover text-on-success" : "bg-[var(--text-primary)] text-[var(--text-inverted)] hover:opacity-90"}`}
                     >
                         {currentStep === 6 ? "✓ Créer le projet" : "Suivant"}
                         {currentStep < 6 && <ArrowRight size={14} />}

@@ -191,7 +191,7 @@ export default function AddMemberModal({
                           className="w-full text-left px-4 py-3 hover:bg-[var(--bg-surface-hover)] transition-colors border-b border-[var(--border-subtle)] last:border-0"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-cat-violet flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-on-primary text-xs font-bold flex-shrink-0">
                               {user.firstName?.[0]}
                               {user.lastName?.[0]}
                             </div>
@@ -272,7 +272,7 @@ export default function AddMemberModal({
                       ${chefTaken ? "opacity-60 cursor-not-allowed" : ""}
                       flex items-start gap-3 p-3.5 rounded-[var(--radius-md)] cursor-pointer transition-all duration-150 border
                       ${isSelected
-                        ? `${colors.bg} ${colors.border} ring-1 ring-${colors.text.replace('text-', '')}/30`
+                        ? `${colors.bg} ${colors.border} ring-1 ${colors.ring}`
                         : "bg-[var(--bg-inset)] border-[var(--border-default)] hover:bg-[var(--bg-surface-hover)]"
                       }
                     `}
@@ -313,8 +313,8 @@ export default function AddMemberModal({
 
             {/* Info box sur les permissions automatiques */}
             <div className="mt-3 p-3 bg-primary-subtle border border-primary/20 rounded-[var(--radius-md)] flex items-start gap-2">
-              <Info size={14} className="text-primary flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-primary">
+              <Info size={14} className="text-primary-fg flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-primary-fg">
                 Les droits d'accès sont automatiquement attribués selon le rôle sélectionné.
                 Pas besoin de configuration supplémentaire.
               </p>
@@ -473,8 +473,8 @@ export default function AddMemberModal({
 
           {formData.projectRole === "contributeur" && formData.level !== "project" && (
             <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
-              <Info size={14} className="text-primary flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-primary leading-relaxed">
+              <Info size={14} className="text-primary-fg flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-primary-fg leading-relaxed">
                 Ce contributeur consultera tout le projet, mais ne pourra déposer des documents que dans{" "}
                 <strong>{formData.entityName || "l'élément sélectionné"}</strong> et ses sous-niveaux.
               </p>
@@ -493,7 +493,7 @@ export default function AddMemberModal({
             <button
               type="submit"
               disabled={isSubmitting || !formData.userId}
-              className="px-5 py-2 bg-[var(--primary)] text-white rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2 bg-[var(--primary)] text-on-primary rounded-[var(--radius-md)] text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting
                 ? "En cours..."

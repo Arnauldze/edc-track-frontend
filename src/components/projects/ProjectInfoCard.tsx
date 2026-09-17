@@ -165,7 +165,7 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
     const statusColors: Record<string, string> = {
       planifie: "bg-inset text-fg-muted border-line",
       en_cours: "bg-success-subtle text-success border-success/20",
-      termine: "bg-primary-subtle text-primary border-primary/20",
+      termine: "bg-primary-subtle text-primary-fg border-primary/20",
       suspendu: "bg-danger-subtle text-danger border-danger/20",
     };
     const color = statusColors[project.status || ""] || "bg-inset text-fg-muted border-line";
@@ -342,7 +342,7 @@ export function ProjectInfoCard({ project }: ProjectInfoCardProps) {
             </span>
           )}
           {project.category && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary-subtle text-primary border border-primary/20">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary-subtle text-primary-fg border border-primary/20">
               {project.category}
             </span>
           )}

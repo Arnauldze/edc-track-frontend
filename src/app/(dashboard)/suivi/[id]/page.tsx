@@ -9,7 +9,7 @@ export default function SuiviProjetSoonPage({ params }: { params: Promise<{ id: 
     const id = unwrappedParams.id;
     
     return (
-        <div className="flex h-screen bg-[#0C0E14] text-white">
+        <div className="flex h-screen bg-canvas text-fg">
             <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
                 
                 {/* Background decorative elements */}
@@ -18,18 +18,18 @@ export default function SuiviProjetSoonPage({ params }: { params: Promise<{ id: 
 
                 {/* Back Button */}
                 <div className="absolute top-8 left-8">
-                    <Link href="/suivi" className="flex items-center gap-2 text-sm font-semibold text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors px-4 py-2 rounded-lg hover:bg-white/5">
+                    <Link href="/suivi" className="flex items-center gap-2 text-sm font-semibold text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors px-4 py-2 rounded-lg hover:bg-hover">
                         <ChevronLeft size={16} /> Retour aux projets
                     </Link>
                 </div>
 
                 {/* Content */}
                 <div className="relative z-10 flex flex-col items-center text-center max-w-xl px-6">
-                    <div className="w-20 h-20 mb-8 rounded-3xl bg-gradient-to-br from-[var(--primary)] to-cat-violet flex items-center justify-center shadow-2xl shadow-[var(--primary)]/20 animate-pulse">
-                        <ActivitySquare size={40} className="text-white" />
+                    <div className="w-20 h-20 mb-8 rounded-3xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] flex items-center justify-center shadow-2xl shadow-[var(--primary)]/20 animate-pulse">
+                        <ActivitySquare size={40} className="text-on-primary" />
                     </div>
                     
-                    <h1 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/60 mb-6 tracking-tight">
+                    <h1 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fg via-fg to-fg/60 mb-6 tracking-tight">
                         Coming Soon
                     </h1>
                     
