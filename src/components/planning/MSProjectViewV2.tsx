@@ -91,19 +91,22 @@ const COLUMN_DEFS: ColumnDef[] = [
   { id: "numero", label: "N°", width: "60px", align: "center", defaultVisible: true, filterType: "text", field: "numero" },
   { id: "nom", label: "Nom", width: "minmax(200px, 1fr)", align: "left", defaultVisible: true, filterType: "level", field: "nom" },
   { id: "type", label: "Type", width: "110px", align: "center", defaultVisible: true, filterType: "text", field: "activityType" },
-  { id: "ponderation", label: "Pond.", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "ponderation" },
+  { id: "ponderation", label: "Pond.", width: "70px", align: "center", defaultVisible: false, filterType: "number", field: "ponderation" },
   { id: "dateDebut", label: "Début", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateDebut" },
   { id: "dateFin", label: "Fin", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateFin" },
   { id: "duree", label: "Durée", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "duree" },
   { id: "avancement", label: "Avanc.", width: "90px", align: "center", defaultVisible: true, filterType: "number", field: "progress" },
-  { id: "budget", label: "Budget", width: "80px", align: "right", defaultVisible: true, filterType: "number", field: "budget" },
-  { id: "delai", label: "Délai", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "delai" },
-  { id: "dateEcheance", label: "Échéance", width: "90px", align: "center", defaultVisible: true, filterType: "date", field: "dateEcheance" },
-  { id: "predecesseur", label: "Préd.", width: "60px", align: "center", defaultVisible: true, filterType: "ref", field: "predecesseur" },
-  { id: "successeur", label: "Succ.", width: "60px", align: "center", defaultVisible: true, filterType: "ref", field: "successeur" },
+  { id: "budget", label: "Budget", width: "80px", align: "right", defaultVisible: false, filterType: "number", field: "budget" },
+  { id: "delai", label: "Délai", width: "70px", align: "center", defaultVisible: false, filterType: "number", field: "delai" },
+  { id: "dateEcheance", label: "Échéance", width: "90px", align: "center", defaultVisible: false, filterType: "date", field: "dateEcheance" },
+  { id: "predecesseur", label: "Préd.", width: "60px", align: "center", defaultVisible: false, filterType: "ref", field: "predecesseur" },
+  { id: "successeur", label: "Succ.", width: "60px", align: "center", defaultVisible: false, filterType: "ref", field: "successeur" },
   { id: "marge", label: "Marge", width: "70px", align: "center", defaultVisible: true, filterType: "number", field: "margeTotale" },
   { id: "ecart", label: "Écart réf.", width: "80px", align: "center", defaultVisible: true, filterType: "number", field: "ecartReference" },
 ];
+
+/** Clé de stockage local du choix de colonnes (le défaut tient dans le volet de 800 px). */
+const CLE_COLONNES = "planning.colonnesVisibles";
 
 interface ColumnFilter {
   columnId: string;
@@ -279,6 +282,23 @@ export function MSProjectViewV2({
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     () => new Set(COLUMN_DEFS.filter(c => c.defaultVisible).map(c => c.id))
   );
+  // Choix de colonnes propre à chaque navigateur, relu après le montage pour ne pas casser l'hydratation.
+  const colonnesRelues = useRef(false);
+  useEffect(() => {
+    try {
+      const brut = localStorage.getItem(CLE_COLONNES);
+      const ids: unknown = brut ? JSON.parse(brut) : null;
+      if (Array.isArray(ids)) {
+        const connus = ids.filter((id): id is string => typeof id === "string" && COLUMN_DEFS.some(c => c.id === id));
+        if (connus.length) setVisibleColumns(new Set([...connus, "numero", "nom"]));
+      }
+    } catch { /* stockage indisponible : on garde les colonnes par défaut */ }
+    colonnesRelues.current = true;
+  }, []);
+  useEffect(() => {
+    if (!colonnesRelues.current) return;
+    try { localStorage.setItem(CLE_COLONNES, JSON.stringify([...visibleColumns])); } catch { /* sans effet */ }
+  }, [visibleColumns]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
 
@@ -294,6 +314,8 @@ export function MSProjectViewV2({
   // Computed: visible columns and dynamic grid template
   const columnsVisible = useMemo(() => COLUMN_DEFS.filter(c => visibleColumns.has(c.id)), [visibleColumns]);
   const gridTemplate = useMemo(() => columnsVisible.map(c => c.width).join(" "), [columnsVisible]);
+  // Largeur réelle des colonnes affichées : la barre de défilement horizontale doit toutes les atteindre.
+  const largeurColonnes = useMemo(() => columnsVisible.reduce((somme, c) => somme + (parseInt(c.width.replace("minmax(", ""), 10) || 0), 0), [columnsVisible]);
   
   // Échelle de temps : choix mémorisé sur ce navigateur, sinon déduite de la durée du projet
   const [chosenScale, setChosenScale] = useState<TimeScale | null>(null);
@@ -1681,7 +1703,7 @@ export function MSProjectViewV2({
             onScroll={handleLeftScroll}
             style={{ flex: 1, overflowY: "auto", overflowX: "auto", position: "relative" }}
           >
-            <div style={{ minWidth: 800, display: "flex", flexDirection: "column" }}>
+            <div style={{ minWidth: Math.max(800, largeurColonnes), display: "flex", flexDirection: "column" }}>
               {/* Table Header — dynamic columns */}
               <div
                 onContextMenu={handleHeaderContextMenu}
