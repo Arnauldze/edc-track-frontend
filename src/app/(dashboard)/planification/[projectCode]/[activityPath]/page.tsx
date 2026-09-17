@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, ChevronLeft, Plus, Save, Trash2, X } from "lucide-react";
+import { BarChart3, ChevronLeft, Flag, FlagOff, Plus, Save, Trash2, X } from "lucide-react";
 import { getProjectById, getLeafActivities, type Project } from "@/lib/projectStore";
 import { planningService, type CreatePlanningDto, type LignePassation, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
@@ -236,6 +236,28 @@ export default function ActivityPlanningPage() {
     setActive[key](false);
   };
 
+  // ── Référence de base ──
+  // Photographie du plan à un instant choisi. On ne la fige pas tant qu'il
+  // reste des modifications non enregistrées : elle doit refléter ce que le
+  // serveur a calculé, pas ce qui est à l'écran.
+  const [figeage, setFigeage] = useState(false);
+
+  async function handleReference() {
+    const figee = !!planning?.reference;
+    setFigeage(true);
+    try {
+      const misAJour = figee
+        ? await planningService.libererReference(projectCode, activityPath)
+        : await planningService.figerReference(projectCode, activityPath);
+      setPlanning(misAJour);
+      toast.success(figee ? "Référence retirée" : "Référence figée sur le plan courant");
+    } catch (error) {
+      toast.error(messageApi(error, figee ? "Impossible de retirer la référence" : "Impossible de figer la référence"));
+    } finally {
+      setFigeage(false);
+    }
+  }
+
   // ── Enregistrement ──
   async function handleSave() {
     if (!hasEtudePrealable && !hasPassation && !hasExecution) {
@@ -382,6 +404,24 @@ export default function ActivityPlanningPage() {
             >
               <BarChart3 /> Voir le Gantt
             </Link>
+            {!readOnly && isEditMode && (
+              <Button
+                variant="secondary"
+                onClick={handleReference}
+                loading={figeage}
+                disabled={aDesModifications}
+                title={
+                  aDesModifications
+                    ? "Enregistrez d'abord : la référence fige le plan calculé par le serveur"
+                    : planning?.reference
+                      ? `Figée le ${new Date(planning.reference.figeeLe).toLocaleDateString("fr-FR")}`
+                      : "Figer le plan courant comme référence de base"
+                }
+              >
+                {planning?.reference ? <FlagOff /> : <Flag />}
+                {planning?.reference ? "Libérer la référence" : "Figer la référence"}
+              </Button>
+            )}
             {!readOnly && isEditMode && (
               <Button variant="danger" size="icon" onClick={handleDelete} title="Supprimer toute la planification" aria-label="Supprimer toute la planification">
                 <Trash2 />
