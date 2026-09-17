@@ -42,7 +42,6 @@ import {
   ArrowDownUp,
   Trash2,
   Upload,
-  Users,
   X,
 } from "lucide-react";
 import { toast } from "@/lib/toastStore";
@@ -490,9 +489,6 @@ export function ArchiveExplorer({ projet }: { projet: ProjetArchive }) {
           <button type="button" onClick={() => setModale({ type: "listeCorbeille" })} className="h-9 px-3.5 inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface text-[13px] font-medium text-fg hover:bg-hover transition-colors">
             <Trash2 size={15} /> Corbeille · {corbeille.length}
           </button>
-          <a href={`/projects/${projet.code}`} className="h-9 px-3.5 inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface text-[13px] font-medium text-fg hover:bg-hover transition-colors">
-            <Users size={15} /> Équipe projet
-          </a>
         </div>
       </div>
 

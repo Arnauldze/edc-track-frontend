@@ -21,6 +21,13 @@ export const PHASES: { id: Phase; label: string }[] = [
   { id: "execution", label: "Exécution" },
 ];
 
+/**
+ * Les trois phases n'existent qu'au niveau le plus fin, l'activité : c'est
+ * elle qui est planifiée et passée en marché. Au-dessus (projet, composante,
+ * sous-composante décomposée), il n'y a que l'étude préalable.
+ */
+export const ETUDE_PREALABLE = "Étude préalable";
+
 export const GLOBAL = "global";
 
 export type NoeudKind = "projet" | "composante" | "sous-composante" | "activite" | "phase" | "dossier";
@@ -93,8 +100,18 @@ function noeudDossier(context: string, phase: Phase, nom: string, folderId: stri
   return { id: `${context}::${phase}::${nom}`, kind: "dossier", label: nom, context, phase, folder: nom, folderId, enfants: [], ...compter(siens) };
 }
 
-function noeudsPhases(context: string, dossiers: Folder[], documents: DocumentMetadata[]): Noeud[] {
-  return PHASES.map(({ id: phase, label }) => {
+function noeudsPhases(context: string, dossiers: Folder[], documents: DocumentMetadata[], feuille: boolean): Noeud[] {
+  const phases = feuille
+    ? PHASES
+    : PHASES.filter(
+        ({ id }) =>
+          // Hors activité : l'étude préalable, plus toute phase où des documents ont déjà été classés.
+          id === "etude" ||
+          documents.some((d) => (d.context || GLOBAL) === context && d.phase === id) ||
+          dossiers.some((f) => f.context === context && f.phase === id),
+      );
+
+  return phases.map(({ id: phase, label }) => {
     const ici = documents.filter((d) => (d.context || GLOBAL) === context && d.phase === phase);
     const noms = new Map<string, string | undefined>();
     for (const dossier of dossiers) {
@@ -106,7 +123,15 @@ function noeudsPhases(context: string, dossiers: Folder[], documents: DocumentMe
       .map(([nom, id]) => noeudDossier(context, phase, nom, id, documents))
       .sort((a, b) => a.label.localeCompare(b.label, "fr"));
 
-    return { id: `${context}::${phase}`, kind: "phase" as const, label, context, phase, enfants, ...compter(ici) };
+    return {
+      id: `${context}::${phase}`,
+      kind: "phase" as const,
+      label: !feuille && phase === "etude" ? ETUDE_PREALABLE : label,
+      context,
+      phase,
+      enfants,
+      ...compter(ici),
+    };
   });
 }
 
@@ -120,6 +145,8 @@ export function construireArbre(
   documents: DocumentMetadata[],
 ): Noeud {
   const emplacement = (kind: NoeudKind, label: string, context: string, enfantsStructure: Noeud[]): Noeud => {
+    // Une unité sans enfant est une activité : elle seule porte les trois phases.
+    const feuille = kind !== "projet" && enfantsStructure.length === 0;
     const siens = documents.filter((d) => dansContexte(d.context || GLOBAL, context));
     const propres = documents.filter((d) => (d.context || GLOBAL) === context);
     return {
@@ -127,7 +154,7 @@ export function construireArbre(
       kind,
       label,
       context,
-      enfants: [...noeudsPhases(context, dossiers, documents), ...enfantsStructure],
+      enfants: [...noeudsPhases(context, dossiers, documents, feuille), ...enfantsStructure],
       ...compter(context === GLOBAL ? propres : siens),
       // Le total d'un emplacement inclut ses descendants ; ses phases n'en montrent que la part directe.
       total: context === GLOBAL ? documents.length : siens.length,
