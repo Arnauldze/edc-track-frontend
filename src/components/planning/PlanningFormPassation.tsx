@@ -1,16 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Briefcase, AlertCircle, Upload, ChevronLeft, ChevronRight } from "lucide-react";
-import { FileImportModal } from "./FileImportModal";
-import { usePermissions } from "@/hooks/usePermissions";
-import type { LignePassation } from "@/services/api/planningService";
-
 // ══════════════════════════════════════════════════════════════
 // PLAN DE PASSATION DES MARCHÉS (PPM)
-// Tableau fidèle au modèle EDC : un marché par ligne, les étapes en colonnes.
+// Tableau fidèle au modèle EDC : un marché par ligne, les étapes en colonnes,
+// regroupées par phase du processus. La colonne du marché reste visible
+// pendant le défilement horizontal.
 // La ligne est saisie en texte ; lib/passationApi.ts la convertit pour l'API.
 // ══════════════════════════════════════════════════════════════
+
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Briefcase, ChevronLeft, ChevronRight, Plus, Trash2, Upload } from "lucide-react";
+import { FileImportModal } from "./FileImportModal";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { voile } from "@/lib/activityTypes";
+import { lignePassationRenseignee } from "@/lib/passationApi";
+import type { LignePassation } from "@/services/api/planningService";
 
 const EMPTY_LIGNE: LignePassation = {
   numero: "", designation: "", typeAO: "", typePrestation: "",
@@ -24,92 +29,111 @@ const EMPTY_LIGNE: LignePassation = {
   delaiGlobalExecution: "", dateReceptionProvisoire: "", periodeGarantie: "", dateReceptionDefinitive: "",
 };
 
-// Types d'AO
-const TYPES_AO = ["DC", "AONO", "AONR", "AOIO", "AMI", "Gré à gré"];
-const TYPES_PRESTATION = ["Travaux", "Fourniture", "SPI", "Services"];
-
-// Définition des colonnes par groupe
 interface ColDef {
   key: keyof LignePassation;
   label: string;
-  width: number;
   type: "text" | "date" | "number" | "select";
+  width?: number;
   options?: string[];
-  computed?: boolean;
+  /** Colonne déduite des autres : affichée, jamais saisie. */
+  calculee?: boolean;
 }
 
 interface ColGroup {
   label: string;
-  color: string;
+  /** Rôle de couleur du design system, jamais une teinte en dur. */
+  couleur: string;
   cols: ColDef[];
 }
 
+const LARGEUR = 118;
+
 const COL_GROUPS: ColGroup[] = [
-  // Colonne de numérotation
   {
-    label: "N°",
-    color: "rgb(100, 116, 139)", // gray
+    label: "Identification",
+    couleur: "var(--text-secondary)",
     cols: [
-      { key: "numero", label: "N°", width: 50, type: "text" },
+      { key: "typeAO", label: "Type d'AO", type: "select", options: ["DC", "AONO", "AONR", "AOIO", "AMI", "Gré à gré"] },
+      { key: "typePrestation", label: "Prestation", type: "select", options: ["Travaux", "Fourniture", "SPI", "Services"] },
+      { key: "montantPrevisionnel", label: "Montant prév.", type: "number", width: 134 },
+      { key: "sourceFinancement", label: "Financement", type: "text", width: 134 },
+      { key: "imputationBudgetaire", label: "Imputation", type: "text", width: 134 },
     ],
   },
-  // Le groupe "Identification" a été déplacé vers "Informations Générales" en haut de la page
   {
     label: "Processus de sélection",
-    color: "rgb(234, 179, 8)", // yellow
+    couleur: "var(--primary-text)",
     cols: [
-      { key: "saisineCIPM", label: "Saisine CIPM", width: 100, type: "date" },
-      { key: "examenDAOCIPM", label: "Examen DAO CIPM", width: 100, type: "date" },
-      { key: "nonObjectionBF1", label: "Non obj. BF", width: 100, type: "date" },
-      { key: "lancementAO", label: "Lancement AO", width: 100, type: "date" },
-      { key: "depouillementOffres", label: "Dépouillement", width: 100, type: "date" },
-      { key: "rapportAnalyseSCA", label: "Rapport SCA", width: 100, type: "date" },
-      { key: "examenRapportCIPM", label: "Examen rapp. CIPM", width: 100, type: "date" },
-      { key: "nonObjectionBF2", label: "Non obj. BF", width: 100, type: "date" },
+      { key: "saisineCIPM", label: "Saisine CIPM", type: "date" },
+      { key: "examenDAOCIPM", label: "Examen DAO CIPM", type: "date" },
+      { key: "nonObjectionBF1", label: "Non obj. BF", type: "date" },
+      { key: "lancementAO", label: "Lancement AO", type: "date" },
+      { key: "depouillementOffres", label: "Dépouillement", type: "date" },
+      { key: "rapportAnalyseSCA", label: "Rapport SCA", type: "date" },
+      { key: "examenRapportCIPM", label: "Examen rapp. CIPM", type: "date" },
+      { key: "nonObjectionBF2", label: "Non obj. BF", type: "date" },
     ],
   },
   {
     label: "Offres financières",
-    color: "rgb(168, 85, 247)", // purple
+    couleur: "var(--accent-text)",
     cols: [
-      { key: "ouvertureOF", label: "Ouverture OF", width: 100, type: "date" },
-      { key: "rapportAnalyseOF", label: "Rapport OF", width: 100, type: "date" },
-      { key: "propositionAttributionCIPM", label: "Proposition CIPM", width: 100, type: "date" },
-      { key: "nonObjectionBF3", label: "Non obj. BF", width: 100, type: "date" },
-      { key: "publicationResultats", label: "Publication rés.", width: 100, type: "date" },
+      { key: "ouvertureOF", label: "Ouverture OF", type: "date" },
+      { key: "rapportAnalyseOF", label: "Rapport OF", type: "date" },
+      { key: "propositionAttributionCIPM", label: "Proposition CIPM", type: "date" },
+      { key: "nonObjectionBF3", label: "Non obj. BF", type: "date" },
+      { key: "publicationResultats", label: "Publication rés.", type: "date" },
     ],
   },
   {
     label: "Contractualisation",
-    color: "rgb(34, 197, 94)", // green
+    couleur: "var(--success)",
     cols: [
-      { key: "souscriptionMarche", label: "Souscription marché", width: 100, type: "date" },
-      { key: "saisineCIPM2", label: "Saisine CIPM", width: 100, type: "date" },
-      { key: "examenMarcheCIPM", label: "Examen marché CIPM", width: 100, type: "date" },
-      { key: "visaCA", label: "VISA CA", width: 80, type: "select", options: ["OUI", "NON", "N/A"] },
-      { key: "nonObjectionBF4", label: "Non obj. BF", width: 100, type: "date" },
-      { key: "signatureMarche", label: "Signature", width: 100, type: "date" },
-      { key: "notificationMarche", label: "Notification", width: 100, type: "date" },
-      { key: "enregistrementMarche", label: "Enregistrement", width: 100, type: "date" },
+      { key: "souscriptionMarche", label: "Souscription", type: "date" },
+      { key: "saisineCIPM2", label: "Saisine CIPM", type: "date" },
+      { key: "examenMarcheCIPM", label: "Examen marché CIPM", type: "date" },
+      { key: "visaCA", label: "VISA CA", type: "select", options: ["OUI", "NON", "N/A"], width: 96 },
+      { key: "nonObjectionBF4", label: "Non obj. BF", type: "date" },
+      { key: "signatureMarche", label: "Signature", type: "date" },
+      { key: "notificationMarche", label: "Notification", type: "date" },
+      { key: "enregistrementMarche", label: "Enregistrement", type: "date" },
     ],
   },
   {
-    label: "Synthèse & Exécution",
-    color: "rgb(239, 68, 68)", // red
+    label: "Synthèse et exécution",
+    couleur: "var(--text-secondary)",
     cols: [
-      { key: "delaiGlobalPassation", label: "Délai passation (j)", width: 90, type: "number", computed: true },
-      { key: "osDeDemarrage", label: "OS démarrage", width: 100, type: "date" },
-      { key: "delaiGlobalExecution", label: "Délai exéc. (j)", width: 90, type: "number" },
-      { key: "dateReceptionProvisoire", label: "Réception prov.", width: 100, type: "date" },
-      { key: "periodeGarantie", label: "Garantie (j)", width: 80, type: "number" },
-      { key: "dateReceptionDefinitive", label: "Réception déf.", width: 100, type: "date" },
+      { key: "delaiGlobalPassation", label: "Délai passation (j)", type: "number", calculee: true },
+      { key: "osDeDemarrage", label: "OS démarrage", type: "date" },
+      { key: "delaiGlobalExecution", label: "Délai exéc. (j)", type: "number" },
+      { key: "dateReceptionProvisoire", label: "Réception prov.", type: "date" },
+      { key: "periodeGarantie", label: "Garantie (j)", type: "number" },
+      { key: "dateReceptionDefinitive", label: "Réception déf.", type: "date" },
     ],
   },
 ];
 
-// Toutes les colonnes à plat
 const ALL_COLS = COL_GROUPS.flatMap((g) => g.cols);
-const TOTAL_WIDTH = ALL_COLS.reduce((s, c) => s + c.width, 0) + 50; // +50 pour colonne actions
+const largeurDe = (col: ColDef) => col.width ?? LARGEUR;
+const largeurGroupe = (groupe: ColGroup) => groupe.cols.reduce((somme, col) => somme + largeurDe(col), 0);
+
+const JOUR = 86_400_000;
+const LIGNE_PAR_DEFAUT: LignePassation[] = [{ ...EMPTY_LIGNE, numero: "1" }];
+
+const enJours = (debut?: string, fin?: string) => {
+  if (!debut || !fin) return undefined;
+  const ecart = Date.parse(`${fin}T00:00:00Z`) - Date.parse(`${debut}T00:00:00Z`);
+  return Number.isFinite(ecart) ? Math.round(ecart / JOUR) : undefined;
+};
+
+const dateCourte = (jour?: string) =>
+  jour ? new Date(`${jour}T00:00:00`).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
+
+/** Plus petite (ou plus grande) valeur non vide d'un champ, sur toutes les lignes. */
+const borne = (lignes: LignePassation[], champ: keyof LignePassation, sens: "min" | "max") => {
+  const valeurs = lignes.map((l) => l[champ]).filter((v): v is string => !!v?.trim()).sort();
+  return sens === "min" ? valeurs[0] : valeurs[valeurs.length - 1];
+};
 
 interface PassationData {
   typePassation?: string;
@@ -119,323 +143,299 @@ interface PassationData {
 interface Props {
   data: PassationData | null;
   onChange: (data: PassationData) => void;
-  projectId?: string;
+  readOnly?: boolean;
 }
 
-export function PlanningFormPassation({ data, onChange, projectId }: Props) {
-  const { can, loading: permissionsLoading } = usePermissions(projectId);
-  // Planifier est réservé au chef de projet : contributeurs et coordinateurs consultent.
-  const readOnly = !can("planning:edit");
-  const [lignes, setLignes] = useState<LignePassation[]>(
-    data?.lignesPassation || [{ ...EMPTY_LIGNE, numero: "1" }]
-  );
-  const [showImportModal, setShowImportModal] = useState(false);
+export function PlanningFormPassation({ data, onChange, readOnly = false }: Props) {
+  const [importOuvert, setImportOuvert] = useState(false);
+  const [groupeVise, setGroupeVise] = useState(COL_GROUPS[0].label);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Sync vers le parent
-  useEffect(() => {
-    onChange({ typePassation: data?.typePassation, lignesPassation: lignes });
+  // Le tableau lit ses lignes du parent : après un enregistrement, il affiche
+  // la version calculée par le serveur. Une ligne d'appel reste offerte tant
+  // qu'aucun marché n'est saisi.
+  const lignes = data?.lignesPassation?.length ? data.lignesPassation : LIGNE_PAR_DEFAUT;
+
+  const publier = useCallback(
+    (suivantes: LignePassation[]) => onChange({ typePassation: data?.typePassation, lignesPassation: suivantes }),
+    [onChange, data?.typePassation],
+  );
+
+  /** Délai entre la saisine CIPM et l'enregistrement du marché, en jours. */
+  const avecDelai = (ligne: LignePassation): LignePassation => {
+    const delai = enJours(ligne.saisineCIPM, ligne.enregistrementMarche);
+    return { ...ligne, delaiGlobalPassation: delai === undefined ? "" : String(delai) };
+  };
+
+  const ajouterLigne = () => publier([...lignes, { ...EMPTY_LIGNE, numero: String(lignes.length + 1) }]);
+
+  const retirerLigne = (index: number) => {
+    const restantes = lignes.filter((_, i) => i !== index);
+    publier(restantes.length ? restantes : []);
+  };
+
+  const modifierLigne = (index: number, champ: keyof LignePassation, valeur: string) =>
+    publier(lignes.map((ligne, i) => (i === index ? avecDelai({ ...ligne, [champ]: valeur }) : ligne)));
+
+  const importer = (rows: Record<string, string>[]) =>
+    publier(
+      rows.map((row, i) =>
+        avecDelai({
+          ...EMPTY_LIGNE,
+          ...row,
+          numero: row.numero || String(i + 1),
+          designation: row.designation || row.nom || "",
+        }),
+      ),
+    );
+
+  /** Amène le groupe de colonnes demandé au bord gauche de la zone défilante. */
+  const allerAuGroupe = (label: string) => {
+    setGroupeVise(label);
+    const avant = COL_GROUPS.slice(0, COL_GROUPS.findIndex((g) => g.label === label));
+    scrollRef.current?.scrollTo({ left: avant.reduce((somme, g) => somme + largeurGroupe(g), 0), behavior: "smooth" });
+  };
+
+  // ── Synthèse de la phase ──
+  const synthese = useMemo(() => {
+    const saisies = lignes.filter(lignePassationRenseignee);
+    const debut = borne(saisies, "saisineCIPM", "min");
+    const fin = borne(saisies, "enregistrementMarche", "max");
+    const os = borne(saisies, "osDeDemarrage", "min");
+    const executions = saisies
+      .map((l) => Number(l.delaiGlobalExecution))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    return {
+      marches: saisies.length,
+      delaiPassation: enJours(debut, fin),
+      periode: debut && fin ? `${dateCourte(debut)} → ${dateCourte(fin)}` : "De la saisine CIPM à l'enregistrement",
+      os,
+      apresEnregistrement: enJours(fin, os),
+      delaiExecution: executions.length ? Math.max(...executions) : undefined,
+      finExecution: borne(saisies, "dateReceptionProvisoire", "max"),
+    };
   }, [lignes]);
 
-  // Calcul auto du délai global de passation
-  const computeDelaiGlobal = (ligne: LignePassation): string => {
-    if (ligne.saisineCIPM && ligne.enregistrementMarche) {
-      const d1 = new Date(ligne.saisineCIPM);
-      const d2 = new Date(ligne.enregistrementMarche);
-      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
-        const diff = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-        return String(diff);
-      }
-    }
-    return ligne.delaiGlobalPassation || "";
-  };
+  const chiffres = [
+    {
+      label: "Délai de passation",
+      valeur: synthese.delaiPassation === undefined ? "—" : `${synthese.delaiPassation} jours`,
+      detail: synthese.periode,
+    },
+    {
+      label: "Ordre de service",
+      valeur: dateCourte(synthese.os),
+      detail:
+        synthese.apresEnregistrement === undefined
+          ? "Démarrage de l'exécution"
+          : `Démarrage de l'exécution, ${synthese.apresEnregistrement} j après l'enregistrement`,
+    },
+    {
+      label: "Délai d'exécution",
+      valeur: synthese.delaiExecution === undefined ? "—" : `${synthese.delaiExecution} jours`,
+      detail: synthese.finExecution ? `Jusqu'au ${dateCourte(synthese.finExecution)}` : "Le plus long des marchés",
+    },
+    {
+      label: "Marchés",
+      valeur: synthese.marches === 0 ? "Aucun" : String(synthese.marches),
+      detail: synthese.marches === 0 ? "Saisissez le premier marché" : `${ALL_COLS.length + 2} colonnes du modèle EDC`,
+    },
+  ];
 
-  const addLigne = () => {
-    const next = { ...EMPTY_LIGNE, numero: String(lignes.length + 1) };
-    setLignes([...lignes, next]);
-  };
+  // ── Cellules ──
+  // Pas de largeur ici : chaque appel pose la sienne (une cellule occupe toute
+  // sa colonne, le numéro est étroit, la désignation prend la place restante).
+  const CELLULE =
+    "h-full min-w-0 rounded-none border-0 bg-transparent px-2 text-[12.5px] text-fg tabular-nums " +
+    "focus:relative focus:z-10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary " +
+    "disabled:cursor-not-allowed disabled:text-fg-subtle";
 
-  const removeLigne = (index: number) => {
-    setLignes(lignes.filter((_, i) => i !== index));
-  };
-
-  const updateLigne = (index: number, key: keyof LignePassation, value: string) => {
-    setLignes(
-      lignes.map((l, i) => {
-        if (i !== index) return l;
-        const updated = { ...l, [key]: value };
-        // Auto-compute délai global
-        if (key === "saisineCIPM" || key === "enregistrementMarche") {
-          updated.delaiGlobalPassation = computeDelaiGlobal(updated);
-        }
-        return updated;
-      })
-    );
-  };
-
-  const scrollBy = (dx: number) => {
-    scrollRef.current?.scrollBy({ left: dx, behavior: "smooth" });
-  };
-
-  const handleImport = (importedData: any[]) => {
-    const imported: LignePassation[] = importedData.map((row, i) => ({
-      ...EMPTY_LIGNE,
-      numero: row.numero || String(i + 1),
-      designation: row.designation || row.nom || "",
-      typeAO: row.typeAO || "",
-      typePrestation: row.typePrestation || "",
-      montantPrevisionnel: row.montantPrevisionnel || row.montant || "",
-      sourceFinancement: row.sourceFinancement || "",
-    }));
-    setLignes(imported);
-  };
-
-  const renderCell = (ligne: LignePassation, col: ColDef, rowIndex: number) => {
-    const value = ligne[col.key];
+  const cellule = (ligne: LignePassation, col: ColDef, index: number) => {
+    const commun = {
+      value: ligne[col.key],
+      disabled: readOnly || col.calculee,
+      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => modifierLigne(index, col.key, e.target.value),
+      "aria-label": `${col.label}, marché ${ligne.numero || index + 1}`,
+    };
 
     if (col.type === "select" && col.options) {
       return (
-        <select
-          value={value}
-          onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-          disabled={readOnly}
-          className="w-full h-full px-1 py-1 bg-transparent text-[10px] focus:outline-none focus:bg-[var(--bg-inset)] rounded border-0 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <select {...commun} className={`${CELLULE} w-full appearance-none`}>
           <option value="">—</option>
-          {col.options.map((o) => (
-            <option key={o} value={o}>{o}</option>
+          {col.options.map((option) => (
+            <option key={option} value={option}>{option}</option>
           ))}
         </select>
       );
     }
-
-    if (col.type === "date") {
-      return (
-        <input
-          type="date"
-          value={value}
-          onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-          disabled={readOnly}
-          className="w-full h-full px-1 py-0.5 bg-transparent text-[9px] focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        />
-      );
-    }
-
-    if (col.type === "number") {
-      return (
-        <input
-          type="number"
-          min="0"
-          value={value}
-          onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-          disabled={readOnly || col.computed}
-          className="w-full h-full px-1 py-1 bg-transparent text-[10px] text-center focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed"
-          placeholder="0"
-        />
-      );
-    }
-
-    // text
     return (
       <input
-        type="text"
-        value={value}
-        onChange={(e) => updateLigne(rowIndex, col.key, e.target.value)}
-        disabled={readOnly}
-        className={`w-full h-full px-1 py-1 bg-transparent focus:outline-none focus:bg-[var(--bg-inset)] rounded disabled:opacity-50 disabled:cursor-not-allowed ${
-          col.key === "designation" ? "text-[11px]" : "text-[10px] text-center"
-        }`}
-        placeholder={col.key === "designation" ? "Désignation..." : ""}
+        {...commun}
+        type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
+        min={col.type === "number" ? 0 : undefined}
+        className={`${CELLULE} w-full ${col.calculee ? "italic" : ""}`}
       />
     );
   };
 
   return (
     <>
-      <FileImportModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onImport={handleImport}
-        importType="passation"
-      />
+      <FileImportModal isOpen={importOuvert} onClose={() => setImportOuvert(false)} onImport={importer} importType="passation" />
 
-      <div className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <Briefcase size={16} />
-              Plan de Passation des Marchés (PPM)
-            </h2>
-            <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">
-              Tableau conforme au modèle PPM EDC — Scroll horizontal pour naviguer.
-            </p>
-          </div>
+      <Card>
+        <div className="flex items-center justify-between gap-4 border-b border-line px-4.5 py-3.5">
           <div className="flex items-center gap-3">
-            {/* Légende des groupes - inline */}
-            {COL_GROUPS.map((g) => (
-              <div key={g.label} className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: g.color }} />
-                <span className="text-[9px] font-medium text-[var(--text-tertiary)]">{g.label}</span>
+            <div
+              className="flex size-8 shrink-0 items-center justify-center rounded-md"
+              style={{ background: voile("var(--phase-passation)"), color: "var(--phase-passation)" }}
+            >
+              <Briefcase size={17} />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-[15px] font-semibold text-fg">Plan de passation des marchés</h2>
+              <p className="text-[12.5px] text-fg-muted">
+                Conforme au modèle PPM EDC · {synthese.marches === 0 ? "aucun marché saisi" : `${synthese.marches} marché${synthese.marches > 1 ? "s" : ""}`}
+              </p>
+            </div>
+          </div>
+          {!readOnly && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOuvert(true)}>
+              <Upload /> Importer depuis Excel
+            </Button>
+          )}
+        </div>
+
+        {/* Synthèse de la phase */}
+        <div className="flex flex-wrap border-b border-line">
+          {chiffres.map((chiffre) => (
+            <div key={chiffre.label} className="flex min-w-50 flex-1 flex-col gap-0.75 border-r border-line px-4 py-3 last:border-r-0">
+              <span className="text-[11px] font-semibold tracking-wide text-fg-subtle uppercase">{chiffre.label}</span>
+              <span className="text-[17px] font-bold text-fg">{chiffre.valeur}</span>
+              <span className="text-xs text-fg-muted">{chiffre.detail}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Groupes de colonnes et défilement */}
+        <div className="flex flex-wrap items-center gap-2.5 px-4.5 py-2.5">
+          <div className="inline-flex gap-0.5 rounded-md border border-line bg-inset p-0.75">
+            {COL_GROUPS.map((groupe) => (
+              <button
+                key={groupe.label}
+                type="button"
+                onClick={() => allerAuGroupe(groupe.label)}
+                aria-pressed={groupeVise === groupe.label}
+                className={`inline-flex h-7 items-center gap-1.75 rounded px-3 text-[12.5px] transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-focus ${
+                  groupeVise === groupe.label ? "bg-surface font-semibold text-fg shadow-sm" : "font-medium text-fg-muted hover:text-fg"
+                }`}
+              >
+                <span aria-hidden className="size-1.75 rounded-xs" style={{ background: groupe.couleur }} />
+                {groupe.label}
+                <span className="text-[11px] text-fg-subtle">{groupe.cols.length}</span>
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-fg-subtle">{ALL_COLS.length + 2} colonnes</span>
+            <Button variant="secondary" size="icon-sm" onClick={() => scrollRef.current?.scrollBy({ left: -3 * LARGEUR, behavior: "smooth" })} aria-label="Défiler vers la gauche">
+              <ChevronLeft />
+            </Button>
+            <Button variant="secondary" size="icon-sm" onClick={() => scrollRef.current?.scrollBy({ left: 3 * LARGEUR, behavior: "smooth" })} aria-label="Défiler vers la droite">
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+
+        {/* Tableau : colonne du marché figée, étapes défilantes */}
+        <div className="flex border-t border-line">
+          <div className="w-64 shrink-0 border-r border-line-strong">
+            <div className="h-7.5 border-b border-line bg-inset" />
+            <div className="flex h-8.5 items-center gap-2.5 border-b border-line bg-inset px-2.5 text-[11px] font-semibold text-fg-subtle">
+              <span className="w-7">N°</span>
+              <span>Marché</span>
+            </div>
+            {lignes.map((ligne, index) => (
+              <div key={index} className="flex h-10.5 items-center gap-1 border-b border-line pl-2.5">
+                <input
+                  value={ligne.numero}
+                  disabled={readOnly}
+                  onChange={(e) => modifierLigne(index, "numero", e.target.value)}
+                  aria-label={`Numéro du marché ${index + 1}`}
+                  className={`${CELLULE} w-7 shrink-0 px-0 font-mono text-[11.5px] text-fg-muted`}
+                />
+                <input
+                  value={ligne.designation}
+                  disabled={readOnly}
+                  onChange={(e) => modifierLigne(index, "designation", e.target.value)}
+                  placeholder="Objet du marché"
+                  aria-label={`Désignation du marché ${index + 1}`}
+                  className={`${CELLULE} flex-1 font-medium placeholder:text-fg-subtle`}
+                />
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => retirerLigne(index)}
+                    title={`Supprimer le marché ${ligne.numero || index + 1}`}
+                    aria-label={`Supprimer le marché ${ligne.numero || index + 1}`}
+                    className="mr-1 flex size-6 shrink-0 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-danger-subtle hover:text-danger focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-focus"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
-        </div>
 
-        <div className="p-3 space-y-3">
-          {!permissionsLoading && readOnly && (
-            <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
-              <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
-              <div className="text-[11px] text-amber-600 dark:text-amber-400">
-                <strong>Mode lecture seule :</strong> Vous ne pouvez pas modifier la planification.
-              </div>
-            </div>
-          )}
-
-          {/* Navigation horizontale */}
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] text-[var(--text-tertiary)]">
-              {lignes.length} ligne{lignes.length > 1 ? "s" : ""} • {ALL_COLS.length} colonnes
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => scrollBy(-400)}
-                className="p-1 rounded hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] transition-colors"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <button
-                onClick={() => scrollBy(400)}
-                className="p-1.5 rounded hover:bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] transition-colors"
-                title="Défiler à droite"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Tableau PPM */}
-          <div className="border-2 border-[var(--border-default)] rounded-[var(--radius-md)] overflow-hidden">
-            <div ref={scrollRef} className="overflow-x-auto">
-              <div style={{ minWidth: `${TOTAL_WIDTH}px` }}>
-
-                {/* Row 1: Group headers */}
-                <div className="flex">
-                  {COL_GROUPS.map((g) => {
-                    const groupWidth = g.cols.reduce((s, c) => s + c.width, 0);
-                    return (
-                      <div
-                        key={g.label}
-                        className="text-center text-[9px] font-bold text-white py-1.5 border-r border-white/20 tracking-wide uppercase"
-                        style={{ width: `${groupWidth}px`, backgroundColor: g.color }}
-                      >
-                        {g.label}
-                      </div>
-                    );
-                  })}
+          <div ref={scrollRef} className="min-w-0 flex-1 overflow-x-auto">
+            <div className="w-max">
+              <div className="flex">
+                {COL_GROUPS.map((groupe) => (
                   <div
-                    className="text-center text-[9px] font-bold text-white py-1.5 bg-gray-500 uppercase"
-                    style={{ width: "50px" }}
+                    key={groupe.label}
+                    className="flex h-7.5 shrink-0 items-center border-r border-line bg-inset px-2.5 text-[11px] font-bold tracking-wide uppercase"
+                    style={{ width: largeurGroupe(groupe), borderTop: `2px solid ${groupe.couleur}`, color: groupe.couleur }}
                   >
-                    Act.
-                  </div>
-                </div>
-
-                {/* Row 2: Column headers */}
-                <div className="flex bg-[var(--bg-inset)] border-b-2 border-[var(--border-default)]">
-                  {ALL_COLS.map((col) => (
-                    <div
-                      key={col.key}
-                      className="text-[8px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider px-1 py-2 border-r border-[var(--border-default)] text-center leading-tight flex items-center justify-center"
-                      style={{ width: `${col.width}px`, minWidth: `${col.width}px` }}
-                      title={col.label}
-                    >
-                      {col.label}
-                    </div>
-                  ))}
-                  <div
-                    className="text-[8px] font-semibold text-[var(--text-tertiary)] uppercase px-1 py-2 text-center flex items-center justify-center"
-                    style={{ width: "50px", minWidth: "50px" }}
-                  >
-                    Suppr.
-                  </div>
-                </div>
-
-                {/* Data rows */}
-                {lignes.map((ligne, rowIndex) => (
-                  <div
-                    key={rowIndex}
-                    className="flex hover:bg-[var(--bg-surface-hover)] transition-colors border-b border-[var(--border-default)]"
-                  >
-                    {ALL_COLS.map((col) => (
-                      <div
-                        key={col.key}
-                        className="border-r border-[var(--border-default)] flex items-center"
-                        style={{ width: `${col.width}px`, minWidth: `${col.width}px` }}
-                      >
-                        {renderCell(ligne, col, rowIndex)}
-                      </div>
-                    ))}
-                    <div
-                      className="flex items-center justify-center"
-                      style={{ width: "50px", minWidth: "50px" }}
-                    >
-                      {can("planning:edit") && (
-                        <button
-                          onClick={() => removeLigne(rowIndex)}
-                          className="p-1 rounded hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
+                    {groupe.label}
                   </div>
                 ))}
-
-                {/* Add row */}
-                <div className="px-3 py-2 bg-[var(--bg-inset)]/30 border-t border-[var(--border-default)]">
-                  {can("planning:edit") && (
-                    <button
-                      onClick={addLigne}
-                      className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[var(--primary-text)] hover:bg-[var(--primary)]/10 rounded-[var(--radius-md)] transition-colors"
-                    >
-                      <Plus size={14} />
-                      Ajouter une ligne
-                    </button>
-                  )}
-                </div>
               </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            {can("planning:edit") && (
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-2 px-4 py-2 text-[12px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-default)] rounded-[var(--radius-md)] transition-colors"
-              >
-                <Upload size={14} />
-                Importer depuis Excel
-              </button>
-            )}
-          </div>
-
-          {/* Info */}
-          <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-            <AlertCircle size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-            <div className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
-              <strong>Plan de Passation des Marchés :</strong>
-              <ul className="mt-1 space-y-0.5 list-disc list-inside">
-                <li><strong>Délai global</strong> : Calculé automatiquement entre la Saisine CIPM et l'Enregistrement</li>
-                <li><strong>Non obj. BF</strong> : Non objection du Bailleur de Fonds (si applicable)</li>
-                <li><strong>Étape sans objet</strong> : laissez la date vide, elle ne sera pas enregistrée</li>
-                <li>Utilisez les flèches ◀ ▶ ou le scroll horizontal pour naviguer dans le tableau</li>
-              </ul>
+              <div className="flex border-y border-line bg-inset">
+                {ALL_COLS.map((col) => (
+                  <div
+                    key={col.key}
+                    title={col.label}
+                    className="flex h-8.5 shrink-0 items-center truncate border-r border-line px-2 text-[11px] font-semibold text-fg-subtle"
+                    style={{ width: largeurDe(col) }}
+                  >
+                    {col.label}
+                  </div>
+                ))}
+              </div>
+              {lignes.map((ligne, index) => (
+                <div key={index} className="flex h-10.5 border-b border-line">
+                  {ALL_COLS.map((col) => (
+                    <div key={col.key} className="shrink-0 border-r border-line" style={{ width: largeurDe(col) }}>
+                      {cellule(ligne, col, index)}
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         </div>
-      </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2">
+          {!readOnly && (
+            <Button variant="ghost" size="sm" onClick={ajouterLigne} className="text-primary-fg hover:text-primary-fg">
+              <Plus /> Ajouter un marché
+            </Button>
+          )}
+          <span className="text-xs text-fg-subtle">
+            Une étape sans objet reste vide : elle ne sera pas enregistrée. Le délai de passation se déduit de la saisine CIPM
+            et de l&apos;enregistrement. Non obj. BF : non-objection du bailleur de fonds.
+          </span>
+        </div>
+      </Card>
     </>
   );
 }

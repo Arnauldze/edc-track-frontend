@@ -186,14 +186,14 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
   // ── Styles ──
   const grille = phase.quantites ? GRID_QUANTITES : GRID;
   const largeurMin = phase.quantites ? "min-w-[1400px]" : "min-w-[1060px]";
-  const cellule = "px-1.5 py-1.5 flex items-center gap-1 border-r border-b border-[var(--border-default)] min-w-0";
+  const cellule = "px-1.5 py-1.5 flex items-center gap-1 border-r border-b border-line min-w-0";
   const champ = (options: { deduit?: boolean; erreur?: string }) =>
     [
-      "w-full min-w-0 px-1.5 py-1 rounded text-[11px] border focus:outline-none focus:border-[var(--primary)] disabled:cursor-not-allowed",
-      options.erreur ? "border-red-500 bg-red-500/5" : "border-transparent hover:border-[var(--border-default)]",
-      options.deduit ? "italic text-[var(--text-tertiary)] bg-[var(--bg-inset)]" : "bg-transparent text-[var(--text-primary)]",
+      "w-full min-w-0 px-1.5 py-1 rounded text-[11px] border focus:outline-none focus:border-primary disabled:cursor-not-allowed",
+      options.erreur ? "border-danger bg-danger-subtle" : "border-transparent hover:border-line",
+      options.deduit ? "italic text-fg-subtle bg-inset" : "bg-transparent text-fg",
     ].join(" ");
-  const selectUnite = "shrink-0 w-[52px] px-0.5 py-1 bg-transparent text-[10px] rounded border border-[var(--border-subtle)] focus:outline-none disabled:opacity-60";
+  const selectUnite = "shrink-0 w-[52px] px-0.5 py-1 bg-transparent text-[10px] rounded border border-line-subtle focus:outline-none disabled:opacity-60";
 
   const dureePhase = calendrier.debut && calendrier.fin ? ecart(calendrier.debut, calendrier.fin, "mois") : undefined;
   const entetes = [
@@ -215,13 +215,13 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
     <>
       <FileImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} onImport={importer} importType={phase.importType} />
 
-      <section className="bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden">
-        <header className="p-5 border-b border-[var(--border-subtle)] flex flex-wrap items-start justify-between gap-4">
+      <section className="bg-surface rounded-lg border border-line overflow-hidden">
+        <header className="p-5 border-b border-line-subtle flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <h2 className="text-sm font-bold text-fg flex items-center gap-2">
               {phase.icone} {phase.titre}
             </h2>
-            <p className="text-[11px] text-[var(--text-secondary)] mt-1">{phase.description}</p>
+            <p className="text-[11px] text-fg-muted mt-1">{phase.description}</p>
           </div>
 
           {/* Synthèse de la phase */}
@@ -235,13 +235,13 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
             ].map((item) => (
               <div
                 key={item.label}
-                className={`px-2.5 py-1.5 rounded-[var(--radius-md)] border ${"alert" in item && item.alert ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400" : "border-[var(--border-default)] bg-[var(--bg-inset)]"}`}
+                className={`px-2.5 py-1.5 rounded-md border ${"alert" in item && item.alert ? "border-warning/30 bg-warning-subtle text-warning" : "border-line bg-inset"}`}
               >
                 <dt className="text-[9px] uppercase tracking-wider font-bold opacity-70">{item.label}</dt>
                 <dd className="font-semibold">{item.value}</dd>
               </div>
             ))}
-            <div className={`px-2.5 py-1.5 rounded-[var(--radius-md)] border ${pondValide ? "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400" : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"}`}>
+            <div className={`px-2.5 py-1.5 rounded-md border ${pondValide ? "border-success/30 bg-success-subtle text-success" : "border-warning/30 bg-warning-subtle text-warning"}`}>
               <dt className="text-[9px] uppercase tracking-wider font-bold opacity-70">Pondération</dt>
               <dd className="font-semibold">{formatQuantite(calendrier.totalPonderation)} % {pondValide ? "✓" : "/ 100 %"}</dd>
             </div>
@@ -250,25 +250,25 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
 
         <div className="p-5 space-y-4">
           {readOnly && (
-            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+            <div className="flex gap-2 p-3 rounded-md border border-warning/20 bg-warning-subtle text-[11px] text-warning">
               <AlertCircle size={15} className="shrink-0 mt-px" />
               <span><strong>Consultation :</strong> seul le chef de projet peut modifier la planification.</span>
             </div>
           )}
 
           {!dateT0 && (
-            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-700 dark:text-blue-400">
+            <div className="flex gap-2 p-3 rounded-md border border-primary/20 bg-primary-subtle text-[11px] text-primary-fg">
               <Info size={15} className="shrink-0 mt-px" />
               <span>Renseignez la <strong>date T0</strong> de l&apos;activité : les {motPluriel} sans prédécesseur ni date de début démarrent à T0, et les délais se comptent depuis T0.</span>
             </div>
           )}
 
           {/* Tableau */}
-          <div className="border border-[var(--border-default)] rounded-[var(--radius-md)] overflow-x-auto">
+          <div className="border border-line rounded-md overflow-x-auto">
             <div className={largeurMin}>
-              <div className={`grid ${grille} bg-[var(--bg-inset)] text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider`}>
+              <div className={`grid ${grille} bg-inset text-[10px] font-bold text-fg-subtle uppercase tracking-wider`}>
                 {entetes.map((label, i) => (
-                  <div key={i} className={`px-2 py-2 border-r border-b border-[var(--border-default)] ${i === 1 ? "" : "text-center"}`}>
+                  <div key={i} className={`px-2 py-2 border-r border-b border-line ${i === 1 ? "" : "text-center"}`}>
                     {label}
                   </div>
                 ))}
@@ -278,7 +278,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                 const saisi = lignes[index];
                 const autres = lignes.filter((_, i) => i !== index && lignes[i].numero);
                 return (
-                  <div key={index} className={`grid ${grille} text-[12px] hover:bg-[var(--bg-surface-hover)]`}>
+                  <div key={index} className={`grid ${grille} text-[12px] hover:bg-hover`}>
                     <div className={cellule}>
                       <input
                         value={saisi.numero}
@@ -318,7 +318,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                         <div className={cellule}>
                           <input inputMode="decimal" value={formatQuantite(saisi.prixUnitaire)} onChange={(e) => modifier(index, { prixUnitaire: parseQuantite(e.target.value) } as Partial<T>)} disabled={readOnly} placeholder="0" className={`${champ({})} text-right`} />
                         </div>
-                        <div className={`${cellule} justify-end text-[11px] text-[var(--text-secondary)]`} title="Quantité × prix unitaire">
+                        <div className={`${cellule} justify-end text-[11px] text-fg-muted`} title="Quantité × prix unitaire">
                           {saisi.quantite && saisi.prixUnitaire ? formatMontant(saisi.quantite * saisi.prixUnitaire) : "—"}
                         </div>
                       </>
@@ -384,19 +384,19 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                         className={champ({ deduit: l.modeFin !== "fin", erreur: problemeDe(index, "dateFin") })}
                       />
                     </div>
-                    <div className={`${cellule} justify-center text-[10px] text-[var(--text-secondary)]`} title="Déduit des prédécesseurs">
+                    <div className={`${cellule} justify-center text-[10px] text-fg-muted`} title="Déduit des prédécesseurs">
                       {l.successeur ?? "—"}
                     </div>
-                    <div className="px-1 py-1.5 flex items-center justify-center gap-0.5 border-b border-[var(--border-default)]">
+                    <div className="px-1 py-1.5 flex items-center justify-center gap-0.5 border-b border-line">
                       {!readOnly && (
                         <>
-                          <button type="button" onClick={() => deplacer(index, -1)} disabled={index === 0} title="Monter" className="p-1 rounded text-[var(--text-tertiary)] hover:bg-[var(--bg-inset)] disabled:opacity-25">
+                          <button type="button" onClick={() => deplacer(index, -1)} disabled={index === 0} title="Monter" className="p-1 rounded text-fg-subtle hover:bg-inset disabled:opacity-25">
                             <ArrowUp size={13} />
                           </button>
-                          <button type="button" onClick={() => deplacer(index, 1)} disabled={index === lignes.length - 1} title="Descendre" className="p-1 rounded text-[var(--text-tertiary)] hover:bg-[var(--bg-inset)] disabled:opacity-25">
+                          <button type="button" onClick={() => deplacer(index, 1)} disabled={index === lignes.length - 1} title="Descendre" className="p-1 rounded text-fg-subtle hover:bg-inset disabled:opacity-25">
                             <ArrowDown size={13} />
                           </button>
-                          <button type="button" onClick={() => supprimer(index)} title="Supprimer" className="p-1 rounded text-red-500/70 hover:text-red-500 hover:bg-red-500/10">
+                          <button type="button" onClick={() => supprimer(index)} title="Supprimer" className="p-1 rounded text-fg-subtle hover:bg-danger-subtle hover:text-danger">
                             <Trash2 size={13} />
                           </button>
                         </>
@@ -406,21 +406,21 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                 );
               })}
 
-              {lignes.length === 0 && <div className="px-4 py-6 text-center text-[12px] text-[var(--text-tertiary)]">Aucun(e) {phase.mot}.</div>}
+              {lignes.length === 0 && <div className="px-4 py-6 text-center text-[12px] text-fg-subtle">Aucun(e) {phase.mot}.</div>}
             </div>
           </div>
 
           {!readOnly && (
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={ajouter} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--primary-text)] hover:bg-[var(--primary)]/10 rounded-[var(--radius-md)]">
+              <button type="button" onClick={ajouter} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-primary-fg hover:bg-primary/10 rounded-md">
                 <Plus size={14} /> Ajouter {phase.mot === "tâche" ? "une tâche" : "un livrable"}
               </button>
               {!pondValide && lignes.length > 0 && (
-                <button type="button" onClick={equilibrer} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] rounded-[var(--radius-md)]" title="Répartir 100 % à parts égales">
+                <button type="button" onClick={equilibrer} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-fg-muted hover:bg-hover rounded-md" title="Répartir 100 % à parts égales">
                   <Scale size={14} /> Répartir 100 %
                 </button>
               )}
-              <button type="button" onClick={() => setShowImportModal(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] border border-[var(--border-default)] hover:bg-[var(--bg-surface-hover)] rounded-[var(--radius-md)]">
+              <button type="button" onClick={() => setShowImportModal(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-fg-muted border border-line hover:bg-hover rounded-md">
                 <Upload size={14} /> Importer depuis Excel
               </button>
             </div>
@@ -428,7 +428,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
 
           {/* Problèmes à corriger avant d'enregistrer */}
           {(problemesLignes.length > 0 || (!pondValide && lignes.length > 0)) && (
-            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+            <div className="flex gap-2 p-3 rounded-md border border-warning/20 bg-warning-subtle text-[11px] text-warning">
               <AlertCircle size={15} className="shrink-0 mt-px" />
               <ul className="space-y-0.5">
                 {problemesLignes.map((message) => <li key={message}>{message}</li>)}
@@ -437,7 +437,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
             </div>
           )}
 
-          <details className="rounded-[var(--radius-md)] border border-blue-500/20 bg-blue-500/5 text-[11px] text-blue-700 dark:text-blue-400">
+          <details className="rounded-md border border-primary/20 bg-primary-subtle text-[11px] text-primary-fg">
             <summary className="px-3 py-2 cursor-pointer font-semibold">Règles de calcul</summary>
             <ul className="px-5 pb-3 space-y-1 list-disc">
               <li><strong>Délai</strong> : temps depuis T0 jusqu&apos;à l&apos;échéance (T0 + 3 mois = échéance).</li>

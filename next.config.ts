@@ -9,6 +9,10 @@ const apiProxyTarget = process.env.API_PROXY_TARGET?.replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["*.ngrok-free.app", "*.ngrok.io"],
+  // Un `next build` écrit dans .next, le même dossier qu'un `next dev` en
+  // cours : les deux se marchent dessus et l'application perd ses styles.
+  // NEXT_DIST_DIR=.next-build isole la compilation de vérification.
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   async rewrites() {
     if (!apiProxyTarget) return [];
     return [{ source: "/backend-api/:path*", destination: `${apiProxyTarget}/:path*` }];
