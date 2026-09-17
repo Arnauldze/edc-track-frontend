@@ -158,12 +158,12 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
                   value={p.nom}
                   onChange={(e) => updatePartie(key, p.id, { nom: e.target.value })}
                   placeholder={placeholder}
-                  className={`flex-1 ${inputSm} ${showErrors && !p.nom.trim() ? "border-red-500" : ""}`}
+                  className={`flex-1 ${inputSm} ${showErrors && !p.nom.trim() ? "border-danger" : ""}`}
                 />
                 <button
                   type="button"
                   onClick={() => askRemovePartie(key, p.id)}
-                  className="p-1 text-[var(--text-tertiary)] hover:text-red-500 transition-colors"
+                  className="p-1 text-[var(--text-tertiary)] hover:text-danger transition-colors"
                   title="Retirer"
                 >
                   <Trash2 size={13} />
@@ -233,7 +233,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
       {/* ── Structuration juridique ── */}
       <div>
         <h3 className="text-[13px] font-bold text-[var(--text-primary)] mb-3 uppercase tracking-wider">
-          Structuration juridique <span className="text-red-500">*</span>
+          Structuration juridique <span className="text-danger">*</span>
         </h3>
         <div className="flex gap-4">
           {([
@@ -256,9 +256,9 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
           ))}
         </div>
         {hiddenSources > 0 && (
-          <div className="mt-3 flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20">
-            <AlertTriangle size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
+          <div className="mt-3 flex gap-2 p-3 rounded-[var(--radius-md)] bg-warning-subtle border border-warning/20">
+            <AlertTriangle size={14} className="text-warning flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-warning leading-relaxed">
               {hiddenSources} source{hiddenSources > 1 ? "s" : ""} saisie{hiddenSources > 1 ? "s" : ""} en{" "}
               {value.type === "MOP" ? "PPP" : "MOP"} ne {hiddenSources > 1 ? "seront" : "sera"} pas enregistrée
               {hiddenSources > 1 ? "s" : ""} : un projet {value.type} ne retient que ses propres sources. Revenez en{" "}
@@ -432,8 +432,8 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {renderParties("partiesPubliques", "Parties publiques", "bg-blue-500", "Nom de l'entité publique…")}
-            {renderParties("partiesPrivees", "Parties privées", "bg-emerald-500", "Nom de l'entité privée…")}
+            {renderParties("partiesPubliques", "Parties publiques", "bg-primary", "Nom de l'entité publique…")}
+            {renderParties("partiesPrivees", "Parties privées", "bg-success", "Nom de l'entité privée…")}
           </div>
         )}
       </div>
@@ -443,7 +443,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
         <button
           type="button"
           onClick={() => setShowRates(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-600 border border-blue-500/20 rounded-[var(--radius-md)] text-[12px] font-semibold hover:bg-blue-500/20 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary-subtle text-primary border border-primary/20 rounded-[var(--radius-md)] text-[12px] font-semibold hover:bg-primary-subtle transition-colors"
         >
           <DollarSign size={14} />
           Taux de change ({foreignCurrencies.map((c) => `1 ${c} = ${value.tauxChange[c] ?? "?"} FCFA`).join(" · ")})
@@ -455,7 +455,7 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
         <div className="p-4 rounded-[var(--radius-lg)] border-2 border-[var(--primary)]/30 bg-[var(--primary)]/5 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h4 className="text-[13px] font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
-              <CheckCircle2 size={14} className="text-green-500" /> Budget total du projet
+              <CheckCircle2 size={14} className="text-success" /> Budget total du projet
             </h4>
             <select
               value={conversionCurrency}
@@ -499,9 +499,9 @@ export function FinancementEditor({ value, onChange, showErrors = false }: Finan
 
       {/* ── Erreurs ── */}
       {showErrors && errors.length > 0 && (
-        <div className="p-3 rounded-[var(--radius-md)] bg-red-500/10 border border-red-500/20 space-y-1">
+        <div className="p-3 rounded-[var(--radius-md)] bg-danger-subtle border border-danger/20 space-y-1">
           {errors.map((error) => (
-            <p key={error} className="text-[12px] text-red-600 dark:text-red-400">{error}</p>
+            <p key={error} className="text-[12px] text-danger">{error}</p>
           ))}
         </div>
       )}

@@ -73,16 +73,16 @@ export function SecurityPasswordModal({
   };
 
   const btnColors = variant === "red"
-    ? "bg-red-600 hover:bg-red-700"
+    ? "bg-danger hover:bg-danger-hover"
     : variant === "amber"
-      ? "bg-amber-600 hover:bg-amber-700"
+      ? "bg-warning hover:bg-warning-hover"
       : "bg-[var(--primary)] hover:opacity-90";
 
   const iconColors = variant === "red"
-    ? "bg-red-500/10 text-red-500"
+    ? "bg-danger-subtle text-danger"
     : variant === "amber"
-      ? "bg-amber-500/10 text-amber-600"
-      : "bg-blue-500/10 text-blue-500";
+      ? "bg-warning-subtle text-warning"
+      : "bg-primary-subtle text-primary";
 
   return (
     <div
@@ -114,8 +114,8 @@ export function SecurityPasswordModal({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-5 pb-5">
-          <div className="p-3 bg-amber-500/8 border border-amber-500/15 rounded-[var(--radius-md)] mb-4">
-            <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+          <div className="p-3 bg-warning-subtle border border-warning/15 rounded-[var(--radius-md)] mb-4">
+            <p className="text-[10px] text-warning leading-relaxed">
               <strong>⚠️ Action sécurisée :</strong> Saisissez votre mot de passe sécurité pour confirmer cette action. Cette action sera enregistrée dans le journal d&apos;audit.
             </p>
           </div>
@@ -134,7 +134,7 @@ export function SecurityPasswordModal({
               className="w-full px-3 py-2.5 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-subtle)]"
             />
             {error && (
-              <p className="text-[11px] text-red-500 font-semibold mt-1.5">{error}</p>
+              <p className="text-[11px] text-danger font-semibold mt-1.5">{error}</p>
             )}
           </div>
 

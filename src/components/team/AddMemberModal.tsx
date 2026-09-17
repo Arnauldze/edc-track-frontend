@@ -191,7 +191,7 @@ export default function AddMemberModal({
                           className="w-full text-left px-4 py-3 hover:bg-[var(--bg-surface-hover)] transition-colors border-b border-[var(--border-subtle)] last:border-0"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-cat-violet flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                               {user.firstName?.[0]}
                               {user.lastName?.[0]}
                             </div>
@@ -227,8 +227,8 @@ export default function AddMemberModal({
 
             {/* Utilisateur sélectionné */}
             {selectedUser && (
-              <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-[var(--radius-md)] flex items-center gap-3">
-                <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
+              <div className="mt-3 p-3 bg-success-subtle border border-success/20 rounded-[var(--radius-md)] flex items-center gap-3">
+                <CheckCircle2 size={20} className="text-success flex-shrink-0" />
                 <div className="flex-1">
                   <div className="text-sm font-semibold text-[var(--text-primary)]">
                     {selectedUser.firstName} {selectedUser.lastName}
@@ -301,7 +301,7 @@ export default function AddMemberModal({
                         {PROJECT_ROLE_DESCRIPTIONS[role]}
                       </div>
                       {chefTaken && (
-                        <div className="text-xs text-amber-600 mt-1">
+                        <div className="text-xs text-warning mt-1">
                           Déjà attribué à {currentChef?.name}. Utilisez « Changer le chef de projet » dans l&apos;onglet Équipe.
                         </div>
                       )}
@@ -312,16 +312,16 @@ export default function AddMemberModal({
             </div>
 
             {/* Info box sur les permissions automatiques */}
-            <div className="mt-3 p-3 bg-blue-500/5 border border-blue-500/20 rounded-[var(--radius-md)] flex items-start gap-2">
-              <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-600 dark:text-blue-400">
+            <div className="mt-3 p-3 bg-primary-subtle border border-primary/20 rounded-[var(--radius-md)] flex items-start gap-2">
+              <Info size={14} className="text-primary flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-primary">
                 Les droits d'accès sont automatiquement attribués selon le rôle sélectionné.
                 Pas besoin de configuration supplémentaire.
               </p>
             </div>
 
             {!isChefProjet && !isAdmin && (
-              <p className="text-xs text-amber-600 mt-2 flex items-center gap-1.5">
+              <p className="text-xs text-warning mt-2 flex items-center gap-1.5">
                 <AlertCircle size={12} />
                 Seul le chef de projet ou l'administrateur peut modifier les rôles
               </p>
@@ -472,9 +472,9 @@ export default function AddMemberModal({
           )}
 
           {formData.projectRole === "contributeur" && formData.level !== "project" && (
-            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-              <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed">
+            <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
+              <Info size={14} className="text-primary flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-primary leading-relaxed">
                 Ce contributeur consultera tout le projet, mais ne pourra déposer des documents que dans{" "}
                 <strong>{formData.entityName || "l'élément sélectionné"}</strong> et ses sous-niveaux.
               </p>

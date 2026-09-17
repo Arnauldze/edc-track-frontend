@@ -221,16 +221,16 @@ export default function ArchivesPage() {
                                             </div>
                                             <div className="flex items-center gap-3 text-[12px]">
                                                 <div className="flex items-center gap-1.5">
-                                                    <FileCheck size={12} className="text-green-600" />
+                                                    <FileCheck size={12} className="text-success" />
                                                     <span className="text-[var(--text-secondary)]">{stats.validatedCount} validés</span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
-                                                    <FileClock size={12} className="text-amber-600" />
+                                                    <FileClock size={12} className="text-warning" />
                                                     <span className="text-[var(--text-secondary)]">{stats.pendingCount} en cours</span>
                                                 </div>
                                                 {stats.rejectedCount > 0 && (
                                                     <div className="flex items-center gap-1.5">
-                                                        <FileX size={12} className="text-red-600" />
+                                                        <FileX size={12} className="text-danger" />
                                                         <span className="text-[var(--text-secondary)]">{stats.rejectedCount} rejetés</span>
                                                     </div>
                                                 )}
@@ -258,8 +258,8 @@ export default function ArchivesPage() {
                                 <div className="group bg-[var(--bg-surface)] rounded-[var(--radius-lg)] border border-[var(--border-default)] overflow-hidden hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)] transition-all duration-200 cursor-pointer">
                                     <div className="flex items-center gap-4 p-4">
                                         {/* Icône */}
-                                        <div className="flex-shrink-0 w-10 h-10 rounded-[var(--radius-md)] bg-emerald-500/10 flex items-center justify-center">
-                                            <FolderOpen size={20} className="text-emerald-600" />
+                                        <div className="flex-shrink-0 w-10 h-10 rounded-[var(--radius-md)] bg-success-subtle flex items-center justify-center">
+                                            <FolderOpen size={20} className="text-success" />
                                         </div>
 
                                         {/* Infos projet */}
@@ -290,16 +290,16 @@ export default function ArchivesPage() {
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center gap-1">
-                                                    <FileCheck size={12} className="text-green-600" />
+                                                    <FileCheck size={12} className="text-success" />
                                                     <span className="text-[var(--text-secondary)]">{stats.validatedCount}</span>
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <FileClock size={12} className="text-amber-600" />
+                                                    <FileClock size={12} className="text-warning" />
                                                     <span className="text-[var(--text-secondary)]">{stats.pendingCount}</span>
                                                 </div>
                                                 {stats.rejectedCount > 0 && (
                                                     <div className="flex items-center gap-1">
-                                                        <FileX size={12} className="text-red-600" />
+                                                        <FileX size={12} className="text-danger" />
                                                         <span className="text-[var(--text-secondary)]">{stats.rejectedCount}</span>
                                                     </div>
                                                 )}

@@ -65,7 +65,7 @@ export function ChangeChefModal({ isOpen, projectId, currentChefs, onClose, onCh
       >
         <div className="p-5 border-b border-[var(--border-default)] flex items-center justify-between">
           <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Crown size={16} className="text-blue-500" /> Changer le chef de projet
+            <Crown size={16} className="text-primary" /> Changer le chef de projet
           </h2>
           <button type="button" onClick={onClose} className="p-1.5 hover:bg-[var(--bg-surface-hover)] rounded-[var(--radius-md)]">
             <X size={18} className="text-[var(--text-tertiary)]" />

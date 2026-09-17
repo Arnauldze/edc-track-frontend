@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ACTIVITY_TYPES as TYPES_ACTIVITE, ACTIVITY_TYPE_ORDER } from "@/lib/activityTypes";
 import { useRouter } from "next/navigation";
 import { Check, ArrowLeft, ArrowRight, Plus, Trash2, CheckCircle2, ChevronUp, ChevronDown, Layers, DollarSign } from "lucide-react";
 import Link from "next/link";
@@ -39,7 +40,7 @@ function ComboBox({ label, placeholder, options, value, onChange, disabled = fal
     return (
         <div className="relative">
             <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">
-                {label} {required && <span className="text-red-500">*</span>}
+                {label} {required && <span className="text-danger">*</span>}
             </label>
             <div className={`relative ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
                 <input
@@ -107,9 +108,9 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
     return (
         <div className="space-y-5">
             {/* Info */}
-            <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500 flex-shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                <p className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
+            <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary flex-shrink-0 mt-0.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                <p className="text-[11px] text-primary leading-relaxed">
                     <strong>Localisation optionnelle :</strong> Vous pouvez localiser votre projet en sélectionnant la région, le département et la ville. Les coordonnées GPS seront <strong>détectées automatiquement</strong>. Vous pouvez aussi laisser vide et compléter plus tard.
                 </p>
             </div>
@@ -158,7 +159,7 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                 <div className="flex items-center gap-2 mb-2">
                     <label className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Coordonnées GPS</label>
                     {autoDetected ? (
-                        <span className="text-[10px] text-green-600 bg-green-500/10 px-2 py-0.5 rounded-full font-bold border border-green-500/20 flex items-center gap-1">
+                        <span className="text-[10px] text-success bg-success-subtle px-2 py-0.5 rounded-full font-bold border border-success/20 flex items-center gap-1">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
                             Auto-détecté
                         </span>
@@ -174,7 +175,7 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             onChange={(e) => { setLat(e.target.value); setAutoDetected(false); }}
                             placeholder="Latitude (ex: 5.5321)"
                             className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
-                                ? "bg-green-500/5 border-green-500/30 text-[var(--text-primary)]"
+                                ? "bg-success-subtle border-success/30 text-[var(--text-primary)]"
                                 : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
                                 }`}
                         />
@@ -186,14 +187,14 @@ function LocalisationStep({ region, setRegion, departement, setDepartement, vill
                             onChange={(e) => { setLng(e.target.value); setAutoDetected(false); }}
                             placeholder="Longitude (ex: 13.6163)"
                             className={`w-full border rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all ${autoDetected
-                                ? "bg-green-500/5 border-green-500/30 text-[var(--text-primary)]"
+                                ? "bg-success-subtle border-success/30 text-[var(--text-primary)]"
                                 : "bg-[var(--bg-inset)] border-[var(--border-default)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
                                 }`}
                         />
                     </div>
                 </div>
                 {autoDetected && (
-                    <p className="text-[10px] text-green-600 mt-1.5 flex items-center gap-1">
+                    <p className="text-[10px] text-success mt-1.5 flex items-center gap-1">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
                         Position approximative de {ville}. Vous pouvez ajuster manuellement si nécessaire.
                     </p>
@@ -601,7 +602,7 @@ export default function NewProjectPage() {
                         <div className="flex flex-col items-center relative z-10">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold border-2 transition-all duration-300
                                 ${step.id < currentStep
-                                    ? "bg-green-500 border-green-500 text-white"
+                                    ? "bg-success border-success text-white"
                                     : step.id === currentStep
                                         ? "bg-[var(--text-primary)] border-[var(--text-primary)] text-[var(--text-inverted)]"
                                         : "bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--text-tertiary)]"
@@ -613,7 +614,7 @@ export default function NewProjectPage() {
                                 ${step.id === currentStep
                                     ? "text-[var(--text-primary)]"
                                     : step.id < currentStep
-                                        ? "text-green-500"
+                                        ? "text-success"
                                         : "text-[var(--text-tertiary)]"
                                 }`}
                             >
@@ -625,7 +626,7 @@ export default function NewProjectPage() {
                         {index < steps.length - 1 && (
                             <div className="flex-1 mx-3 mt-[-20px]">
                                 <div className={`h-[2px] rounded-full transition-colors duration-300
-                                    ${step.id < currentStep ? "bg-green-500" : "bg-[var(--border-default)]"}`}
+                                    ${step.id < currentStep ? "bg-success" : "bg-[var(--border-default)]"}`}
                                 />
                             </div>
                         )}
@@ -640,7 +641,7 @@ export default function NewProjectPage() {
                 {currentStep === 1 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="col-span-2">
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Titre du projet <span className="text-red-500">*</span></label>
+                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Titre du projet <span className="text-danger">*</span></label>
                             <input type="text" value={titre} onChange={e => setTitre(e.target.value)} placeholder="ex: Barrage de Lom Pangar" className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
                         </div>
                         <div className="col-span-2">
@@ -655,11 +656,11 @@ export default function NewProjectPage() {
                             <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Décrivez le projet..." className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all resize-none" />
                         </div>
                         <div>
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date début <span className="text-red-500">*</span></label>
+                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date début <span className="text-danger">*</span></label>
                             <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
                         </div>
                         <div>
-                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date fin prévue <span className="text-red-500">*</span></label>
+                            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">Date fin prévue <span className="text-danger">*</span></label>
                             <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="w-full bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/20 transition-all" />
                         </div>
                     </div>
@@ -671,9 +672,9 @@ export default function NewProjectPage() {
                 {/* Step 3: Financement */}
                 {currentStep === 3 && (
                     <div className="space-y-6">
-                        <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500 flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                            <p className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
+                        <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                            <p className="text-[11px] text-primary leading-relaxed">
                                 Définissez le cadre juridique et les sources de financement du projet. Le budget total sera calculé automatiquement à partir des contributions. Les sources pourront être complétées plus tard depuis la fiche du projet.
                             </p>
                         </div>
@@ -696,10 +697,10 @@ export default function NewProjectPage() {
 
                         {/* ── Budget Total par devise ── */}
                         {Object.keys(budgetParDevise).length > 0 && (
-                            <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-[var(--radius-md)] p-4">
+                            <div className="bg-gradient-to-br from-success/10 to-success/10 border border-success/30 rounded-[var(--radius-md)] p-4">
                                 <div className="flex items-center gap-2 mb-3">
-                                    <DollarSign size={16} className="text-green-600" />
-                                    <div className="text-[11px] font-bold text-green-700 dark:text-green-400 uppercase tracking-wider">Budget Total du Projet</div>
+                                    <DollarSign size={16} className="text-success" />
+                                    <div className="text-[11px] font-bold text-success uppercase tracking-wider">Budget Total du Projet</div>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {Object.entries(budgetParDevise).map(([devise, montant]) => {
@@ -716,15 +717,15 @@ export default function NewProjectPage() {
                                 </div>
                                 {/* Budget total converti en FCFA */}
                                 {budgetTotalFCFA > 0 && (
-                                    <div className="mt-3 pt-3 border-t border-green-500/20">
+                                    <div className="mt-3 pt-3 border-t border-success/20">
                                         <div className="flex items-center justify-between bg-white/50 dark:bg-black/20 rounded-[var(--radius-sm)] p-3">
                                             <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase">Total alloué aux composants (FCFA) :</span>
-                                            <span className="text-[16px] font-bold text-green-600">
+                                            <span className="text-[16px] font-bold text-success">
                                                 {budgetTotalFCFA.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} FCFA
                                             </span>
                                         </div>
                                         {financementPreview.total > 0 && budgetTotalFCFA > financementPreview.total && (
-                                            <div className="mt-2 p-2 rounded-[var(--radius-sm)] bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+                                            <div className="mt-2 p-2 rounded-[var(--radius-sm)] bg-warning-subtle border border-warning/20 text-[11px] text-warning">
                                                 Les composants totalisent {formatCurrency(budgetTotalFCFA, "FCFA")}, soit {formatCurrency(budgetTotalFCFA - financementPreview.total, "FCFA")} de plus que le budget financé ({formatCurrency(financementPreview.total, "FCFA")}).
                                             </div>
                                         )}
@@ -734,15 +735,15 @@ export default function NewProjectPage() {
                                     </div>
                                 )}
                                 {/* Total pondération */}
-                                <div className="mt-3 pt-3 border-t border-green-500/20 flex items-center justify-between">
+                                <div className="mt-3 pt-3 border-t border-success/20 flex items-center justify-between">
                                     <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Total des pondérations :</span>
-                                    <span className={`text-[13px] font-bold ${allocation === 'balanced' ? 'text-green-600' : allocation === 'over' ? 'text-red-600' : 'text-orange-600'}`}>
+                                    <span className={`text-[13px] font-bold ${allocation === 'balanced' ? 'text-success' : allocation === 'over' ? 'text-danger' : 'text-warning'}`}>
                                         {allocation === 'undefined' ? '—' : formatShare(totalPonderation)}
                                         {allocation === 'balanced' && <CheckCircle2 size={14} className="inline ml-1" />}
                                     </span>
                                 </div>
                                 {allocation !== 'balanced' && (
-                                    <div className="mt-2 text-[10px] text-orange-600 dark:text-orange-400">
+                                    <div className="mt-2 text-[10px] text-warning">
                                         {allocation === 'undefined'
                                             ? "Renseignez le financement (étape 3) pour calculer les pondérations."
                                             : allocation === 'over'
@@ -754,10 +755,10 @@ export default function NewProjectPage() {
                         )}
 
                         {/* ── Info compteurs ── */}
-                        <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-blue-500/10 border border-blue-500/20">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-500 flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                            <div className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
-                                <p>Définissez l&apos;arborescence. <strong>{components.length}</strong> composant{components.length > 1 ? "s" : ""}, <strong>{totalSC}</strong> sous-composant{totalSC > 1 ? "s" : ""}, <strong>{totalActivities}</strong> activité{totalActivities > 1 ? "s" : ""}. Utilisez <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-green-500/10 rounded text-green-500 text-[10px] font-bold"><ChevronUp size={9} />Monter d&apos;un niveau</span> et <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-orange-500/10 rounded text-orange-500 text-[10px] font-bold"><ChevronDown size={9} />Descendre d&apos;un niveau</span> pour changer le niveau hiérarchique.</p>
+                        <div className="flex gap-3 p-3 rounded-[var(--radius-md)] bg-primary-subtle border border-primary/20">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                            <div className="text-[11px] text-primary leading-relaxed">
+                                <p>Définissez l&apos;arborescence. <strong>{components.length}</strong> composant{components.length > 1 ? "s" : ""}, <strong>{totalSC}</strong> sous-composant{totalSC > 1 ? "s" : ""}, <strong>{totalActivities}</strong> activité{totalActivities > 1 ? "s" : ""}. Utilisez <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-success-subtle rounded text-success text-[10px] font-bold"><ChevronUp size={9} />Monter d&apos;un niveau</span> et <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-warning-subtle rounded text-warning text-[10px] font-bold"><ChevronDown size={9} />Descendre d&apos;un niveau</span> pour changer le niveau hiérarchique.</p>
                             </div>
                         </div>
 
@@ -767,7 +768,7 @@ export default function NewProjectPage() {
                                 <div key={comp.id} className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-lg)] px-4 py-3.5">
                                     {/* ── Composant : Nom + Budget + Devise + Pondération + TypeActivite (si niveau le plus bas) + Actions ── */}
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <div className="w-7 h-7 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
+                                        <div className="w-7 h-7 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
                                         <input type="text" value={comp.name} onChange={e => updateComponentName(ci, e.target.value)} placeholder="Nom du composant..." className="flex-1 min-w-0 bg-transparent border-b-2 border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[14px] font-bold text-[var(--text-primary)] px-1 py-1 transition-colors" style={{ minWidth: '12rem' }} />
 
                                         {/* Type d'activité (si niveau le plus bas) */}
@@ -778,8 +779,8 @@ export default function NewProjectPage() {
                                         )}
                                         {/* Actions à droite */}
                                         <div className="flex items-center gap-1 flex-shrink-0 ml-1 border-l border-[var(--border-subtle)] pl-2">
-                                            <button type="button" onClick={() => demoteComponent(ci)} disabled={!canIndent(components, comp.id)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
-                                            <button type="button" onClick={() => removeComponent(ci)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={14} /></button>
+                                            <button type="button" onClick={() => demoteComponent(ci)} disabled={!canIndent(components, comp.id)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-warning-subtle text-warning disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
+                                            <button type="button" onClick={() => removeComponent(ci)} className="p-1.5 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={14} /></button>
                                         </div>
 
                                         {/* Budget : montant ou pourcentage — ligne dédiée, pour ne jamais déborder */}
@@ -795,11 +796,11 @@ export default function NewProjectPage() {
                                     </div>
 
                                     {/* ── Sous-composants ── */}
-                                    <div className="ml-9 pl-3 border-l-2 border-blue-500/20 space-y-1 mt-3">
+                                    <div className="ml-9 pl-3 border-l-2 border-primary/20 space-y-1 mt-3">
                                         {comp.sousComposants.map((sc, si) => (
                                             <div key={sc.id}>
                                                 <div className="flex items-center gap-2 py-1.5">
-                                                    <div className="w-5 h-5 bg-amber-500/15 text-amber-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
+                                                    <div className="w-5 h-5 bg-warning-subtle text-warning rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
                                                     <input type="text" value={sc.name} onChange={e => updateSCName(ci, si, e.target.value)} placeholder="Sous-composant..." className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--border-default)] focus:border-[var(--primary)] outline-none text-[12px] font-semibold text-[var(--text-secondary)] px-1 py-0.5 transition-colors" />
                                                     {/* Type d'activité (si niveau le plus bas) */}
                                                     {isSousComposantLowestLevel(sc) && (
@@ -809,20 +810,20 @@ export default function NewProjectPage() {
                                                     )}
                                                     {/* Actions à droite */}
                                                     <div className="flex items-center gap-1 flex-shrink-0 border-l border-[var(--border-subtle)] pl-1.5">
-                                                        <button type="button" onClick={() => promoteSC(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-green-500/10 text-green-500 transition-all" title="Transformer en Composant"><ChevronUp size={15} /></button>
-                                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={!canIndent(components, sc.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={15} /></button>
-                                                        <button type="button" onClick={() => removeSousComposant(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={12} /></button>
+                                                        <button type="button" onClick={() => promoteSC(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-success-subtle text-success transition-all" title="Transformer en Composant"><ChevronUp size={15} /></button>
+                                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={!canIndent(components, sc.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-warning-subtle text-warning disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={15} /></button>
+                                                        <button type="button" onClick={() => removeSousComposant(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={12} /></button>
                                                     </div>
                                                 </div>
                                                 {/* ── Activités ── */}
-                                                <div className="ml-7 pl-3 border-l border-amber-500/15 space-y-0.5 mt-0.5">
+                                                <div className="ml-7 pl-3 border-l border-warning/15 space-y-0.5 mt-0.5">
                                                     {sc.activities.map((act, ai) => {
                                                         const actName = getActivityName(act);
                                                         const actType = getActivityType(act);
-                                                        const TYPE_COLORS: Record<string, string> = { travaux: "bg-blue-500", fourniture: "bg-amber-500", services: "bg-green-500", etudes: "bg-purple-500", pi: "bg-rose-500" };
+                                                        const TYPE_COLORS: Record<string, string> = Object.fromEntries(ACTIVITY_TYPE_ORDER.map((t) => [t, TYPES_ACTIVITE[t].pastille]));
                                                         return (
                                                             <div key={ai} className="flex items-center gap-1.5 py-0.5 group">
-                                                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${TYPE_COLORS[actType] || "bg-purple-500/20"}`} />
+                                                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${TYPE_COLORS[actType] || "bg-type-travaux/20"}`} />
                                                                 <input type="text" value={actName} onChange={e => updateActivity(ci, si, ai, e.target.value)} placeholder="Activité..." className="flex-1 min-w-0 bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] outline-none text-[11px] text-[var(--text-secondary)] px-2 py-1 focus:border-[var(--primary)] transition-colors" />
                                                                 {/* Type selector */}
                                                                 <select value={actType} onChange={e => updateActivityType(ci, si, ai, e.target.value)} className="bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[9px] font-semibold text-[var(--text-secondary)] px-1 py-1 focus:outline-none focus:border-[var(--primary)] cursor-pointer w-[120px] flex-shrink-0">
@@ -830,8 +831,8 @@ export default function NewProjectPage() {
                                                                 </select>
                                                                 {/* Actions (visibles au hover) */}
                                                                 <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity border-l border-[var(--border-subtle)] pl-1">
-                                                                    <button type="button" onClick={() => promoteActivity(ci, si, ai)} className="p-0.5 rounded-[var(--radius-sm)] hover:bg-green-500/10 text-green-500 transition-all" title="Transformer en Sous-composant"><ChevronUp size={14} /></button>
-                                                                    <button type="button" onClick={() => removeActivity(ci, si, ai)} className="p-0.5 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={11} /></button>
+                                                                    <button type="button" onClick={() => promoteActivity(ci, si, ai)} className="p-0.5 rounded-[var(--radius-sm)] hover:bg-success-subtle text-success transition-all" title="Transformer en Sous-composant"><ChevronUp size={14} /></button>
+                                                                    <button type="button" onClick={() => removeActivity(ci, si, ai)} className="p-0.5 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={11} /></button>
                                                                 </div>
                                                             </div>
                                                         );
@@ -890,7 +891,7 @@ export default function NewProjectPage() {
                                                 )}
                                                 {comp.sousComposants.length === 0 && <div className="w-5" />}
 
-                                                <div className="w-6 h-6 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
+                                                <div className="w-6 h-6 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
                                                 <span className="text-[14px] font-bold text-[var(--text-primary)]">
                                                     {comp.name || `Composant ${ci + 1}`}
                                                 </span>
@@ -927,7 +928,7 @@ export default function NewProjectPage() {
                                                                     )}
                                                                     {sc.activities.length === 0 && <div className="w-4" />}
 
-                                                                    <div className="w-5 h-5 bg-amber-500/15 text-amber-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
+                                                                    <div className="w-5 h-5 bg-warning-subtle text-warning rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
                                                                     <span className="text-[13px] font-semibold text-[var(--text-secondary)]">
                                                                         {sc.name || `Sous-composant ${si + 1}`}
                                                                     </span>
@@ -942,10 +943,10 @@ export default function NewProjectPage() {
                                                                     <ul className="mt-2 ml-2 pl-4 border-l border-[var(--border-subtle)] space-y-1.5">
                                                                         {sc.activities.map((act, ai) => {
                                                                             const actType = getActivityType(act);
-                                                                            const TYPE_COLORS: Record<string, string> = { travaux: "bg-blue-500", fourniture: "bg-amber-500", services: "bg-green-500", etudes: "bg-purple-500", pi: "bg-rose-500" };
+                                                                            const TYPE_COLORS: Record<string, string> = Object.fromEntries(ACTIVITY_TYPE_ORDER.map((t) => [t, TYPES_ACTIVITE[t].pastille]));
                                                                             return (
                                                                                 <li key={ai} className="flex items-center gap-2 text-[12px] text-[var(--text-tertiary)]">
-                                                                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${TYPE_COLORS[actType] || "bg-gray-400"}`} />
+                                                                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${TYPE_COLORS[actType] || "bg-fg-subtle"}`} />
                                                                                     {getActivityName(act) || `Activité ${ai + 1}`}
                                                                                     <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] uppercase">
                                                                                         {ACTIVITY_TYPES.find(t => t.id === actType)?.label || "Activité"}
@@ -970,8 +971,8 @@ export default function NewProjectPage() {
 
                 {currentStep === 6 && (
                     <div className="text-center py-12">
-                        <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
-                            <Check size={24} className="text-green-500" />
+                        <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
+                            <Check size={24} className="text-success" />
                         </div>
                         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Projet prêt à être créé</h3>
                         <p className="text-[11px] text-[var(--text-tertiary)] max-w-xs mx-auto">Vérifiez les informations puis cliquez sur &quot;Créer le projet&quot;.</p>
@@ -1029,7 +1030,7 @@ export default function NewProjectPage() {
                     </Link>
                     <button
                         onClick={handleNext}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] text-[13px] font-semibold shadow-[var(--shadow-sm)] transition-all ${currentStep === 6 ? "bg-green-600 hover:bg-green-700 text-white" : "bg-[var(--text-primary)] text-[var(--text-inverted)] hover:opacity-90"}`}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] text-[13px] font-semibold shadow-[var(--shadow-sm)] transition-all ${currentStep === 6 ? "bg-success hover:bg-success-hover text-white" : "bg-[var(--text-primary)] text-[var(--text-inverted)] hover:opacity-90"}`}
                     >
                         {currentStep === 6 ? "✓ Créer le projet" : "Suivant"}
                         {currentStep < 6 && <ArrowRight size={14} />}

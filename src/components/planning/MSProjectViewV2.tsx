@@ -19,7 +19,7 @@ import {
   indentUnit, moveUnitDown, moveUnitUp, outdentUnit, removeUnit, renameUnit, setUnitType, wbsNumbers,
   type ActivityType,
 } from "@/lib/structureOps";
-import { ACTIVITY_TYPES, ACTIVITY_TYPE_ORDER } from "@/lib/activityTypes";
+import { ACTIVITY_TYPES, ACTIVITY_TYPE_ORDER, voile } from "@/lib/activityTypes";
 import { checkStructureChange, hasPlannedDescendant } from "@/lib/structureRules";
 import { useStructureEditor } from "@/hooks/useStructureEditor";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
@@ -59,6 +59,13 @@ const MSP_BAR_BLUE = "var(--type-travaux)";
 const MSP_SUMMARY_COLOR = "var(--summary-bar)";
 const MSP_TODAY_COLOR = "var(--success)";
 const MSP_PROJECT_COLOR = "var(--primary)";
+const MSP_PROJECT_GRADIENT = "var(--primary-hover)";
+const MSP_ALERTE_COLOR = "var(--warning)";
+const MSP_PROBLEME_COLOR = "var(--danger)";
+/** Niveaux de la WBS : une intensité décroissante, pas une teinte de plus. */
+const MSP_NIVEAU_COMPOSANT = "var(--text-primary)";
+const MSP_NIVEAU_SOUS_COMPOSANT = "var(--text-secondary)";
+const MSP_NIVEAU_FEUILLE = "var(--text-tertiary)";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COLUMN DEFINITIONS (configurable)
@@ -1314,15 +1321,15 @@ export function MSProjectViewV2({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "6px 12px",
-          background: "rgba(237, 125, 49, 0.1)",
-          borderBottom: "1px solid rgba(237, 125, 49, 0.3)",
+          background: voile(MSP_ALERTE_COLOR, 10),
+          borderBottom: `1px solid ${voile(MSP_ALERTE_COLOR, 30)}`,
           fontSize: 12,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#ED7D31" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: MSP_ALERTE_COLOR }}>
             <Calendar size={14} />
             <span style={{ fontWeight: 600 }}>Modifications non sauvegardées</span>
             {problemesLivrables.length > 0
-              ? <span style={{ fontSize: 11, color: "#C0392B", fontWeight: 600 }}>• {problemesLivrables[0]}{problemesLivrables.length > 1 ? ` (+${problemesLivrables.length - 1})` : ""}</span>
+              ? <span style={{ fontSize: 11, color: MSP_PROBLEME_COLOR, fontWeight: 600 }}>• {problemesLivrables[0]}{problemesLivrables.length > 1 ? ` (+${problemesLivrables.length - 1})` : ""}</span>
               : <span style={{ fontSize: 10, opacity: 0.7 }}>• Cliquez pour éditer • Entrée pour valider</span>}
           </div>
           <div style={{ display: "flex", gap: 6 }}>
@@ -1436,8 +1443,8 @@ export function MSProjectViewV2({
               onClick={() => setLevelFilter("all")}
               style={{
                 display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
-                background: "rgba(112, 48, 160, 0.1)", border: "1px solid rgba(112, 48, 160, 0.3)",
-                borderRadius: 3, color: "#7030A0", fontSize: 10, fontWeight: 600, cursor: "pointer",
+                background: voile(MSP_PROJECT_COLOR, 10), border: `1px solid ${voile(MSP_PROJECT_COLOR, 30)}`,
+                borderRadius: 3, color: MSP_PROJECT_COLOR, fontSize: 10, fontWeight: 600, cursor: "pointer",
               }}
             >
               <X size={10} /> Niveau : {levelFilter === "components" ? "Composantes" : levelFilter === "subcomponents" ? "Sous-composantes" : levelFilter === "activities" ? "Activités" : "Livrables"}
@@ -1449,8 +1456,8 @@ export function MSProjectViewV2({
               onClick={clearAllFilters}
               style={{
                 display: "flex", alignItems: "center", gap: 4, padding: "3px 8px",
-                background: "rgba(237, 125, 49, 0.1)", border: "1px solid rgba(237, 125, 49, 0.3)",
-                borderRadius: 3, color: "#ED7D31", fontSize: 10, fontWeight: 600, cursor: "pointer",
+                background: voile(MSP_ALERTE_COLOR, 10), border: `1px solid ${voile(MSP_ALERTE_COLOR, 30)}`,
+                borderRadius: 3, color: MSP_ALERTE_COLOR, fontSize: 10, fontWeight: 600, cursor: "pointer",
               }}
             >
               <X size={10} /> {activeFilters.size} filtre{activeFilters.size > 1 ? "s" : ""} actif{activeFilters.size > 1 ? "s" : ""}
@@ -1639,7 +1646,7 @@ export function MSProjectViewV2({
                           onClick={(e) => { e.stopPropagation(); isFilterOpen ? setFilterDropdown(null) : openFilterDropdown(col.id); }}
                           style={{
                             background: "none", border: "none", cursor: "pointer", padding: 1,
-                            color: levelFilter !== "all" ? "#ED7D31" : "var(--msp-text-muted)",
+                            color: levelFilter !== "all" ? MSP_ALERTE_COLOR : "var(--msp-text-muted)",
                             display: "flex", alignItems: "center", opacity: levelFilter !== "all" ? 1 : 0.5,
                             marginLeft: "auto", flexShrink: 0,
                           }}
@@ -1768,7 +1775,7 @@ export function MSProjectViewV2({
                 const isSummary = task.type === "project" || task.type === "component" || task.type === "subcomponent";
                 const isProject = task.type === "project";
                 const rowBg = isProject
-                  ? "linear-gradient(90deg, rgba(26,82,118,0.08), rgba(26,82,118,0.03))"
+                  ? `linear-gradient(90deg, ${voile(MSP_PROJECT_COLOR, 8)}, ${voile(MSP_PROJECT_COLOR, 3)})`
                   : index % 2 === 0 ? "var(--msp-bg-row-even)" : "var(--msp-bg-row-odd)";
                 const isSelected = editor.isEditing && !!task.unitId && task.unitId === selectedId;
                 const isRenaming = !!task.unitId && renaming?.id === task.unitId;
@@ -1823,13 +1830,13 @@ export function MSProjectViewV2({
                             )}
 
                             {isProject && (
-                              <span style={{ width: 12, height: 12, borderRadius: 3, flexShrink: 0, background: `linear-gradient(135deg, ${MSP_PROJECT_COLOR}, #2980b9)`, display: "inline-block" }} />
+                              <span style={{ width: 12, height: 12, borderRadius: 3, flexShrink: 0, background: `linear-gradient(135deg, ${MSP_PROJECT_COLOR}, ${MSP_PROJECT_GRADIENT})`, display: "inline-block" }} />
                             )}
                             {task.type === "component" && (
-                              <span style={{ width: 10, height: 10, borderRadius: 2, flexShrink: 0, background: "linear-gradient(135deg, #7030A0, #9B59B6)", display: "inline-block" }} />
+                              <span style={{ width: 10, height: 10, borderRadius: 2, flexShrink: 0, background: `linear-gradient(135deg, ${MSP_NIVEAU_COMPOSANT}, ${MSP_NIVEAU_SOUS_COMPOSANT})`, display: "inline-block" }} />
                             )}
                             {task.type === "subcomponent" && (
-                              <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: "linear-gradient(135deg, #70AD47, #A9D18E)", display: "inline-block" }} />
+                              <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: `linear-gradient(135deg, ${MSP_NIVEAU_SOUS_COMPOSANT}, ${MSP_NIVEAU_FEUILLE})`, display: "inline-block" }} />
                             )}
                             {task.activityType && task.type === "activity" && (
                               <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: ACTIVITY_COLORS[task.activityType] || MSP_BAR_BLUE, display: "inline-block" }} />

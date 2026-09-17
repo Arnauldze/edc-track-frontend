@@ -119,7 +119,7 @@ export default function AlertsPage() {
                                 e.preventDefault();
                                 onResolve(alert._id);
                             }}
-                            className="text-[11px] font-medium text-green-600 hover:text-green-700 hover:underline"
+                            className="text-[11px] font-medium text-success hover:text-success-hover hover:underline"
                         >
                             Marquer résolu
                         </button>
@@ -164,7 +164,7 @@ export default function AlertsPage() {
                         Suivi des obligations et échéances critiques
                     </p>
                 </div>
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold text-red-500 bg-[var(--danger-subtle)] border border-red-200 dark:border-red-800/30">
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold text-danger bg-[var(--danger-subtle)] border border-danger/30">
                     <AlertCircle size={13} /> {totalUnresolved} non résolue{totalUnresolved > 1 ? "s" : ""}
                 </span>
             </div>
@@ -173,7 +173,7 @@ export default function AlertsPage() {
             <div className="space-y-8">
                 {/* CRITICAL */}
                 <div>
-                    <h2 className="text-[12px] font-bold text-red-500 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                    <h2 className="text-[12px] font-bold text-danger mb-3 flex items-center gap-2 uppercase tracking-wider">
                         <AlertCircle size={14} /> Critiques ({critical.length})
                     </h2>
                     <div className="space-y-2">
@@ -194,7 +194,7 @@ export default function AlertsPage() {
 
                 {/* WARNING */}
                 <div>
-                    <h2 className="text-[12px] font-bold text-amber-500 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                    <h2 className="text-[12px] font-bold text-warning mb-3 flex items-center gap-2 uppercase tracking-wider">
                         <AlertTriangle size={14} /> Attention ({warning.length})
                     </h2>
                     <div className="space-y-2">
@@ -217,7 +217,7 @@ export default function AlertsPage() {
                 <div>
                     <button
                         onClick={() => setShowResolved(!showResolved)}
-                        className="w-full flex items-center justify-between text-[12px] font-bold text-green-500 mb-3 uppercase tracking-wider hover:bg-[var(--bg-surface-hover)] p-2 rounded-[var(--radius-md)] transition-colors"
+                        className="w-full flex items-center justify-between text-[12px] font-bold text-success mb-3 uppercase tracking-wider hover:bg-[var(--bg-surface-hover)] p-2 rounded-[var(--radius-md)] transition-colors"
                     >
                         <div className="flex items-center gap-2">
                             <CheckCircle size={14} /> Résolues récemment ({resolved.length})

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { ACTIVITY_TYPES as TYPES_ACTIVITE, ACTIVITY_TYPE_ORDER } from "@/lib/activityTypes";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -40,13 +41,14 @@ type ConfirmState = {
 // ══════════════════════════════════════
 // ACTIVITY TYPES
 // ══════════════════════════════════════
-export const ACTIVITY_TYPES = [
-  { id: "travaux", label: "Travaux", color: "bg-blue-500", bgColor: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
-  { id: "fourniture", label: "Fourniture", color: "bg-amber-500", bgColor: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
-  { id: "services", label: "Services", color: "bg-green-500", bgColor: "bg-green-500/10 text-green-600 border-green-500/20" },
-  { id: "etudes", label: "Études", color: "bg-purple-500", bgColor: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
-  { id: "pi", label: "Prestations Intellectuelles", color: "bg-rose-500", bgColor: "bg-rose-500/10 text-rose-600 border-rose-500/20" },
-];
+// Les 5 types viennent de lib/activityTypes.ts ; seules les classes utilitaires
+// sont dérivées ici, à partir des jetons --color-type-* du design system.
+export const ACTIVITY_TYPES = ACTIVITY_TYPE_ORDER.map((id) => ({
+  id,
+  label: TYPES_ACTIVITE[id].label,
+  color: TYPES_ACTIVITE[id].pastille,
+  bgColor: TYPES_ACTIVITE[id].puce,
+}));
 
 const getActivityName = (act: string | { name: string; typeActivite: string }): string =>
   typeof act === "string" ? act : act.name;
@@ -541,9 +543,9 @@ export default function ProjectConfigPage() {
   const remainingBudgetFCFA = Math.max(budgetTotalFCFA - allocatedBudgetFCFA, 0);
   const status = hasProjectBudget ? allocationStatus(allocatedBudgetFCFA, projectBudgetFCFA) : "undefined";
   const statusColor =
-    status === "balanced" ? "text-green-600" : status === "over" ? "text-red-500" : status === "under" ? "text-orange-600" : "text-[var(--text-secondary)]";
+    status === "balanced" ? "text-success" : status === "over" ? "text-danger" : status === "under" ? "text-warning" : "text-[var(--text-secondary)]";
   const statusBar =
-    status === "balanced" ? "bg-green-500" : status === "over" ? "bg-red-500" : status === "under" ? "bg-orange-500" : "bg-[var(--text-tertiary)]";
+    status === "balanced" ? "bg-success" : status === "over" ? "bg-danger" : status === "under" ? "bg-warning" : "bg-[var(--text-tertiary)]";
   const weightedComponents = components.map((component, index) => {
     const devise = component.devise || 'FCFA';
     const budget = component.budget || 0;
@@ -585,7 +587,7 @@ export default function ProjectConfigPage() {
         {/* Titre et boutons */}
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-[var(--shadow-sm)] flex-shrink-0">
+            <div className="w-10 h-10 rounded-[var(--radius-lg)] bg-gradient-to-br from-primary to-primary flex items-center justify-center text-white shadow-[var(--shadow-sm)] flex-shrink-0">
               <Settings size={20} />
             </div>
             <div>
@@ -623,7 +625,7 @@ export default function ProjectConfigPage() {
                       setShowProjectMenu(false);
                       setShowDeleteConfirm(true);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-danger hover:bg-danger-subtle transition-colors"
                   >
                     <Trash2 size={16} /> Supprimer le projet
                   </button>
@@ -686,7 +688,7 @@ export default function ProjectConfigPage() {
                 <span className="px-2.5 py-1 rounded-full bg-[var(--bg-surface)] border border-[var(--border-default)] text-[11px] text-[var(--text-secondary)]">
                   <strong className="text-[var(--text-primary)]">{totalActivities}</strong> activités
                 </span>
-                <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[11px] font-semibold flex items-center gap-1.5">
+                <span className="px-2.5 py-1 rounded-full bg-primary-subtle text-primary border border-primary/20 text-[11px] font-semibold flex items-center gap-1.5">
                   <DollarSign size={12} />
                   {project.financement?.type || "MOP"} • {project.financement ? ((project.financement.budgetNational ? 1 : 0) + (project.financement.bailleurs?.length || 0) + (project.financement.partiesPubliques?.length || 0) + (project.financement.partiesPrivees?.length || 0)) : 5} financeurs
                 </span>
@@ -771,7 +773,7 @@ export default function ProjectConfigPage() {
                       </button>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1.5 text-xs text-orange-600 font-semibold bg-orange-500/10 px-2.5 py-1 rounded-[var(--radius-md)] border border-orange-500/20">
+                        <span className="flex items-center gap-1.5 text-xs text-warning font-semibold bg-warning-subtle px-2.5 py-1 rounded-[var(--radius-md)] border border-warning/20">
                           <Edit2 size={13} />
                           Mode édition actif
                         </span>
@@ -783,7 +785,7 @@ export default function ProjectConfigPage() {
                         </button>
                         <button
                           onClick={handleSaveStructure}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-[var(--radius-md)] text-xs font-semibold hover:bg-green-700 transition-colors shadow-sm"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-success text-white rounded-[var(--radius-md)] text-xs font-semibold hover:bg-success transition-colors shadow-sm"
                         >
                           <Save size={13} />
                           Enregistrer
@@ -811,7 +813,7 @@ export default function ProjectConfigPage() {
                           ) : (
                             <div className="w-[20px] flex-shrink-0" />
                           )}
-                          <div className="mt-0.5 w-7 h-7 bg-blue-500/15 text-blue-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
+                          <div className="mt-0.5 w-7 h-7 bg-primary-subtle text-primary rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[10px] flex-shrink-0">C{ci + 1}</div>
 
                           <div className="flex-1 min-w-0">
                             {/* Ligne 1 : nom, type, actions */}
@@ -851,8 +853,8 @@ export default function ProjectConfigPage() {
 
                               {isEditingStructure && (
                                 <div className="flex items-center gap-1 flex-shrink-0">
-                                  <button type="button" onClick={() => demoteComponent(ci)} disabled={!canIndent(components, comp.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
-                                  <button type="button" onClick={() => removeComponent(ci)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={16} /></button>
+                                  <button type="button" onClick={() => demoteComponent(ci)} disabled={!canIndent(components, comp.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-warning-subtle text-warning disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Sous-composant"><ChevronDown size={16} /></button>
+                                  <button type="button" onClick={() => removeComponent(ci)} className="p-1 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={16} /></button>
                                 </div>
                               )}
                             </div>
@@ -880,7 +882,7 @@ export default function ProjectConfigPage() {
                                   )}
                                 </span>
                               ) : (
-                                <span className="text-[11px] font-medium text-amber-600">Budget non défini</span>
+                                <span className="text-[11px] font-medium text-warning">Budget non défini</span>
                               )}
                             </div>
                           </div>
@@ -888,7 +890,7 @@ export default function ProjectConfigPage() {
 
                         {/* Sous-composants */}
                         {!collapsedComponents.has(ci) && (
-                          <div className="ml-9 pl-3 border-l-2 border-blue-500/20 space-y-1 mt-3">
+                          <div className="ml-9 pl-3 border-l-2 border-primary/20 space-y-1 mt-3">
                             {comp.sousComposants.map((sc, si) => (
                               <div key={sc.id}>
                                 <div className="flex items-center gap-2 py-1.5">
@@ -905,7 +907,7 @@ export default function ProjectConfigPage() {
                                   ) : (
                                     <div className="w-[18px] flex-shrink-0" />
                                   )}
-                                  <div className="w-5 h-5 bg-amber-500/15 text-amber-500 rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
+                                  <div className="w-5 h-5 bg-warning-subtle text-warning rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-[8px] flex-shrink-0">SC</div>
 
                                   {/* MODE LECTURE */}
                                   {!isEditingStructure ? (
@@ -934,9 +936,9 @@ export default function ProjectConfigPage() {
                                       )}
                                       {/* Boutons d'action — ordre uniforme : (monter) → (descendre) → (supprimer), gap-2 = 8px, icônes 16px */}
                                       <div className="flex items-center gap-2 flex-shrink-0 border-l border-[var(--border-subtle)] pl-2">
-                                        <button type="button" onClick={() => promoteSC(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-green-500/10 text-green-500 transition-all" title="Transformer en Composant"><ChevronUp size={16} /></button>
-                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={!canIndent(components, sc.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-orange-500/10 text-orange-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={16} /></button>
-                                        <button type="button" onClick={() => removeSousComposant(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={16} /></button>
+                                        <button type="button" onClick={() => promoteSC(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-success-subtle text-success transition-all" title="Transformer en Composant"><ChevronUp size={16} /></button>
+                                        <button type="button" onClick={() => demoteSC(ci, si)} disabled={!canIndent(components, sc.id)} className="p-1 rounded-[var(--radius-sm)] hover:bg-warning-subtle text-warning disabled:opacity-20 disabled:cursor-not-allowed transition-all" title="Transformer en Activité"><ChevronDown size={16} /></button>
+                                        <button type="button" onClick={() => removeSousComposant(ci, si)} className="p-1 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={16} /></button>
                                       </div>
                                     </>
                                   )}
@@ -951,7 +953,7 @@ export default function ProjectConfigPage() {
 
                                 {/* Activities with type selector */}
                                 {!collapsedSousComposants.has(`${ci}-${si}`) && (
-                                  <div className="ml-7 pl-3 border-l border-amber-500/15 space-y-1 mt-0.5">
+                                  <div className="ml-7 pl-3 border-l border-warning/15 space-y-1 mt-0.5">
                                     {sc.activities.map((act, ai) => {
                                       const actName = getActivityName(act);
                                       const actType = getActivityType(act);
@@ -992,8 +994,8 @@ export default function ProjectConfigPage() {
                                               </select>
                                               {/* Boutons d'action — ordre uniforme : (monter) → (supprimer), gap-2 = 8px, icônes 16px */}
                                               <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity border-l border-[var(--border-subtle)] pl-2">
-                                                <button type="button" onClick={() => promoteActivity(ci, si, ai)} className="p-1 rounded-[var(--radius-sm)] hover:bg-green-500/10 text-green-500 transition-all" title="Transformer en Sous-composant"><ChevronUp size={16} /></button>
-                                                <button type="button" onClick={() => removeActivity(ci, si, ai)} className="p-1 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all" title="Supprimer"><Trash2 size={16} /></button>
+                                                <button type="button" onClick={() => promoteActivity(ci, si, ai)} className="p-1 rounded-[var(--radius-sm)] hover:bg-success-subtle text-success transition-all" title="Transformer en Sous-composant"><ChevronUp size={16} /></button>
+                                                <button type="button" onClick={() => removeActivity(ci, si, ai)} className="p-1 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger/60 hover:text-danger transition-all" title="Supprimer"><Trash2 size={16} /></button>
                                               </div>
                                             </>
                                           )}
@@ -1092,17 +1094,17 @@ export default function ProjectConfigPage() {
                     {weightedComponents.map(({ component, index, budget, devise, percentage }) => (
                       <div key={component.id}>
                         <div className="flex items-center justify-between gap-2 text-[12px]">
-                          <span className={`truncate font-semibold ${budget > 0 ? 'text-[var(--text-primary)]' : 'text-amber-600'}`}>
-                            <span className="text-[10px] font-bold text-blue-500 mr-1.5">C{index + 1}</span>
+                          <span className={`truncate font-semibold ${budget > 0 ? 'text-[var(--text-primary)]' : 'text-warning'}`}>
+                            <span className="text-[10px] font-bold text-primary mr-1.5">C{index + 1}</span>
                             {component.name || 'Sans nom'}
                           </span>
                           <span className="font-bold tabular-nums flex-shrink-0 text-[var(--text-primary)]">{formatShare(percentage)}</span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <div className="flex-1 h-1 rounded-full bg-[var(--bg-inset)] overflow-hidden">
-                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.min(percentage, 100)}%` }} />
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(percentage, 100)}%` }} />
                           </div>
-                          <span className={`text-[10px] tabular-nums flex-shrink-0 ${budget > 0 ? 'text-[var(--text-tertiary)]' : 'text-amber-600'}`}>
+                          <span className={`text-[10px] tabular-nums flex-shrink-0 ${budget > 0 ? 'text-[var(--text-tertiary)]' : 'text-warning'}`}>
                             {budget > 0 ? `${formatMoney(budget, 2)} ${devise}` : 'non défini'}
                           </span>
                         </div>
@@ -1156,7 +1158,7 @@ export default function ProjectConfigPage() {
             </div>
 
             {currentChefs.length > 1 && (
-              <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
+              <div className="flex gap-2 p-3 rounded-[var(--radius-md)] bg-warning-subtle border border-warning/20 text-xs text-warning">
                 <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
                 <span>
                   Ce projet a {currentChefs.length} chefs de projet ({currentChefs.map((c) => c.name).join(", ")}).
@@ -1214,7 +1216,7 @@ export default function ProjectConfigPage() {
                         <tr key={`assignment-${index}`} className="hover:bg-[var(--bg-surface-hover)] transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-cat-violet flex items-center justify-center text-white text-xs font-bold">
                                 {user.firstName?.[0] || ""}{user.lastName?.[0] || ""}
                               </div>
                               <div>
@@ -1228,7 +1230,7 @@ export default function ProjectConfigPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${PROJECT_ROLE_COLORS[assignment.projectRole]?.bg || 'bg-gray-100'} ${PROJECT_ROLE_COLORS[assignment.projectRole]?.text || 'text-gray-800'} border ${PROJECT_ROLE_COLORS[assignment.projectRole]?.border || 'border-gray-200'}`}>
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${PROJECT_ROLE_COLORS[assignment.projectRole]?.bg || 'bg-inset'} ${PROJECT_ROLE_COLORS[assignment.projectRole]?.text || 'text-fg'} border ${PROJECT_ROLE_COLORS[assignment.projectRole]?.border || 'border-line'}`}>
                               {isProjectRole(assignment.projectRole) ? PROJECT_ROLE_LABELS[assignment.projectRole] : "Rôle retiré"}
                             </span>
                           </td>
@@ -1246,7 +1248,7 @@ export default function ProjectConfigPage() {
                                   setEditingAssignment(assignment);
                                   setShowAddModal(true);
                                 }}
-                                className="p-1.5 rounded-[var(--radius-sm)] hover:bg-blue-500/10 text-blue-500 transition-all"
+                                className="p-1.5 rounded-[var(--radius-sm)] hover:bg-primary-subtle text-primary transition-all"
                                 title="Modifier"
                               >
                                 <Edit2 size={14} />
@@ -1255,7 +1257,7 @@ export default function ProjectConfigPage() {
                               {can("team:remove") && canManageAssignment(assignment.projectRole) && (
                               <button
                                 onClick={() => setDeleteTeamConfirm({ id: assignment._id, name: `${user.firstName} ${user.lastName}` })}
-                                className="p-1.5 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500 transition-all"
+                                className="p-1.5 rounded-[var(--radius-sm)] hover:bg-danger-subtle text-danger transition-all"
                                 title="Retirer"
                               >
                                 <Trash2 size={14} />
@@ -1415,8 +1417,8 @@ export default function ProjectConfigPage() {
           >
             {/* Header */}
             <div className="flex items-center gap-3 p-5 border-b border-[var(--border-subtle)]">
-              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                <AlertCircle size={20} className="text-red-600" />
+              <div className="w-10 h-10 rounded-full bg-danger-subtle flex items-center justify-center flex-shrink-0">
+                <AlertCircle size={20} className="text-danger" />
               </div>
               <div>
                 <h4 className="text-sm font-bold text-[var(--text-primary)]">
@@ -1430,8 +1432,8 @@ export default function ProjectConfigPage() {
 
             {/* Body */}
             <div className="p-5 space-y-4">
-              <div className="p-3 bg-red-500/10 rounded-[var(--radius-md)] border border-red-500/20">
-                <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">
+              <div className="p-3 bg-danger-subtle rounded-[var(--radius-md)] border border-danger/20">
+                <p className="text-xs text-danger leading-relaxed">
                   <strong>⚠️ Attention :</strong> Vous êtes sur le point de supprimer définitivement le projet{" "}
                   <strong>&quot;{project.name}&quot;</strong>. Cette action supprimera toutes les données associées
                   (structure, équipe, planification, documents, etc.).
@@ -1447,7 +1449,7 @@ export default function ProjectConfigPage() {
                   value={deleteCodeInput}
                   onChange={(e) => setDeleteCodeInput(e.target.value)}
                   placeholder={`Tapez ${project.code}`}
-                  className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                  className="w-full px-3 py-2 text-sm bg-[var(--bg-inset)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:border-danger focus:ring-2 focus:ring-danger/20"
                   autoFocus
                 />
               </div>
@@ -1473,7 +1475,7 @@ export default function ProjectConfigPage() {
                   }
                 }}
                 disabled={deleteCodeInput !== project.code || deleting}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-danger hover:bg-danger-hover text-white text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Trash2 size={14} />
                 {deleting ? "Suppression..." : "Supprimer définitivement"}
@@ -1510,8 +1512,8 @@ export default function ProjectConfigPage() {
           >
             {/* Header */}
             <div className="flex items-center gap-3 p-5 border-b border-[var(--border-subtle)]">
-              <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-                <AlertCircle size={20} className="text-orange-600" />
+              <div className="w-10 h-10 rounded-full bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                <AlertCircle size={20} className="text-warning" />
               </div>
               <div>
                 <h4 className="text-sm font-bold text-[var(--text-primary)]">
@@ -1542,7 +1544,7 @@ export default function ProjectConfigPage() {
                     setNavigationTarget(null);
                   }
                 }}
-                className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 bg-success hover:bg-success-hover text-white text-sm font-semibold rounded-[var(--radius-md)] shadow-sm transition-colors flex items-center justify-center gap-2"
               >
                 <Save size={14} />
                 Enregistrer et quitter

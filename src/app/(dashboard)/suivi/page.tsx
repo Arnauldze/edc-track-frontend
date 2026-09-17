@@ -30,11 +30,11 @@ type ProjetSuivi = {
 };
 
 const GRADIENT_COLORS = [
-    "from-green-500 to-emerald-600",
-    "from-purple-500 to-violet-600",
-    "from-blue-500 to-cyan-600",
-    "from-orange-500 to-amber-600",
-    "from-pink-500 to-rose-600",
+    "from-success to-success",
+    "from-cat-violet to-cat-violet",
+    "from-primary to-cat-cyan",
+    "from-warning to-warning",
+    "from-cat-rose to-danger",
 ];
 
 async function mapToSuivi(projects: Project[]): Promise<ProjetSuivi[]> {
@@ -84,13 +84,13 @@ export default function SuiviPage() {
     }
 
     const getBarColor = (pct: number) =>
-        pct >= 80 ? "bg-green-500" : pct >= 40 ? "bg-blue-500" : pct > 0 ? "bg-amber-500" : "bg-[var(--bg-surface-active)]";
+        pct >= 80 ? "bg-success" : pct >= 40 ? "bg-primary" : pct > 0 ? "bg-warning" : "bg-[var(--bg-surface-active)]";
 
     const getStatusDot = (status: string) => {
         switch (status) {
-            case "ok": return "bg-green-500";
-            case "progress": return "bg-blue-500";
-            case "retard": return "bg-red-500 animate-pulse";
+            case "ok": return "bg-success";
+            case "progress": return "bg-primary";
+            case "retard": return "bg-danger animate-pulse";
             default: return "bg-[var(--text-tertiary)]";
         }
     };
@@ -174,7 +174,7 @@ export default function SuiviPage() {
                                     </div>
 
                                     {projet.alerts > 0 && (
-                                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold text-red-500 bg-[var(--danger-subtle)] border border-red-200 dark:border-red-800/30">
+                                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold text-danger bg-[var(--danger-subtle)] border border-danger/30">
                                             <AlertCircle size={11} /> {projet.alerts} alerte{projet.alerts > 1 ? "s" : ""}
                                         </span>
                                     )}
