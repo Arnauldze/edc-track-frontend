@@ -56,13 +56,13 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
       {budgets.map((budget, index) => (
         <div
           key={index}
-          className="flex items-center gap-3 p-3 bg-[var(--bg-inset)] rounded-[var(--radius-md)] border border-[var(--border-default)]"
+          className="flex items-center gap-3 p-3 bg-inset rounded-md border border-line"
         >
           {/* Devise */}
           <select
             value={budget.devise}
             onChange={(e) => updateBudget(index, "devise", e.target.value)}
-            className="w-24 px-2 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)] cursor-pointer"
+            className="w-24 px-2 py-2 bg-surface border border-line rounded-sm text-[12px] font-semibold text-fg focus:outline-none focus:border-primary cursor-pointer"
           >
             {DEVISES.map((d) => (
               <option key={d} value={d}>
@@ -79,13 +79,13 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
               onChange={(e) => updateBudget(index, "montant", parseFloat(e.target.value) || 0)}
               onBlur={calculatePourcentages}
               placeholder="Montant"
-              className="w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--primary)] transition-colors"
+              className="w-full px-3 py-2 bg-surface border border-line rounded-sm text-[13px] text-fg placeholder:text-fg-subtle focus:outline-none focus:border-primary transition-colors"
             />
           </div>
 
           {/* Pourcentage */}
           <div className="w-20 text-right">
-            <span className="text-[12px] font-bold text-[var(--text-secondary)]">
+            <span className="text-[12px] font-bold text-fg-muted">
               {budget.pourcentage?.toFixed(1) || "0"}%
             </span>
           </div>
@@ -94,7 +94,7 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
           {budgets.length > 1 && (
             <button
               onClick={() => removeBudget(index)}
-              className="p-2 rounded-[var(--radius-sm)] hover:bg-red-500/10 text-red-500/60 hover:text-red-500 transition-all"
+              className="p-2 rounded-sm hover:bg-danger-subtle text-fg-subtle hover:text-danger transition-all"
               title="Supprimer"
             >
               <Trash2 size={14} />
@@ -106,7 +106,7 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
       {/* Ajouter */}
       <button
         onClick={addBudget}
-        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-[var(--primary-text)] hover:bg-[var(--primary)]/10 rounded-[var(--radius-md)] transition-colors"
+        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-primary-fg hover:bg-primary/10 rounded-md transition-colors"
       >
         <Plus size={14} />
         Ajouter une devise
@@ -114,11 +114,11 @@ export function BudgetMultiDevise({ budgets, onChange }: Props) {
 
       {/* Total */}
       {budgets.length > 1 && (
-        <div className="flex items-center justify-between p-3 bg-[var(--bg-surface)] rounded-[var(--radius-md)] border-2 border-[var(--primary)]/20">
-          <span className="text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
+        <div className="flex items-center justify-between p-3 bg-surface rounded-md border-2 border-primary/20">
+          <span className="text-[11px] font-bold text-fg-subtle uppercase tracking-wider">
             Total (converti)
           </span>
-          <span className="text-[16px] font-bold text-[var(--text-primary)]">
+          <span className="text-[16px] font-bold text-fg">
             {formatNumber(calculateTotal())} FCFA
           </span>
         </div>

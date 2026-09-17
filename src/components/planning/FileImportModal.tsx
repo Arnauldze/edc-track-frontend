@@ -230,9 +230,9 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
           {/* STEP 1: Upload */}
           {step === "upload" && (
             <div className="space-y-4">
-              <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] bg-blue-500/10 border border-blue-500/20">
-                <AlertCircle size={18} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                <div className="text-[12px] text-blue-600 dark:text-blue-400 leading-relaxed">
+              <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] border border-primary/20 bg-primary-subtle">
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-primary" />
+                <div className="text-[12px] leading-relaxed text-primary-fg">
                   <strong>Format attendu :</strong> La première ligne doit contenir les en-têtes de colonnes.
                   Les données commencent à la ligne 2. Vous pourrez mapper les colonnes à l'étape suivante.
                 </div>
@@ -263,9 +263,9 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
           {/* STEP 2: Calibrate */}
           {step === "calibrate" && (
             <div className="space-y-4">
-              <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] bg-amber-500/10 border border-amber-500/20">
-                <AlertCircle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                <div className="text-[12px] text-amber-600 dark:text-amber-400 leading-relaxed">
+              <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] border border-warning/20 bg-warning-subtle">
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-warning" />
+                <div className="text-[12px] leading-relaxed text-warning">
                   <strong>Calibrage des colonnes :</strong> Indiquez quelle colonne de votre fichier correspond
                   à chaque champ requis. Les champs marqués d'un * sont obligatoires.
                 </div>
@@ -289,7 +289,7 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
                     <div className="flex-1">
                       <div className="text-[12px] font-semibold text-[var(--text-primary)]">
                         {mapping.label}
-                        {mapping.required && <span className="text-red-500 ml-1">*</span>}
+                        {mapping.required && <span className="ml-1 text-danger">*</span>}
                       </div>
                       <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5">
                         Champ : {mapping.field}
@@ -317,9 +317,9 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
           {/* STEP 3: Preview */}
           {step === "preview" && (
             <div className="space-y-4">
-              <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] bg-green-500/10 border border-green-500/20">
-                <CheckCircle2 size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                <div className="text-[12px] text-green-600 dark:text-green-400 leading-relaxed">
+              <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] border border-success/20 bg-success-subtle">
+                <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-success" />
+                <div className="text-[12px] leading-relaxed text-success">
                   <strong>Aperçu des données :</strong> Vérifiez que les données sont correctement importées
                   avant de confirmer. {previewData.length} élément(s) seront importés.
                 </div>
@@ -409,7 +409,7 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
             {step === "preview" && (
               <button
                 onClick={handleConfirmImport}
-                className="px-4 py-2 bg-green-600 text-white text-[13px] font-semibold rounded-[var(--radius-md)] hover:bg-green-700 transition-colors"
+                className="rounded-md border border-primary bg-primary px-4 py-2 text-[13px] font-semibold text-on-primary transition-colors hover:bg-primary-hover"
               >
                 Confirmer l'import
               </button>

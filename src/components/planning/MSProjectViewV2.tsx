@@ -19,6 +19,7 @@ import {
   indentUnit, moveUnitDown, moveUnitUp, outdentUnit, removeUnit, renameUnit, setUnitType, wbsNumbers,
   type ActivityType,
 } from "@/lib/structureOps";
+import { ACTIVITY_TYPES, ACTIVITY_TYPE_ORDER } from "@/lib/activityTypes";
 import { checkStructureChange, hasPlannedDescendant } from "@/lib/structureRules";
 import { useStructureEditor } from "@/hooks/useStructureEditor";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
@@ -38,21 +39,14 @@ const GANTT_TOP_HEIGHT = 18;
 const GANTT_BOTTOM_HEIGHT = HEADER_HEIGHT - GANTT_TOP_HEIGHT;
 const SCALE_STORAGE_KEY = "edc.planification.echelle";
 
-const ACTIVITY_COLORS: Record<string, string> = {
-  travaux: "#4472C4",
-  fourniture: "#ED7D31",
-  services: "#70AD47",
-  etudes: "#7030A0",
-  pi: "#E84C88",
-};
+/** Couleurs des types d’activité : les mêmes rôles que la légende de l’écran. */
+const ACTIVITY_COLORS: Record<string, string> = Object.fromEntries(
+  ACTIVITY_TYPE_ORDER.map((id) => [id, ACTIVITY_TYPES[id].couleur]),
+);
 
-const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
-  travaux: "Travaux",
-  fourniture: "Fourniture",
-  services: "Services",
-  etudes: "Études",
-  pi: "Prest. intellectuelles",
-};
+const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = Object.fromEntries(
+  ACTIVITY_TYPE_ORDER.map((id) => [id, ACTIVITY_TYPES[id].court]),
+) as Record<ActivityType, string>;
 
 const NEW_UNIT_NAMES: Record<UnitLevel, string> = {
   component: "Nouveau composant",
@@ -61,10 +55,10 @@ const NEW_UNIT_NAMES: Record<UnitLevel, string> = {
 };
 const CHILD_LEVEL: Record<UnitLevel, UnitLevel> = { component: "subcomponent", subcomponent: "activity", activity: "activity" };
 
-const MSP_BAR_BLUE = "#4472C4";
-const MSP_SUMMARY_COLOR = "#555555";
-const MSP_TODAY_COLOR = "#70AD47";
-const MSP_PROJECT_COLOR = "#1a5276";
+const MSP_BAR_BLUE = "var(--type-travaux)";
+const MSP_SUMMARY_COLOR = "var(--summary-bar)";
+const MSP_TODAY_COLOR = "var(--success)";
+const MSP_PROJECT_COLOR = "var(--primary)";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COLUMN DEFINITIONS (configurable)

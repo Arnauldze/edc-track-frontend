@@ -6,7 +6,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pencil } from "lucide-react";
 import { BudgetMultiDevise } from "./BudgetMultiDevise";
+import { controlClasses } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/helpers/currencyHelpers";
+import { cn } from "@/lib/utils";
 
 type Budget = { devise: string; montant: number; pourcentage?: number };
 
@@ -57,17 +59,17 @@ function Champ({
       <button
         type="button"
         onClick={() => !readOnly && setOuvert(!ouvert)}
-        className={`group flex items-baseline gap-2 px-2.5 py-1.5 rounded-[var(--radius-md)] border text-left ${
-          manquant ? "border-amber-500/40 bg-amber-500/10" : "border-transparent hover:border-[var(--border-default)] hover:bg-[var(--bg-inset)]"
+        className={`group flex h-7.5 items-center gap-2 rounded-md border px-2.5 text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-focus ${
+          manquant ? "border-warning/40 bg-warning-subtle" : "border-transparent hover:border-line hover:bg-inset"
         } ${readOnly ? "cursor-default" : "cursor-pointer"}`}
       >
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">{label}</span>
-        <span className={`text-[12px] font-semibold ${manquant ? "text-amber-700 dark:text-amber-400" : "text-[var(--text-primary)]"}`}>{valeur}</span>
-        {!readOnly && <Pencil size={11} className="text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100" />}
+        <span className="text-[10.5px] font-semibold tracking-wide text-fg-subtle uppercase">{label}</span>
+        <span className={`text-[13px] font-semibold ${manquant ? "text-warning" : "text-fg"}`}>{valeur}</span>
+        {!readOnly && <Pencil size={12} className="text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100" />}
       </button>
       {ouvert && (
         <div
-          className="absolute z-30 left-0 top-full mt-1 p-3 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-lg"
+          className="absolute top-full left-0 z-30 mt-1 rounded-md border border-line bg-surface p-3 shadow-lg"
           style={{ width: largeur }}
         >
           {children}
@@ -77,31 +79,30 @@ function Champ({
   );
 }
 
-const inputClass =
-  "w-full px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[12px] focus:outline-none focus:border-[var(--primary)]";
+const inputClass = cn(controlClasses, "h-8 px-2.5");
 
 export function ActivityGeneralStrip({ dateT0, onDateT0, budgets, onBudgets, budgetTotalFCFA, responsable, onResponsable, readOnly }: Props) {
   const plusieursDevises = budgets.some((b) => b.devise !== "FCFA" && b.montant);
   return (
     <div className="flex flex-wrap items-center gap-1">
       <Champ label="T0" valeur={dateT0 ? new Date(`${dateT0}T00:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "À définir"} manquant={!dateT0} readOnly={readOnly}>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">Date T0 de l&apos;activité</label>
+        <label className="block text-[11px] font-bold text-fg-muted mb-1.5">Date T0 de l&apos;activité</label>
         <input type="date" value={dateT0} onChange={(e) => onDateT0(e.target.value)} className={inputClass} autoFocus />
-        <p className="mt-1.5 text-[10px] text-[var(--text-tertiary)]">Les délais des livrables et des tâches se comptent depuis T0.</p>
+        <p className="mt-1.5 text-[10px] text-fg-subtle">Les délais des livrables et des tâches se comptent depuis T0.</p>
       </Champ>
 
       <Champ label="Budget" valeur={budgetTotalFCFA ? formatCurrency(budgetTotalFCFA, "FCFA") : "À définir"} manquant={!budgetTotalFCFA} readOnly={readOnly} largeur={520}>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">Budget de l&apos;activité</label>
+        <label className="block text-[11px] font-bold text-fg-muted mb-1.5">Budget de l&apos;activité</label>
         <BudgetMultiDevise budgets={budgets} onChange={onBudgets} />
         {plusieursDevises && (
-          <p className="mt-1.5 text-[11px] text-[var(--text-secondary)]">
+          <p className="mt-1.5 text-[11px] text-fg-muted">
             Total converti : <strong>{formatCurrency(budgetTotalFCFA, "FCFA")}</strong> (taux du financement du projet)
           </p>
         )}
       </Champ>
 
       <Champ label="Responsable" valeur={responsable || "—"} readOnly={readOnly}>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">Responsable de l&apos;activité</label>
+        <label className="block text-[11px] font-bold text-fg-muted mb-1.5">Responsable de l&apos;activité</label>
         <input type="text" value={responsable} onChange={(e) => onResponsable(e.target.value)} placeholder="Nom du responsable" className={inputClass} autoFocus />
       </Champ>
     </div>
