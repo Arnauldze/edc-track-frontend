@@ -887,10 +887,12 @@ export function MSProjectViewV2({
     }
     setSavingStructure(true);
     try {
-      const saved = await projectService.update(project.code, { components: draft });
+      const { project: saved, avertissements } = await projectService.updateEtAvertissements(project.code, { components: draft });
       editor.stop();
       setSelectedId(null);
       toast.success("Structure du projet enregistrée");
+      // Déplacements faits d'office : laissés plus longtemps à l'écran.
+      avertissements.forEach((avis) => toast.info(avis, 12000));
       onStructureSaved?.(saved);
     } catch (error) {
       // Refus du serveur (ex. 409 : unité qui porte des documents) : son message est explicite.

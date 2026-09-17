@@ -218,8 +218,20 @@ export const projectService = {
    * Update project
    */
   async update(code: string, data: UpdateProjectDto): Promise<Project> {
-    const response = await apiClient.patch<ApiResponse<Project>>(`/projects/${code}`, data);
-    return response.data.data!;
+    return (await projectService.updateEtAvertissements(code, data)).project;
+  },
+
+  /**
+   * Enregistre et rapporte ce que le serveur a déplacé de lui-même : quand une
+   * unité est décomposée, ses documents de passation et d'exécution suivent sa
+   * première sous-unité. Les écrans de structure montrent ces avertissements.
+   */
+  async updateEtAvertissements(
+    code: string,
+    data: UpdateProjectDto,
+  ): Promise<{ project: Project; avertissements: string[] }> {
+    const response = await apiClient.patch<ApiResponse<Project> & { warnings?: string[] }>(`/projects/${code}`, data);
+    return { project: response.data.data!, avertissements: response.data.warnings ?? [] };
   },
 
   /**

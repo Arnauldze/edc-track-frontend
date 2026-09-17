@@ -36,6 +36,11 @@ export async function updateProject(code: string, updates: UpdateProjectDto): Pr
   return await projectService.update(code, updates);
 }
 
+/** Comme `updateProject`, en rapportant ce que le serveur a déplacé de lui-même. */
+export async function updateProjectAvecAvertissements(code: string, updates: UpdateProjectDto) {
+  return await projectService.updateEtAvertissements(code, updates);
+}
+
 export async function deleteProject(code: string): Promise<void> {
   await projectService.delete(code);
 }

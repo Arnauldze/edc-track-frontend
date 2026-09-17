@@ -35,7 +35,8 @@ function addToast(message: string, type: ToastType, duration = 3500) {
 export const toast = {
     success: (message: string) => addToast(message, "success"),
     error: (message: string) => addToast(message, "error"),
-    info: (message: string) => addToast(message, "info"),
+    /** Un avertissement durable (déplacement fait d'office…) peut demander plus de temps de lecture. */
+    info: (message: string, duration?: number) => addToast(message, "info", duration),
 };
 
 export function subscribeToasts(listener: Listener): () => void {
