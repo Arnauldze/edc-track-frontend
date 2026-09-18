@@ -12,6 +12,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, IndentDecrease, IndentIncrease, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { Component } from "@/services/api/projectService";
 import { ACTIVITY_TYPES, ACTIVITY_TYPE_ORDER, type ActivityType } from "@/lib/activityTypes";
@@ -69,7 +70,9 @@ function flatten(components: Component[], collapsed: Set<string>): Row[] {
 }
 
 const PLACEHOLDER = { 1: "Nom de la composante", 2: "Nom de la sous-composante", 3: "Nom de l'activité" } as const;
-const COLS = "grid-cols-[44px_minmax(0,1fr)_168px_124px_62px_30px]";
+// Sans financement saisi, la colonne « Pond. » n'a rien à afficher : on la retire.
+const COLS_POND = "grid-cols-[44px_minmax(0,1fr)_176px_136px_66px_32px]";
+const COLS_SANS_POND = "grid-cols-[44px_minmax(0,1fr)_176px_136px_32px]";
 
 const outilClass =
   "h-[30px] px-2.5 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[12.5px] font-medium text-fg hover:bg-hover disabled:opacity-30 disabled:pointer-events-none transition-colors";
@@ -100,27 +103,69 @@ interface MenuItem {
   run: () => void;
 }
 
-/** Menu « … » d'une ligne : les mêmes commandes que la barre d'outils, sur cette ligne. */
+/**
+ * Menu « … » d'une ligne : les mêmes commandes que la barre d'outils, sur cette ligne.
+ * Rendu dans un portail et positionné à l'écran : le tableau rogne son contenu
+ * (coins arrondis), un menu posé dedans restait invisible sur les dernières lignes.
+ * Il s'ouvre vers le haut quand le bas de la fenêtre est trop proche.
+ */
+const MENU_W = 236;
+const MENU_ITEM_H = 34;
+
 function RowMenu({ ouvert, onOuvrir, items }: { ouvert: boolean; onOuvrir: (v: boolean) => void; items: MenuItem[] }) {
+  const bouton = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const basculer = () => {
+    if (ouvert) { onOuvrir(false); return; }
+    const r = bouton.current?.getBoundingClientRect();
+    if (!r) return;
+    const hauteur = items.length * MENU_ITEM_H + 8;
+    const dessous = window.innerHeight - r.bottom > hauteur + 12;
+    setPos({
+      top: dessous ? r.bottom + 4 : Math.max(8, r.top - hauteur - 4),
+      left: Math.min(Math.max(8, r.right - MENU_W), window.innerWidth - MENU_W - 8),
+    });
+    onOuvrir(true);
+  };
+
+  // Le menu est posé à l'écran : dès que la page bouge sous lui, il se referme.
+  useEffect(() => {
+    if (!ouvert) return;
+    const fermer = () => onOuvrir(false);
+    window.addEventListener("resize", fermer);
+    window.addEventListener("scroll", fermer, true);
+    return () => {
+      window.removeEventListener("resize", fermer);
+      window.removeEventListener("scroll", fermer, true);
+    };
+  }, [ouvert, onOuvrir]);
+
   return (
-    <div className="relative flex justify-end">
+    <div className="flex justify-end">
       <button
+        ref={bouton}
         type="button"
         aria-label="Actions sur cette ligne"
         aria-expanded={ouvert}
-        onClick={() => onOuvrir(!ouvert)}
-        className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-fg-subtle hover:bg-hover hover:text-fg transition-colors"
+        onClick={basculer}
+        className={`w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] transition-colors ${ouvert ? "bg-hover text-fg" : "text-fg-subtle hover:bg-hover hover:text-fg"}`}
       >
         <MoreHorizontal size={16} />
       </button>
-      {ouvert && (
+      {ouvert && pos && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => onOuvrir(false)} />
-          <div className="absolute right-0 top-8 z-50 w-60 rounded-[var(--radius-md)] border border-line bg-surface py-1 shadow-[var(--shadow-lg)]">
+          <div className="fixed inset-0 z-[60]" onClick={() => onOuvrir(false)} />
+          <div
+            role="menu"
+            style={{ top: pos.top, left: pos.left, width: MENU_W }}
+            className="fixed z-[61] rounded-[var(--radius-md)] border border-line bg-surface py-1 shadow-[var(--shadow-lg)]"
+          >
             {items.map((item) => (
               <button
                 key={item.label}
                 type="button"
+                role="menuitem"
                 disabled={item.disabled}
                 onClick={() => { item.run(); onOuvrir(false); }}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12.5px] hover:bg-hover disabled:opacity-30 disabled:pointer-events-none transition-colors ${item.danger ? "text-danger" : "text-fg"}`}
@@ -129,7 +174,8 @@ function RowMenu({ ouvert, onOuvrir, items }: { ouvert: boolean; onOuvrir: (v: b
               </button>
             ))}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
@@ -204,6 +250,12 @@ export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onC
   // La barre d'outils agit sur la ligne sélectionnée, si elle est visible.
   const cible = selected && rows.some((r) => r.id === selected) ? selected : null;
 
+  // Sans budget financé, la pondération n'a pas de référence : la colonne disparaît.
+  const avecPond = referenceFCFA > 0;
+  const COLS = avecPond ? COLS_POND : COLS_SANS_POND;
+  const totalFCFA = value.reduce((sum, c) => sum + toFCFA(c.budget, c.devise, rates), 0);
+  const chiffre = value.some((c) => c.budget);
+
   return (
     <div className="space-y-2">
       <div className="border border-line rounded-[var(--radius-lg)] bg-surface overflow-hidden">
@@ -233,8 +285,8 @@ export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onC
               <span>N°</span>
               <span>Nom</span>
               <span>Type d&apos;activité</span>
-              <span className="text-right">Budget FCFA</span>
-              <span className="text-right">Pond.</span>
+              <span className="text-right" title="Les composantes se chiffrent en FCFA. Les devises des sources sont converties à l'étape Financement, au taux de change qui y est défini.">Budget FCFA</span>
+              {avecPond && <span className="text-right">Pond.</span>}
               <span />
             </div>
 
@@ -305,9 +357,11 @@ export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onC
                     )}
                   </div>
 
-                  <span className="text-right text-[12.5px] tabular-nums text-fg-muted">
-                    {composante && referenceFCFA > 0 && row.budget ? formatShare(share) : ""}
-                  </span>
+                  {avecPond && (
+                    <span className="text-right text-[12.5px] tabular-nums text-fg-muted">
+                      {composante && row.budget ? formatShare(share) : ""}
+                    </span>
+                  )}
 
                   <RowMenu
                     ouvert={menu === row.id}
@@ -325,6 +379,20 @@ export function StructureTreeEditor({ value, onChange, referenceFCFA, rates, onC
                 </div>
               );
             })}
+
+            {/* Total réparti : referme le tableau et donne le cumul sans quitter des yeux les lignes. */}
+            {chiffre && (
+              <div className={`grid ${COLS} gap-2.5 items-center h-[38px] px-3 border-t border-line bg-inset text-[12px]`}>
+                <span />
+                <span className="font-semibold text-fg-muted">Total réparti</span>
+                <span />
+                <span className="text-right font-mono text-[12.5px] font-bold tabular-nums text-fg">{formatMoney(totalFCFA, 0)}</span>
+                {avecPond && (
+                  <span className="text-right font-semibold tabular-nums text-fg-muted">{formatShare(shareOf(totalFCFA, referenceFCFA))}</span>
+                )}
+                <span />
+              </div>
+            )}
           </div>
         </div>
       </div>

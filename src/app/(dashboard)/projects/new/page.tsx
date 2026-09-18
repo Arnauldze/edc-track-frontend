@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, Check, Coins, Info, Layers, MapPin, Pencil, type LucideIcon } from "lucide-react";
-import { addProject, generateProjectCode, type ComponentData } from "@/lib/projectStore";
+import { addProject, type ComponentData } from "@/lib/projectStore";
 import { toast } from "@/lib/toastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FinancementEditor, sourceColor } from "@/components/financing/FinancementEditor";
@@ -282,7 +282,9 @@ const yearOf = (iso: string) => Number(iso.slice(0, 4));
 
 function infoErrors(titre: string, dateDebut: string, dateFin: string) {
     const errors: { titre?: string; dateDebut?: string; dateFin?: string } = {};
+    // Le serveur refuse un nom de moins de 3 caractères : le dire ici, pas après la dernière étape.
     if (!titre.trim()) errors.titre = "Donnez un nom au projet.";
+    else if (titre.trim().length < 3) errors.titre = "Le nom doit contenir au moins 3 caractères.";
     if (!dateDebut) errors.dateDebut = "Indiquez la date de début.";
     else if (yearOf(dateDebut) < 1900 || yearOf(dateDebut) > 2200) errors.dateDebut = "Cette date n'est pas plausible : vérifiez l'année.";
     if (!dateFin) errors.dateFin = "Indiquez la date de fin prévue.";
@@ -331,7 +333,6 @@ export default function NewProjectPage() {
 
     const [currentStep, setCurrentStep] = useState(1);
     const [maxStep, setMaxStep] = useState(1);
-    const [projectCode] = useState(generateProjectCode());
     const [creating, setCreating] = useState(false);
 
     // 1. Informations
@@ -471,6 +472,8 @@ export default function NewProjectPage() {
     };
 
     const step = STEPS[currentStep - 1];
+    // L'étape Structure est un tableau : elle prend toute la largeur disponible.
+    const etapeLarge = currentStep === 4;
 
     // ── Rendu ──
     return (
@@ -479,7 +482,6 @@ export default function NewProjectPage() {
             <aside className="hidden lg:flex w-[250px] flex-shrink-0 flex-col gap-5 border-r border-line bg-surface px-5 py-6 overflow-y-auto">
                 <div>
                     <h1 className="text-[17px] font-semibold tracking-tight text-fg">Nouveau projet</h1>
-                    <p className="mt-1 text-[12.5px] leading-snug text-fg-muted">Le projet n&apos;est créé qu&apos;à la dernière étape.</p>
                 </div>
 
                 <ol>
@@ -528,7 +530,7 @@ export default function NewProjectPage() {
 
                 <div className="mt-auto flex items-start gap-2 text-[12px] leading-snug text-fg-subtle">
                     <Info size={15} className="mt-px flex-shrink-0" />
-                    Chaque étape reste modifiable jusqu&apos;à la création.
+                    Rien n&apos;est enregistré avant la dernière étape ; chaque étape reste modifiable.
                 </div>
             </aside>
 
@@ -546,9 +548,10 @@ export default function NewProjectPage() {
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto">
-                    <div className="max-w-[900px] px-5 sm:px-8 pt-6 pb-5">
-                        <p className="text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">Étape {currentStep} sur {LAST_STEP}</p>
-                        <h2 className="mt-1 text-[21px] font-bold tracking-tight text-fg">{step.name}</h2>
+                    <div className={`${etapeLarge ? "max-w-[1200px]" : "max-w-[900px]"} px-5 sm:px-8 pt-6 pb-5`}>
+                        {/* Le rail de gauche numérote déjà les étapes : le rappel ne sert qu'à sa place. */}
+                        <p className="lg:hidden text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">Étape {currentStep} sur {LAST_STEP}</p>
+                        <h2 className="lg:mt-0 mt-1 text-[21px] font-bold tracking-tight text-fg">{step.name}</h2>
                         <p className="mt-1.5 text-[13px] leading-relaxed text-fg-muted">{step.intro}</p>
 
                         <div className="mt-5">
@@ -569,7 +572,7 @@ export default function NewProjectPage() {
                                         </Field>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-[12.5px] text-fg-muted">
-                                        <span className="font-mono font-semibold text-fg">{projectCode}</span> code attribué automatiquement, il identifie le projet dans toute l&apos;application.
+Le code du projet (<span className="font-mono font-semibold text-fg">PRJ-{new Date().getFullYear()}-…</span>) est attribué à la création ; il identifie le projet dans toute l&apos;application.
                                     </div>
                                 </div>
                             )}
@@ -618,7 +621,7 @@ export default function NewProjectPage() {
 
                                     <ReviewSection title="Informations" onEdit={() => goTo(1)}>
                                         <ReviewRow label="Nom" value={titre} />
-                                        <ReviewRow label="Code" value={<span className="font-mono">{projectCode}</span>} />
+                                        <ReviewRow label="Code" value={<span className="italic text-fg-muted">Attribué à la création</span>} />
                                         <ReviewRow label="Période" value={periode || "—"} />
                                         {description.trim() && <ReviewRow label="Description" value={description} />}
                                     </ReviewSection>
@@ -690,16 +693,15 @@ export default function NewProjectPage() {
                 </footer>
             </div>
 
-            {/* ── Aperçu ── */}
+            {/* ── Aperçu ── masqué sur Structure : le tableau a besoin de la largeur,
+                 et la jauge de répartition y redit déjà le budget. */}
+            {!etapeLarge && (
             <aside className="hidden xl:flex w-[300px] flex-shrink-0 flex-col gap-3.5 border-l border-line bg-surface px-5 py-6 overflow-y-auto">
                 <span className="text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">Aperçu du projet</span>
 
                 <div className="space-y-2">
                     <h3 className={`text-[16px] font-bold leading-snug break-words ${titre.trim() ? "text-fg" : "text-fg-subtle italic font-semibold"}`}>{titre.trim() || "Nom à saisir"}</h3>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-mono text-[11px] px-1.5 py-px rounded-[var(--radius-sm)] border border-line bg-inset text-fg-muted">{projectCode}</span>
-                        <span className="text-[11.5px] text-fg-subtle">code attribué automatiquement</span>
-                    </div>
+                    <p className="text-[11.5px] text-fg-subtle">Code attribué à la création</p>
                 </div>
 
                 <div className="rounded-[var(--radius-md)] bg-primary-subtle px-3.5 py-3">
@@ -733,6 +735,7 @@ export default function NewProjectPage() {
                     </ApercuRow>
                 </div>
             </aside>
+            )}
 
             <ConfirmDialog
                 isOpen={pendingRemoval !== null}
@@ -762,12 +765,13 @@ function ApercuRow({ icon: Icon, label, value, vide, children }: { icon: LucideI
 }
 
 function AllocationGauge({ allocated, total, status, share, parts }: { allocated: number; total: number; status: AllocationStatus; share: number; parts: number[] }) {
+    // Sans financement, il n'y a rien à jauger : une simple note, pas un encadré.
     if (status === "undefined") {
         return (
-            <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-surface px-4 py-3 text-[12.5px] text-fg-muted">
-                <Coins size={18} className="flex-shrink-0 text-fg-subtle" />
-                Aucun financement saisi : les budgets des composantes seront enregistrés sans pondération.
-            </div>
+            <p className="flex items-center gap-2 text-[12px] text-fg-subtle">
+                <Coins size={14} className="flex-shrink-0" />
+                Aucun financement saisi : les budgets seront enregistrés sans pondération.
+            </p>
         );
     }
     const tone = status === "balanced" ? "text-success" : status === "over" ? "text-danger" : "text-warning";
