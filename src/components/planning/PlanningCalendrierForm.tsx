@@ -137,9 +137,10 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
 
   const ajouter = () => onChange([...lignes, nouvelleLigne<T>(phase, prochainNumero(lignes, phase.prefixe))]);
 
+  /** Comme MS Project : les successeurs de la ligne retirée se rattachent à son prédécesseur (T1 → T2 → T3 devient T1 → T3). */
   const supprimer = (index: number) => {
-    const retire = lignes[index].numero;
-    onChange(lignes.filter((_, i) => i !== index).map((l) => (l.predecesseur === retire ? { ...l, predecesseur: "" } : l)));
+    const { numero: retire, predecesseur: relais } = lignes[index];
+    onChange(lignes.filter((_, i) => i !== index).map((l) => (l.predecesseur === retire ? { ...l, predecesseur: relais ?? "" } : l)));
   };
 
   const deplacer = (index: number, direction: -1 | 1) => {
@@ -212,6 +213,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
     "",
   ];
   const motPluriel = `${phase.mot}s`;
+  const nombre = lignes.filter((l) => String(l[phase.champNom] ?? "").trim()).length;
 
   return (
     <>
@@ -230,6 +232,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
           <div className="flex flex-wrap items-center gap-2">
           <dl className="flex flex-wrap gap-1.5 text-[11px]">
             {[
+              { label: `${motPluriel[0].toUpperCase()}${motPluriel.slice(1)}`, value: String(nombre) },
               { label: "T0", value: dateT0 ? formatJour(dateT0) : "Non définie", alert: !dateT0 },
               { label: "Début", value: formatJour(calendrier.debut) },
               { label: "Fin", value: formatJour(calendrier.fin) },

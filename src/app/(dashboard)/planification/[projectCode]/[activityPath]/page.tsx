@@ -16,10 +16,10 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { BarChart3, Flag, FlagOff, Plus, Save, Trash2, X } from "lucide-react";
 import { getProjectById, getLeafActivities, type Project } from "@/lib/projectStore";
-import { planningService, type CreatePlanningDto, type LignePassation, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
+import { planningService, type CreatePlanningDto, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
 import { PlanningFormEtude, nouveauLivrable } from "@/components/planning/PlanningFormEtude";
-import { PlanningFormPassation } from "@/components/planning/PlanningFormPassation";
+import { PlanningFormPassation, nouvellePassation, type PassationSaisie } from "@/components/planning/PlanningFormPassation";
 import { PlanningFormExecution, nouvelleTache } from "@/components/planning/PlanningFormExecution";
 import { ActivityGeneralStrip } from "@/components/planning/ActivityGeneralStrip";
 import { ActivityPhaseBar, type PhaseSummary } from "@/components/planning/ActivityPhaseBar";
@@ -28,10 +28,10 @@ import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 import { findUnit, listUnits } from "@/lib/structureUnits";
 import { wbsNumbers } from "@/lib/structureOps";
 import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
-import { PHASE_LABELS, PHASE_ORDER, periodeDesLignes, type PhaseKey } from "@/lib/phaseTimeline";
+import { PHASE_LABELS, PHASE_ORDER, periodeDe, type PhaseKey } from "@/lib/phaseTimeline";
 import { toFCFA } from "@/lib/componentBudget";
 import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
-import { lignePassationDepuisApi, lignePassationPourApi, lignePassationRenseignee } from "@/lib/passationApi";
+import { colonnesModele, depuisAncienneLigne } from "@/lib/passationEtapes";
 import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 import { typeActivite, voile, type ActivityType } from "@/lib/activityTypes";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -74,7 +74,7 @@ export default function ActivityPlanningPage() {
 
   // Données des phases
   const [livrables, setLivrables] = useState<Livrable[]>([nouveauLivrable("R1")]);
-  const [passationData, setPassationData] = useState<{ typePassation?: string; lignesPassation: LignePassation[] } | null>(null);
+  const [passation, setPassation] = useState<PassationSaisie>(nouvellePassation);
   const [taches, setTaches] = useState<TacheExecution[]>([nouvelleTache("T1")]);
 
   const isEditMode = planning !== null;
@@ -94,11 +94,26 @@ export default function ActivityPlanningPage() {
     setDateT0(toDay(p.dateDebutInitiale as unknown as string) ?? "");
     setResponsablePrincipal(p.responsablePrincipal || "");
     setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
-    setPassationData(
-      p.hasPassation
-        ? { typePassation: p.typePassation, lignesPassation: (p.lignesPassation ?? []).map(lignePassationDepuisApi) }
-        : null,
-    );
+    // Une passation saisie dans l'ancien tableau reprend sa première ligne ;
+    // une passation jamais planifiée part des colonnes du modèle.
+    const ancienne = p.colonnesPassation?.length ? undefined : p.lignesPassation?.length ? depuisAncienneLigne(p.lignesPassation[0]) : undefined;
+    setPassation({
+      typeAO: p.typeAO || ancienne?.typeAO || "",
+      sourceFinancement: p.sourceFinancement || ancienne?.sourceFinancement || "",
+      imputationBudgetaire: p.imputationBudgetaire || ancienne?.imputationBudgetaire || "",
+      responsablePassation: p.responsablePassation || "",
+      colonnes: p.colonnesPassation?.length
+        ? p.colonnesPassation.map((c) => ({ ...c, date: toDay(c.date) }))
+        : ancienne?.colonnes ?? colonnesModele(),
+      synthese: p.synthesePassation
+        ? {
+            ...p.synthesePassation,
+            osDeDemarrage: toDay(p.synthesePassation.osDeDemarrage),
+            dateReceptionProvisoire: toDay(p.synthesePassation.dateReceptionProvisoire),
+            dateReceptionDefinitive: toDay(p.synthesePassation.dateReceptionDefinitive),
+          }
+        : ancienne?.synthese ?? {},
+    });
     setTaches(p.tachesExecution?.length ? p.tachesExecution : [nouvelleTache("T1")]);
     const premiere = PHASE_ORDER.find((k) => ({ etude: p.hasEtudePrealable, passation: p.hasPassation, execution: p.hasExecution })[k]);
     if (premiere && ouvrirPremierePhase) setSelected(premiere);
@@ -110,10 +125,10 @@ export default function ActivityPlanningPage() {
     () => ({
       general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal }),
       etude: JSON.stringify(hasEtudePrealable ? livrables.map(livrablePourApi) : null),
-      passation: JSON.stringify(hasPassation ? passationData : null),
+      passation: JSON.stringify(hasPassation ? passation : null),
       execution: JSON.stringify(hasExecution ? taches.map(tachePourApi) : null),
     }),
-    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, livrables, hasPassation, passationData, hasExecution, taches],
+    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches],
   );
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
@@ -200,13 +215,11 @@ export default function ActivityPlanningPage() {
   const problemesExecution = useMemo(() => [...new Set(calendrierExecution.problemes.map((p) => p.message))], [calendrierExecution]);
 
   const phases: PhaseSummary[] = useMemo(() => {
-    const lignesPassation = passationData?.lignesPassation ?? [];
-
     const livrablesNommes = livrables.filter((l) => l.intitule?.trim()).length;
-    const marches = lignesPassation.filter(lignePassationRenseignee).length;
+    const etapesDatees = passation.colonnes.filter((c) => c.date).length;
     const tachesNommees = taches.filter((t) => t.designation?.trim()).length;
 
-    const resume = (key: PhaseKey, contenu: number, mot: string, periode = periodeDesLignes(lignesPassation)) => {
+    const resume = (key: PhaseKey, contenu: number, mot: string, periode = periodeDe(passation.colonnes.map((c) => c.date))) => {
       const base = { key, active: actives[key], periode, dirty: modifiees[key] };
       if (!actives[key]) return { ...base, tone: "off" as const, status: "Non prévue" };
       if (contenu === 0) return { ...base, tone: "todo" as const, status: "À planifier" };
@@ -218,7 +231,10 @@ export default function ActivityPlanningPage() {
       hasEtudePrealable && problemesEtude.length
         ? { ...etude, tone: "warn" as const, status: `${pluriel(problemesEtude.length, "problème")} à corriger` }
         : etude,
-      resume("passation", marches, "marché"),
+      (() => {
+        const etapes = resume("passation", etapesDatees, "étape");
+        return etapes.tone === "ok" ? { ...etapes, status: `${etapesDatees} / ${passation.colonnes.length} étapes datées` } : etapes;
+      })(),
       (() => {
         const execution = resume("execution", tachesNommees, "tâche", { debut: calendrierExecution.debut, fin: calendrierExecution.fin });
         return hasExecution && problemesExecution.length
@@ -227,7 +243,7 @@ export default function ActivityPlanningPage() {
       })(),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [livrables, calendrierEtude, problemesEtude, passationData, taches, calendrierExecution, problemesExecution, hasEtudePrealable, hasPassation, hasExecution, sections, reference]);
+  }, [livrables, calendrierEtude, problemesEtude, passation, taches, calendrierExecution, problemesExecution, hasEtudePrealable, hasPassation, hasExecution, sections, reference]);
 
   // ── Phases ──
   const retirerPhase = (key: PhaseKey) => {
@@ -293,10 +309,23 @@ export default function ActivityPlanningPage() {
         responsablePrincipal: responsablePrincipal || undefined,
         // Une phase retirée n'emporte pas ses données
         livrables: hasEtudePrealable ? livrables.map(livrablePourApi) : [],
-        // Une phase retirée n’emporte pas ses marchés
-        lignesPassation: hasPassation
-          ? (passationData?.lignesPassation ?? []).filter(lignePassationRenseignee).map(lignePassationPourApi)
-          : [],
+        // Une phase retirée n'emporte pas son marché
+        ...(hasPassation
+          ? {
+              typeAO: passation.typeAO || undefined,
+              sourceFinancement: passation.sourceFinancement || undefined,
+              imputationBudgetaire: passation.imputationBudgetaire || undefined,
+              responsablePassation: passation.responsablePassation || undefined,
+              colonnesPassation: passation.colonnes.map((c) => ({
+                cle: c.cle,
+                designation: c.designation.trim() || "Étape",
+                groupe: c.groupe,
+                date: toDay(c.date),
+                choix: c.choix,
+              })),
+              synthesePassation: Object.fromEntries(Object.entries(passation.synthese).filter(([, v]) => v !== undefined && v !== "")),
+            }
+          : { colonnesPassation: [] }),
         // Une phase retirée n'emporte pas ses tâches
         tachesExecution: hasExecution ? taches.map(tachePourApi) : [],
       };
@@ -486,7 +515,14 @@ export default function ActivityPlanningPage() {
 
         {hasPassation && (
           <div hidden={selected !== "passation"}>
-            <PlanningFormPassation data={passationData} onChange={setPassationData} readOnly={readOnly} action={boutonRetirer} />
+            <PlanningFormPassation
+              data={passation}
+              onChange={setPassation}
+              readOnly={readOnly}
+              activite={{ nom: activityName, type: activityType, montant: budgetTotalFCFA }}
+              lienPPM={`/planification/${projectCode}/ppm`}
+              action={boutonRetirer}
+            />
           </div>
         )}
 

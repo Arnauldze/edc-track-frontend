@@ -32,11 +32,6 @@ export function periodeDe(valeurs: unknown[]): Periode {
   return { debut: jours[0], fin: jours[jours.length - 1] };
 }
 
-/** Toutes les dates d'une liste d'objets (lignes du PPM, tâches…), quels que soient les champs. */
-export function periodeDesLignes(lignes: object[] | undefined): Periode {
-  return periodeDe((lignes ?? []).flatMap((ligne) => Object.values(ligne)));
-}
-
 export interface Chevauchement {
   avant: PhaseKey;
   apres: PhaseKey;

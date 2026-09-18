@@ -46,52 +46,32 @@ export interface EtapePassation {
 }
 
 /**
- * Ligne du plan de passation des marchés (PPM), telle que la saisit le tableau :
- * tout est du texte, une étape non renseignée vaut "". Voir lib/passationApi.ts
- * pour la conversion vers et depuis l'API.
+ * Étape du marché d'une activité : une colonne datée du tableau de passation.
+ * Une étape du modèle PPM a pour clé son code (saisineCIPM…), une étape
+ * ajoutée à la main une clé générée (voir lib/passationEtapes.ts).
  */
-export interface LignePassation {
-  numero: string;
+export interface ColonnePassation {
+  cle: string;
   designation: string;
-  typeAO: string;
-  typePrestation: string;
-  montantPrevisionnel: string;
-  sourceFinancement: string;
-  imputationBudgetaire: string;
-  // Processus de sélection
-  saisineCIPM: string;
-  examenDAOCIPM: string;
-  nonObjectionBF1: string;
-  lancementAO: string;
-  depouillementOffres: string;
-  rapportAnalyseSCA: string;
-  examenRapportCIPM: string;
-  nonObjectionBF2: string;
-  // Offres financières
-  ouvertureOF: string;
-  rapportAnalyseOF: string;
-  propositionAttributionCIPM: string;
-  nonObjectionBF3: string;
-  publicationResultats: string;
-  // Contractualisation
-  souscriptionMarche: string;
-  saisineCIPM2: string;
-  examenMarcheCIPM: string;
-  visaCA: string;
-  nonObjectionBF4: string;
-  signatureMarche: string;
-  notificationMarche: string;
-  enregistrementMarche: string;
-  // Synthèse et exécution
-  delaiGlobalPassation: string;
-  osDeDemarrage: string;
-  delaiGlobalExecution: string;
-  dateReceptionProvisoire: string;
-  periodeGarantie: string;
-  dateReceptionDefinitive: string;
+  groupe: 'selection' | 'offres' | 'contractualisation';
+  /** AAAA-MM-JJ à la saisie ; date ISO en retour de l'API. */
+  date?: string;
+  /** Étape à réponse fermée (VISA CA). */
+  choix?: 'OUI' | 'NON' | 'N/A';
 }
 
-/** La même ligne côté API : dates et nombres, étapes non renseignées absentes. */
+/** Colonnes « Synthèse et exécution » du marché, saisies à la main. */
+export interface SynthesePassation {
+  osDeDemarrage?: string;
+  /** Jours. */
+  delaiGlobalExecution?: number;
+  dateReceptionProvisoire?: string;
+  /** Jours. */
+  periodeGarantie?: number;
+  dateReceptionDefinitive?: string;
+}
+
+/** Ancien tableau à colonnes figées (un marché par ligne), gardé pour lecture : dates et nombres, étapes non renseignées absentes. */
 export interface LignePassationApi {
   numero: string;
   designation?: string;
@@ -193,6 +173,13 @@ export interface Planning {
   typePassation?: string;
   etapesPassation: EtapePassation[];
   lignesPassation: LignePassationApi[];
+  // Marché de l'activité
+  typeAO?: string;
+  sourceFinancement?: string;
+  imputationBudgetaire?: string;
+  responsablePassation?: string;
+  colonnesPassation?: ColonnePassation[];
+  synthesePassation?: SynthesePassation;
   dateDebutPassation?: Date;
   dateFinPassation?: Date;
   
@@ -234,6 +221,12 @@ export interface CreatePlanningDto {
   typePassation?: string;
   etapesPassation?: EtapePassation[];
   lignesPassation?: LignePassationApi[];
+  typeAO?: string;
+  sourceFinancement?: string;
+  imputationBudgetaire?: string;
+  responsablePassation?: string;
+  colonnesPassation?: ColonnePassation[];
+  synthesePassation?: SynthesePassation;
   dateDebutPassation?: Date;
   dateFinPassation?: Date;
   tachesExecution?: TacheExecution[];
