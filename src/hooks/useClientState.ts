@@ -1,7 +1,6 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { SESSION_KEY, getCurrentSession, type AuthSession } from "@/lib/authStore";
 
 // ══════════════════════════════════════════════════════════════
 // ÉTATS CÔTÉ NAVIGATEUR
@@ -14,34 +13,6 @@ const noSubscription = () => () => {};
 /** Vrai une fois le composant monté dans le navigateur. */
 export function useHydrated() {
   return useSyncExternalStore(noSubscription, () => true, () => false);
-}
-
-// ── Session ──
-
-let sessionRaw: string | null = null;
-let sessionValue: AuthSession | null = null;
-
-function subscribeSession(onChange: () => void) {
-  window.addEventListener("auth-changed", onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener("auth-changed", onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-function readSession() {
-  const raw = sessionStorage.getItem(SESSION_KEY);
-  if (raw !== sessionRaw) {
-    sessionRaw = raw;
-    sessionValue = getCurrentSession();
-  }
-  return sessionValue;
-}
-
-/** Session de l'utilisateur connecté, mise à jour à la connexion et à la déconnexion. */
-export function useSession() {
-  return useSyncExternalStore(subscribeSession, readSession, () => null);
 }
 
 // ── Préférence persistée ──

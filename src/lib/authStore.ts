@@ -1,107 +1,37 @@
 // ══════════════════════════════════════════════════════════════
 // AUTH STORE — Session & Authentication
-// Connected to Backend API - NO HARDCODED DATA
+//
+// La session vit côté serveur : un cookie httpOnly porte le jeton, et
+// GET /auth/me donne l'identité et les droits à jour (hook useCurrentUser).
+// Rien n'est recopié dans sessionStorage : une copie locale finit toujours
+// par diverger du serveur — un rôle retiré resterait actif dans l'interface —
+// et un jeton stocké là est lisible par n'importe quel script injecté.
 // ══════════════════════════════════════════════════════════════
 
-import type { PlatformRole } from "./rbacStore";
 import { authService, type LoginRequest } from "@/services/api/authService";
+import { setAccessToken } from "@/services/api/client";
 
-// ── Types ──
+/** Connexion. Renvoie vrai si un mot de passe temporaire doit être remplacé. */
+export async function login(credentials: LoginRequest): Promise<{ mustChangePassword: boolean }> {
+  const reponse = await authService.login(credentials);
 
-export type AuthSession = {
-  userId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  platformRole: PlatformRole;
-  canCreateProjects?: boolean;
-  position?: string;
-  department?: string;
-  loginAt: string;
-};
+  setAccessToken(reponse.accessToken);
 
-export const SESSION_KEY = "edc_auth_session";
-const TOKEN_KEY = "jwt_token";
-
-// ── Session management ──
-
-/**
- * Login with backend API
- */
-export async function login(credentials: LoginRequest): Promise<AuthSession> {
-  const response = await authService.login(credentials);
-  
-  // Store JWT token
-  if (typeof window !== "undefined") {
-    sessionStorage.setItem(TOKEN_KEY, response.accessToken);
-  }
-  
-  // Store session
-  const session: AuthSession = {
-    userId: response.user.id,
-    firstName: response.user.firstName,
-    lastName: response.user.lastName,
-    email: response.user.email,
-    platformRole: response.user.platformRole,
-    canCreateProjects: response.user.canCreateProjects,
-    position: response.user.position,
-    department: response.user.department,
-    loginAt: new Date().toISOString(),
-  };
-  
-  if (typeof window !== "undefined") {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    window.dispatchEvent(new Event("auth-changed"));
-  }
-  
-  return session;
+  return { mustChangePassword: reponse.user?.mustChangePassword === true };
 }
 
 /**
- * Logout
+ * Déconnexion. Le serveur efface le cookie ; l'appelant vide le cache de
+ * requêtes (cf. useLogout) pour qu'aucune donnée du compte précédent ne
+ * subsiste dans l'onglet.
  */
 export async function logout(): Promise<void> {
-  if (typeof window === "undefined") return;
-  
   try {
     await authService.logout();
   } catch (error) {
+    // Le cookie a pu expirer : la session locale se termine quand même.
     console.error("Logout error:", error);
   } finally {
-    sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(TOKEN_KEY);
-    window.dispatchEvent(new Event("auth-changed"));
+    setAccessToken(null);
   }
-}
-
-export function getCurrentSession(): AuthSession | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const stored = sessionStorage.getItem(SESSION_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function getCurrentUserId(): string | null {
-  return getCurrentSession()?.userId ?? null;
-}
-
-export function isLoggedIn(): boolean {
-  return getCurrentSession() !== null;
-}
-
-export function isAdmin(): boolean {
-  return getCurrentSession()?.platformRole === "admin";
-}
-
-export function canCreateProjects(): boolean {
-  const session = getCurrentSession();
-  return session?.platformRole === "admin" || session?.canCreateProjects === true;
-}
-
-export function getJwtToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY);
 }

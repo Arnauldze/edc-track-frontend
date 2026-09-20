@@ -95,11 +95,19 @@ useEffect(() => { fetchData(); }, []);
 
 ## 🔐 Authentification
 
-Le token JWT est automatiquement:
-- Ajouté aux requêtes (intercepteur request)
-- Stocké dans `sessionStorage`
-- Vérifié à chaque requête
-- Supprimé en cas d'erreur 401 (redirection vers `/login`)
+La session vit dans un cookie `httpOnly` posé par l'API : le code de la page
+ne peut pas le lire, et rien n'est écrit dans `sessionStorage`.
+
+- `withCredentials: true` : le navigateur joint le cookie à chaque requête
+- Le jeton reçu à la connexion est gardé **en mémoire** le temps de l'onglet et
+  envoyé en `Authorization` : repli utile quand le cookie n'arrive pas
+  (interface et API sur deux domaines)
+- Une erreur 401 efface cette copie et renvoie vers `/login?next=<page>` —
+  sauf sur les routes `/auth/*`, qui portent leur propre message d'erreur
+- L'identité et les droits viennent de `GET /auth/me` (hook `useCurrentUser`),
+  jamais d'une copie conservée dans le navigateur
+
+Voir `backend/doc/authentification.md` pour le déploiement.
 
 ## 🛠️ Configuration
 

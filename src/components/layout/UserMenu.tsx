@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import Link from "next/link";
+import { ChevronsUpDown, KeyRound, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { logout } from "@/lib/authStore";
-import { useSession } from "@/hooks/useClientState";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useLogout } from "@/hooks/useLogout";
 import { Avatar } from "@/components/ui/avatar";
 
 // ══════════════════════════════════════════════════════════════
@@ -12,9 +13,9 @@ import { Avatar } from "@/components/ui/avatar";
 // ══════════════════════════════════════════════════════════════
 
 export function UserMenu({ collapsed }: { collapsed: boolean }) {
-  const session = useSession();
+  const { data: session } = useCurrentUser();
+  const { seDeconnecter, enCours: leaving } = useLogout();
   const [open, setOpen] = useState(false);
-  const [leaving, setLeaving] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,12 +36,6 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
 
   const fullName = `${session.firstName} ${session.lastName}`.trim();
   const role = session.platformRole === "admin" ? "Administrateur" : session.position || "Utilisateur";
-
-  const handleLogout = async () => {
-    setLeaving(true);
-    await logout();
-    window.location.href = "/login";
-  };
 
   return (
     <div ref={rootRef} className="relative">
@@ -87,11 +82,20 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
             </div>
           </div>
           <div className="p-1.5">
+            <Link
+              href="/mot-de-passe"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-inset"
+            >
+              <KeyRound aria-hidden className="size-4" />
+              Changer mon mot de passe
+            </Link>
             <button
               type="button"
               role="menuitem"
               disabled={leaving}
-              onClick={handleLogout}
+              onClick={seDeconnecter}
               className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium text-danger transition-colors hover:bg-danger-subtle disabled:opacity-45"
             >
               <LogOut aria-hidden className="size-4" />

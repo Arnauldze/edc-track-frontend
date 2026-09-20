@@ -1,7 +1,6 @@
 "use client";
 
 import { ThemeProvider } from "next-themes";
-import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
 // Les providers enveloppent l'arbre dès le rendu serveur : les court-circuiter
@@ -12,9 +11,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <ReactQueryProvider>
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-                <AuthProvider>
-                    {children}
-                </AuthProvider>
+                {children}
             </ThemeProvider>
         </ReactQueryProvider>
     );

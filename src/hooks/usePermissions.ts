@@ -11,12 +11,11 @@
 // ══════════════════════════════════════
 
 import { useCallback, useEffect, useState } from "react";
-import { getCurrentSession, type AuthSession } from "@/lib/authStore";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { projectService } from "@/services/api/projectService";
 import { SUPERVISION_ROLES, type Permission, type PlatformRole, type ProjectRole } from "@/lib/rbacStore";
 
 export type UsePermissionsReturn = {
-  session: AuthSession | null;
   platformRole: PlatformRole | null;
   /** Rôles détenus sur le projet (vide hors projet ou si non membre). */
   roles: ProjectRole[];
@@ -38,20 +37,16 @@ export type UsePermissionsReturn = {
 };
 
 export function usePermissions(projectId?: string): UsePermissionsReturn {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  // Le rôle de plateforme vient du serveur, comme les permissions de projet :
+  // une copie gardée dans le navigateur resterait « admin » après un rôle
+  // retiré, jusqu'à la prochaine connexion.
+  const { data: utilisateur } = useCurrentUser();
   const [roles, setRoles] = useState<ProjectRole[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [canAccessInitialisation, setCanAccessInitialisation] = useState(false);
   const [uploadScope, setUploadScope] = useState<{ paths: string[] | null; labels: string[] }>({ paths: [], labels: [] });
   // Projet dont les permissions sont chargées : le chargement se déduit de l'écart.
   const [loadedProjectId, setLoadedProjectId] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    setSession(getCurrentSession());
-    const handleAuthChange = () => setSession(getCurrentSession());
-    window.addEventListener("auth-changed", handleAuthChange);
-    return () => window.removeEventListener("auth-changed", handleAuthChange);
-  }, []);
 
   useEffect(() => {
     if (!projectId) return;
@@ -83,7 +78,7 @@ export function usePermissions(projectId?: string): UsePermissionsReturn {
     };
   }, [projectId]);
 
-  const platformRole = session?.platformRole ?? null;
+  const platformRole = (utilisateur?.platformRole as PlatformRole | undefined) ?? null;
   const isAdmin = platformRole === "admin";
 
   const can = useCallback((permission: Permission) => permissions.includes(permission), [permissions]);
@@ -100,7 +95,6 @@ export function usePermissions(projectId?: string): UsePermissionsReturn {
   );
 
   return {
-    session,
     platformRole,
     roles,
     can,
@@ -112,6 +106,6 @@ export function usePermissions(projectId?: string): UsePermissionsReturn {
     uploadScope,
     canUploadIn,
     loading: Boolean(projectId) && loadedProjectId !== projectId,
-    isAuthenticated: session !== null,
+    isAuthenticated: Boolean(utilisateur),
   };
 }

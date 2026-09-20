@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { AlertCircle, Eye, EyeOff, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,20 @@ import { Input } from "@/components/ui/input";
 import { login } from "@/lib/authStore";
 import { getErrorMessage } from "@/services/api/client";
 
+/**
+ * Destination d'après-connexion. Le paramètre vient de l'adresse, donc de
+ * l'extérieur : seuls les chemins internes sont suivis, sinon un lien
+ * « /login?next=https://… » renverrait vers un site tiers après une
+ * connexion parfaitement normale.
+ */
+function destinationSure(brut: string | null): string {
+  if (!brut || !brut.startsWith("/") || brut.startsWith("//")) return "/dashboard";
+  return brut;
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -24,8 +37,15 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      await login({ login: loginId, password });
-      router.push("/dashboard");
+      const { mustChangePassword } = await login({ login: loginId, password });
+
+      // Rien du compte précédent ne doit rester en cache dans cet onglet.
+      queryClient.clear();
+
+      const suite = destinationSure(new URLSearchParams(window.location.search).get("next"));
+      router.replace(
+        mustChangePassword ? `/mot-de-passe?next=${encodeURIComponent(suite)}` : suite,
+      );
     } catch (err) {
       setError(getErrorMessage(err));
       setLoading(false);
@@ -85,14 +105,13 @@ export default function LoginPage() {
               <Input
                 id="login"
                 name="login"
-                autoComplete="off"
+                autoComplete="username"
                 required
                 placeholder="Votre identifiant"
                 leftIcon={User}
                 value={loginId}
                 onChange={(event) => setLoginId(event.target.value)}
                 className="h-10"
-                data-form-type="other"
               />
             </Field>
 
@@ -101,14 +120,13 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
-                autoComplete="off"
+                autoComplete="current-password"
                 required
                 placeholder="Votre mot de passe"
                 leftIcon={Lock}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="h-10"
-                data-form-type="password"
                 rightIcon={
                   <Button
                     variant="ghost"
@@ -128,10 +146,14 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p className="rounded-md border border-line bg-inset px-3 py-2.5 text-center text-xs text-fg-muted">
-            Démo : identifiant <code className="rounded-sm bg-surface px-1.5 py-0.5 font-mono text-fg">admin</code>, mot de passe{" "}
-            <code className="rounded-sm bg-surface px-1.5 py-0.5 font-mono text-fg">admin123</code>
-          </p>
+          {/* Jamais dans une version déployée : ce serait publier un compte. */}
+          {process.env.NODE_ENV !== "production" && (
+            <p className="rounded-md border border-line bg-inset px-3 py-2.5 text-center text-xs text-fg-muted">
+              Démo (développement) : identifiant{" "}
+              <code className="rounded-sm bg-surface px-1.5 py-0.5 font-mono text-fg">admin</code>, mot de passe{" "}
+              <code className="rounded-sm bg-surface px-1.5 py-0.5 font-mono text-fg">admin123</code>
+            </p>
+          )}
         </div>
       </main>
     </div>
