@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { Hammer } from "lucide-react";
 import type { TacheExecution } from "@/services/api/planningService";
 import type { ActivityType } from "@/lib/activityTypes";
-import type { ModeFin } from "@/lib/livrableSchedule";
+import type { Calendrier, ModeFin } from "@/lib/livrableSchedule";
 import { PlanningCalendrierForm, nouvelleLigne, type PhaseCalendrier } from "./PlanningCalendrierForm";
 
 /**
@@ -45,6 +45,8 @@ interface Props {
   taches: TacheExecution[];
   onChange: (taches: TacheExecution[]) => void;
   dateT0: string;
+  /** Jours travaillés de l'activité. */
+  calendrierTravail?: Calendrier;
   readOnly: boolean;
   /** Nature de l'activité : elle décide du type de planification proposé. */
   typeActivite?: ActivityType;
@@ -54,13 +56,14 @@ interface Props {
   action?: ReactNode;
 }
 
-export function PlanningFormExecution({ taches, onChange, dateT0, readOnly, typeActivite, controleDemande, action }: Props) {
+export function PlanningFormExecution({ taches, onChange, dateT0, calendrierTravail, readOnly, typeActivite, controleDemande, action }: Props) {
   return (
     <PlanningCalendrierForm
       phase={phaseExecution(typeActivite)}
       lignes={taches}
       onChange={onChange}
       dateT0={dateT0}
+      calendrierTravail={calendrierTravail}
       readOnly={readOnly}
       controleDemande={controleDemande}
       action={action}

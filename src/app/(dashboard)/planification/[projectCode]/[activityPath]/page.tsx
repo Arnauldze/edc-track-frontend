@@ -27,7 +27,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigationGuard } from "@/contexts/NavigationGuardContext";
 import { findUnit, listUnits } from "@/lib/structureUnits";
 import { wbsNumbers } from "@/lib/structureOps";
-import { calculerCalendrierEtude, toDay } from "@/lib/livrableSchedule";
+import { CALENDRIER_PAR_DEFAUT, calculerCalendrierEtude, normaliserCalendrier, toDay, type Calendrier } from "@/lib/livrableSchedule";
 import { PHASE_LABELS, PHASE_ORDER, periodeDe, type PhaseKey } from "@/lib/phaseTimeline";
 import { toFCFA } from "@/lib/componentBudget";
 import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
@@ -72,6 +72,8 @@ export default function ActivityPlanningPage() {
   const [budgetInitial, setBudgetInitial] = useState<Budget[]>(BUDGET_VIDE);
   const [dateT0, setDateT0] = useState("");
   const [responsablePrincipal, setResponsablePrincipal] = useState("");
+  // Jours travaillés de l'activité : ils décident des durées et des échéances.
+  const [calendrier, setCalendrier] = useState<Calendrier>(CALENDRIER_PAR_DEFAUT);
 
   // Données des phases
   const [livrables, setLivrables] = useState<Livrable[]>([nouveauLivrable("R1")]);
@@ -98,6 +100,7 @@ export default function ActivityPlanningPage() {
     setBudgetInitial(p.budgetInitial?.length ? p.budgetInitial : BUDGET_VIDE);
     setDateT0(toDay(p.dateDebutInitiale as unknown as string) ?? "");
     setResponsablePrincipal(p.responsablePrincipal || "");
+    setCalendrier(normaliserCalendrier(p.calendrier));
     setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
     // Une passation saisie dans l'ancien tableau reprend sa première ligne ;
     // une passation jamais planifiée part des colonnes du modèle.
@@ -130,12 +133,12 @@ export default function ActivityPlanningPage() {
   // Chaque partie est comparée à son état au dernier chargement ou enregistrement.
   const sections = useMemo(
     () => ({
-      general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal }),
+      general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal, calendrier }),
       etude: JSON.stringify(hasEtudePrealable ? livrables.map(livrablePourApi) : null),
       passation: JSON.stringify(hasPassation ? passation : null),
       execution: JSON.stringify(hasExecution ? taches.map(tachePourApi) : null),
     }),
-    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches],
   );
   /** Tout ce qui se saisit sur cette page, pour le brouillon automatique. */
   const etatFormulaire = useMemo(
@@ -143,6 +146,7 @@ export default function ActivityPlanningPage() {
       budgetInitial,
       dateT0,
       responsablePrincipal,
+      calendrier,
       hasEtudePrealable,
       hasPassation,
       hasExecution,
@@ -150,7 +154,7 @@ export default function ActivityPlanningPage() {
       passation,
       taches,
     }),
-    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches],
   );
 
   const sectionsRef = useRef(sections);
@@ -186,6 +190,7 @@ export default function ActivityPlanningPage() {
     setBudgetInitial(e.budgetInitial);
     setDateT0(e.dateT0);
     setResponsablePrincipal(e.responsablePrincipal);
+    setCalendrier(e.calendrier ?? CALENDRIER_PAR_DEFAUT);
     setHasEtudePrealable(e.hasEtudePrealable);
     setHasPassation(e.hasPassation);
     setHasExecution(e.hasExecution);
@@ -268,9 +273,9 @@ export default function ActivityPlanningPage() {
     [hasEtudePrealable, livrables, hasExecution, taches],
   );
 
-  const calendrierEtude = useMemo(() => calculerCalendrierEtude(livrables, dateT0), [livrables, dateT0]);
+  const calendrierEtude = useMemo(() => calculerCalendrierEtude(livrables, dateT0, calendrier), [livrables, dateT0, calendrier]);
   const problemesEtude = useMemo(() => [...new Set(calendrierEtude.problemes.map((p) => p.message))], [calendrierEtude]);
-  const calendrierExecution = useMemo(() => calculerCalendrierEtude(taches, dateT0), [taches, dateT0]);
+  const calendrierExecution = useMemo(() => calculerCalendrierEtude(taches, dateT0, calendrier), [taches, dateT0, calendrier]);
   const problemesExecution = useMemo(() => [...new Set(calendrierExecution.problemes.map((p) => p.message))], [calendrierExecution]);
 
   const phases: PhaseSummary[] = useMemo(() => {
@@ -376,6 +381,7 @@ export default function ActivityPlanningPage() {
         budgetInitialTotal: Math.round(budgetTotalFCFA),
         dateDebutInitiale: dateT0 || undefined,
         responsablePrincipal: responsablePrincipal || undefined,
+        calendrier,
         // Une phase retirée n'emporte pas ses données
         livrables: hasEtudePrealable ? livrables.map(livrablePourApi) : [],
         // Une phase retirée n'emporte pas son marché
@@ -552,6 +558,8 @@ export default function ActivityPlanningPage() {
             budgetTotalFCFA={budgetTotalFCFA}
             responsable={responsablePrincipal}
             onResponsable={setResponsablePrincipal}
+            calendrier={calendrier}
+            onCalendrier={setCalendrier}
             readOnly={readOnly}
           />
           {modifiees.general && <span className="size-2 rounded-full bg-accent" title="Modifications non enregistrées" />}
@@ -608,6 +616,7 @@ export default function ActivityPlanningPage() {
               livrables={livrables}
               onChange={setLivrables}
               dateT0={dateT0}
+              calendrierTravail={calendrier}
               readOnly={readOnly}
               controleDemande={controleDemande}
               action={boutonRetirer}
@@ -634,6 +643,7 @@ export default function ActivityPlanningPage() {
               taches={taches}
               onChange={setTaches}
               dateT0={dateT0}
+              calendrierTravail={calendrier}
               readOnly={readOnly}
               typeActivite={activityType}
               controleDemande={controleDemande}

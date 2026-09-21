@@ -29,10 +29,49 @@
 //   Le décalage peut être négatif (T3FD-1sem = une semaine avant la fin de T3)
 //   et son unité vaut le jour par défaut (T3FD+5 = cinq jours).
 //   Les liaisons fin à fin et début à fin ne sont pas gérées.
+//
+// Calendrier. Le régime dit quels jours comptent : tous (calendaire), ou bien
+// seulement les jours ouvrés, du lundi au vendredi ou du lundi au samedi, les
+// jours chômés supplémentaires étant listés à part. Il ne change que les jours
+// et les semaines : un mois reste un mois de calendrier, sa date de fin étant
+// simplement repoussée au prochain jour ouvré.
+//
+// Deux notions à ne pas confondre dès qu'on compte en jours ouvrés :
+//   durée     une tâche de 3 jours commencée le lundi finit le mercredi — le
+//             dernier jour travaillé est compris (finDeDuree / dureeEntre) ;
+//   décalage  « +2 jours » après la fin du prédécesseur reste un décalage : il
+//             saute les jours chômés sans en compter aucun (ajouter / ecart).
 // ══════════════════════════════════════════════════════════════
 
 export type Unite = 'jours' | 'semaines' | 'mois';
 export type ModeFin = 'duree' | 'delai' | 'fin';
+
+/** Jours travaillés retenus pour l'activité. */
+export type RegimeCalendrier = 'calendaire' | 'lun-ven' | 'lun-sam';
+
+export interface Calendrier {
+  regime: RegimeCalendrier;
+  /** Jours chômés en plus du régime : fériés, congés, saison des pluies… */
+  feries?: string[];
+}
+
+/**
+ * Tous les jours comptent tant que personne n'a choisi de régime : une
+ * planification déjà enregistrée garde exactement ses dates.
+ */
+export const CALENDRIER_PAR_DEFAUT: Calendrier = { regime: 'calendaire' };
+
+export const JOURS_OUVRES_SEMAINE: Record<RegimeCalendrier, number> = {
+  calendaire: 7,
+  'lun-ven': 5,
+  'lun-sam': 6,
+};
+
+export const LIBELLE_REGIME: Record<RegimeCalendrier, string> = {
+  calendaire: 'Jours calendaires — 7 jours sur 7',
+  'lun-ven': 'Du lundi au vendredi — 5 jours',
+  'lun-sam': 'Du lundi au samedi — 6 jours',
+};
 
 /** Fin à début (la plus courante) ou début à début. */
 export type TypeLiaison = 'FD' | 'DD';
@@ -154,8 +193,80 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 export const normaliserUnite = (unite: string | undefined, parDefaut: Unite = 'mois'): Unite =>
   unite === 'jours' || unite === 'semaines' || unite === 'mois' ? unite : parDefaut;
 
-/** Ajoute une quantité (éventuellement décimale) exprimée dans une unité. */
-export function ajouter(day: string, quantite: number, unite: Unite): string {
+// ── Jours ouvrés ──
+
+/**
+ * Garde-fou : un calendrier qui ne laisserait aucun jour travaillé — tous les
+ * jours déclarés chômés — ferait boucler les parcours. Dix ans de jours.
+ */
+const LIMITE_PARCOURS = 3660;
+
+/** 0 = dimanche, 6 = samedi. */
+const jourDeSemaine = (day: string) => new Date(utc(day)).getUTCDay();
+
+/** Calendrier lu d'un enregistrement, où il peut manquer ou être incomplet. */
+export function normaliserCalendrier(
+  valeur: { regime?: string; feries?: Array<string | Date | undefined | null> } | undefined | null,
+): Calendrier {
+  const regime = valeur?.regime;
+  if (regime !== 'lun-ven' && regime !== 'lun-sam') return CALENDRIER_PAR_DEFAUT;
+  const feries = (valeur?.feries ?? []).map((f) => toDay(f)).filter((f): f is string => !!f);
+  return { regime, feries };
+}
+
+/** Ce jour est-il travaillé ? Toujours vrai en régime calendaire. */
+export function estOuvre(day: string, calendrier: Calendrier = CALENDRIER_PAR_DEFAUT): boolean {
+  if (calendrier.regime === 'calendaire') return true;
+  const jour = jourDeSemaine(day);
+  if (jour === 0) return false;
+  if (jour === 6 && calendrier.regime === 'lun-ven') return false;
+  return !calendrier.feries?.includes(day);
+}
+
+/** Ce jour s'il est travaillé, sinon le prochain qui l'est — ou le précédent si sens vaut -1. */
+export function prochainJourOuvre(day: string, calendrier: Calendrier = CALENDRIER_PAR_DEFAUT, sens: 1 | -1 = 1): string {
+  let courant = day;
+  for (let garde = 0; garde < LIMITE_PARCOURS && !estOuvre(courant, calendrier); garde++) {
+    courant = fromUtc(utc(courant) + sens * DAY_MS);
+  }
+  return courant;
+}
+
+/** Avance de n jours travaillés sans compter celui du départ ; recule si n est négatif. */
+function avancerOuvres(day: string, n: number, calendrier: Calendrier): string {
+  if (n === 0) return day;
+  const pas = n < 0 ? -DAY_MS : DAY_MS;
+  const plafond = Math.abs(n) * 7 + LIMITE_PARCOURS;
+  let reste = Math.abs(n);
+  let courant = day;
+  for (let garde = 0; reste > 0 && garde < plafond; garde++) {
+    courant = fromUtc(utc(courant) + pas);
+    if (estOuvre(courant, calendrier)) reste--;
+  }
+  return courant;
+}
+
+/**
+ * Jours travaillés de `debut` compris à `fin` exclu — négatif si `fin` précède
+ * `debut`. C'est l'inverse exact de l'avance en jours ouvrés, donc la bonne
+ * mesure d'un décalage ; pour une durée, voir `dureeEntre`.
+ */
+export function joursOuvresEntre(debut: string, fin: string, calendrier: Calendrier = CALENDRIER_PAR_DEFAUT): number {
+  if (debut === fin) return 0;
+  const signe = fin < debut ? -1 : 1;
+  const [a, b] = signe < 0 ? [fin, debut] : [debut, fin];
+  if (calendrier.regime === 'calendaire') return signe * Math.round((utc(b) - utc(a)) / DAY_MS);
+  let compte = 0;
+  for (let jour = a; jour < b; jour = fromUtc(utc(jour) + DAY_MS)) {
+    if (estOuvre(jour, calendrier)) compte++;
+  }
+  return signe * compte;
+}
+
+// ── Arithmétique des dates ──
+
+/** Arithmétique de calendrier, tous les jours comptant. */
+function ajouterCalendaire(day: string, quantite: number, unite: Unite): string {
   if (unite === 'jours') return fromUtc(utc(day) + Math.round(quantite) * DAY_MS);
   if (unite === 'semaines') return fromUtc(utc(day) + Math.round(quantite * 7) * DAY_MS);
   const entiers = Math.trunc(quantite);
@@ -166,8 +277,27 @@ export function ajouter(day: string, quantite: number, unite: Unite): string {
   return fromUtc(utc(base) + Math.round(reste * daysInMonth(y, m - 1)) * DAY_MS);
 }
 
-/** Écart entre deux jours dans une unité ; en mois, mois entiers plus fraction du mois suivant. */
-export function ecart(from: string, to: string, unite: Unite): number {
+/**
+ * Ajoute un décalage exprimé dans une unité : le jour de départ n'est jamais
+ * compté. En jours ouvrés, les jours chômés sont sautés ; un mois reste un
+ * mois de calendrier, la date obtenue étant repoussée au prochain jour ouvré.
+ */
+export function ajouter(day: string, quantite: number, unite: Unite, calendrier: Calendrier = CALENDRIER_PAR_DEFAUT): string {
+  if (calendrier.regime === 'calendaire') return ajouterCalendaire(day, quantite, unite);
+  if (unite === 'jours') return avancerOuvres(day, Math.round(quantite), calendrier);
+  if (unite === 'semaines') return avancerOuvres(day, Math.round(quantite * JOURS_OUVRES_SEMAINE[calendrier.regime]), calendrier);
+  return prochainJourOuvre(ajouterCalendaire(day, quantite, unite), calendrier);
+}
+
+/**
+ * Écart entre deux jours dans une unité — inverse de `ajouter`, donc le jour
+ * d'arrivée est exclu. En mois : mois entiers plus fraction du mois suivant.
+ */
+export function ecart(from: string, to: string, unite: Unite, calendrier: Calendrier = CALENDRIER_PAR_DEFAUT): number {
+  if (calendrier.regime !== 'calendaire' && unite !== 'mois') {
+    const ouvres = joursOuvresEntre(from, to, calendrier);
+    return unite === 'jours' ? ouvres : round2(ouvres / JOURS_OUVRES_SEMAINE[calendrier.regime]);
+  }
   const jours = Math.round((utc(to) - utc(from)) / DAY_MS);
   if (unite === 'jours') return jours;
   if (unite === 'semaines') return round2(jours / 7);
@@ -179,6 +309,30 @@ export function ecart(from: string, to: string, unite: Unite): number {
   const suivant = addMonths(a, mois + 1);
   const fraction = (utc(b) - utc(palier)) / (utc(suivant) - utc(palier));
   return signe * round2(mois + fraction);
+}
+
+/**
+ * Fin d'une tâche qui occupe `duree` unités à partir de `debut`.
+ *
+ * En jours ouvrés, le dernier jour travaillé est compris, comme dans MS
+ * Project : trois jours à partir du lundi se terminent le mercredi, et un
+ * début tombant un jour chômé est reporté au prochain jour travaillé. En
+ * régime calendaire — et pour les mois dans tous les cas — c'est
+ * l'arithmétique des dates, inchangée.
+ */
+export function finDeDuree(debut: string, duree: number, unite: Unite, calendrier: Calendrier = CALENDRIER_PAR_DEFAUT): string {
+  if (calendrier.regime === 'calendaire' || unite === 'mois') return ajouter(debut, duree, unite, calendrier);
+  const jours =
+    unite === 'semaines' ? Math.round(duree * JOURS_OUVRES_SEMAINE[calendrier.regime]) : Math.round(duree);
+  const premier = prochainJourOuvre(debut, calendrier);
+  return jours <= 1 ? premier : avancerOuvres(premier, jours - 1, calendrier);
+}
+
+/** Durée entre deux dates, dernier jour travaillé compris : inverse de `finDeDuree`. */
+export function dureeEntre(debut: string, fin: string, unite: Unite, calendrier: Calendrier = CALENDRIER_PAR_DEFAUT): number {
+  if (calendrier.regime === 'calendaire' || unite === 'mois') return ecart(debut, fin, unite, calendrier);
+  const jours = joursOuvresEntre(debut, fin, calendrier) + (estOuvre(fin, calendrier) ? 1 : 0);
+  return unite === 'semaines' ? round2(jours / JOURS_OUVRES_SEMAINE[calendrier.regime]) : jours;
 }
 
 // ── Liaisons ──
@@ -401,13 +555,24 @@ export function deplacerLigne<T extends LivrableSaisi>(
   return renumeroterLignes(raccordees, prefixe);
 }
 
-/** Date d'ancrage d'une liaison : fin du prédécesseur, ou son début en début à début. */
-const ancreDe = (liaison: Liaison, predecesseur: LivrableCalcule | undefined) =>
-  liaison.type === 'DD' ? predecesseur?.dateDebut : predecesseur?.dateFin;
+/**
+ * Date d'ancrage d'une liaison : le début du prédécesseur en début à début,
+ * sinon sa fin.
+ *
+ * En jours ouvrés, cette fin est le DERNIER jour travaillé de la ligne : le
+ * successeur enchaîne donc le jour travaillé suivant, sans quoi les deux se
+ * chevaucheraient d'une journée. En régime calendaire, la fin est déjà la
+ * date d'enchaînement et rien ne change.
+ */
+const ancreDe = (liaison: Liaison, predecesseur: LivrableCalcule | undefined, calendrier: Calendrier) => {
+  if (liaison.type === 'DD') return predecesseur?.dateDebut;
+  const fin = predecesseur?.dateFin;
+  return fin && calendrier.regime !== 'calendaire' ? ajouter(fin, 1, 'jours', calendrier) : fin;
+};
 
 /** Applique un décalage, en laissant la date intacte quand il est nul. */
-const decaler = (jour: string | undefined, quantite: number, unite: Unite) =>
-  jour && quantite !== 0 ? ajouter(jour, quantite, unite) : jour;
+const decaler = (jour: string | undefined, quantite: number, unite: Unite, calendrier: Calendrier) =>
+  jour && quantite !== 0 ? ajouter(jour, quantite, unite, calendrier) : jour;
 
 // ── Calcul ──
 
@@ -429,8 +594,10 @@ function modeParDefaut(l: LivrableSaisi): ModeFin {
 export function calculerCalendrierEtude<T extends LivrableSaisi>(
   livrables: T[],
   dateT0?: string | Date | null,
+  calendrier: Calendrier = CALENDRIER_PAR_DEFAUT,
 ): CalendrierEtude<T> {
-  const t0 = toDay(dateT0);
+  const t0raw = toDay(dateT0);
+  const t0 = t0raw ? prochainJourOuvre(t0raw, calendrier) : undefined;
   const problemes: ProblemeLivrable[] = [];
   const numeros = livrables.map((l) => (l.numero ?? '').trim());
   const indexParNumero = new Map<string, number>();
@@ -504,20 +671,22 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
     const lien = enBoucle.has(index) ? undefined : liens[index];
 
     const debutFixe = lien === undefined && (saisi.debutFixe ?? !!toDay(saisi.dateDebut)) && !!toDay(saisi.dateDebut);
-    const debut = lien
-      ? decaler(ancreDe(lien, resultats[lien.index]), lien.decalage, lien.unite)
+    const debutBrut = lien
+      ? decaler(ancreDe(lien, resultats[lien.index], calendrier), lien.decalage, lien.unite, calendrier)
       : debutFixe
         ? toDay(saisi.dateDebut)
         : t0;
+    // Un début tombant un jour chômé est reporté au prochain jour travaillé.
+    const debut = debutBrut ? prochainJourOuvre(debutBrut, calendrier) : undefined;
 
     let fin: string | undefined;
     if (modeFin === 'duree') {
-      if (debut && positif(saisi.duree)) fin = ajouter(debut, saisi.duree, dureeUnite);
+      if (debut && positif(saisi.duree)) fin = finDeDuree(debut, saisi.duree, dureeUnite, calendrier);
       else if (!debut && positif(saisi.duree)) {
         problemes.push({ numero, index, champ: 'dateDebut', message: `${numero} : indiquez une date de début, un prédécesseur ou la date T0.` });
       }
     } else if (modeFin === 'delai') {
-      if (t0 && typeof saisi.delai === 'number' && saisi.delai >= 0) fin = ajouter(t0, saisi.delai, delaiUnite);
+      if (t0 && typeof saisi.delai === 'number' && saisi.delai >= 0) fin = ajouter(t0, saisi.delai, delaiUnite, calendrier);
       else if (!t0) problemes.push({ numero, index, champ: 'delai', message: `${numero} : le délai se compte depuis T0, qui n'est pas définie.` });
     } else {
       fin = toDay(saisi.dateFin);
@@ -540,8 +709,8 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
       debutFixe,
       dateFin: fin,
       dateEcheance: fin,
-      duree: modeFin === 'duree' ? saisi.duree : debut && fin ? ecart(debut, fin, dureeUnite) : undefined,
-      delai: modeFin === 'delai' ? saisi.delai : t0 && fin ? ecart(t0, fin, delaiUnite) : undefined,
+      duree: modeFin === 'duree' ? saisi.duree : debut && fin ? dureeEntre(debut, fin, dureeUnite, calendrier) : undefined,
+      delai: modeFin === 'delai' ? saisi.delai : t0 && fin ? ecart(t0, fin, delaiUnite, calendrier) : undefined,
     };
   }
 
@@ -580,7 +749,9 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
       // Durée ramenée à zéro si l'échéance précède le début : la contrainte est
       // intenable et déjà signalée, elle ne doit pas inventer de la marge pour
       // le prédécesseur en remontant.
-      const dureeJours = ligne.dateDebut ? Math.max(0, ecart(ligne.dateDebut, ligne.dateFin, 'jours')) : 0;
+      // Mesurée à l'identique de l'avance : jour d'arrivée exclu, pour que
+      // l'aller et le retour se compensent exactement.
+      const dureeJours = ligne.dateDebut ? Math.max(0, ecart(ligne.dateDebut, ligne.dateFin, 'jours', calendrier)) : 0;
 
       // Ce que chaque successeur impose à la fin de cette ligne :
       //   fin à début   elle doit finir au plus tard au début au plus tard du
@@ -592,8 +763,13 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
           const tard = debutAuPlusTard[i];
           const lien = liens[i];
           if (!tard || !lien) return undefined;
-          const borne = decaler(tard, -lien.decalage, lien.unite)!;
-          return lien.type === 'DD' ? ajouter(borne, dureeJours, 'jours') : borne;
+          const recule = decaler(tard, -lien.decalage, lien.unite, calendrier)!;
+          // Miroir de `ancreDe` : en jours ouvrés, une liaison fin à début
+          // fait enchaîner le successeur le jour travaillé SUIVANT, donc le
+          // prédécesseur doit finir un jour travaillé plus tôt.
+          const borne =
+            lien.type === 'FD' && calendrier.regime !== 'calendaire' ? ajouter(recule, -1, 'jours', calendrier) : recule;
+          return lien.type === 'DD' ? ajouter(borne, dureeJours, 'jours', calendrier) : borne;
         })
         .filter((d): d is string => !!d)
         .sort();
@@ -604,9 +780,9 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
       // termine la phase.
       const finAuPlusTard = [finPhase, ...contraintes].sort()[0];
 
-      ligne.margeTotale = ecart(ligne.dateFin, finAuPlusTard, 'jours');
+      ligne.margeTotale = ecart(ligne.dateFin, finAuPlusTard, 'jours', calendrier);
       ligne.critique = ligne.margeTotale <= 0;
-      debutAuPlusTard[index] = ajouter(finAuPlusTard, -dureeJours, 'jours');
+      debutAuPlusTard[index] = ajouter(finAuPlusTard, -dureeJours, 'jours', calendrier);
     }
   }
 

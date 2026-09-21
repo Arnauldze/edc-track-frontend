@@ -10,7 +10,7 @@ import type { Planning, Livrable } from "@/services/api/planningService";
 import { planningService } from "@/services/api/planningService";
 import { projectService, type Component } from "@/services/api/projectService";
 import { toast } from "@/lib/toastStore";
-import { calculerCalendrierEtude, ecart, toDay, EXEMPLES_LIAISON } from "@/lib/livrableSchedule";
+import { calculerCalendrierEtude, ecart, normaliserCalendrier, toDay, EXEMPLES_LIAISON, type Calendrier } from "@/lib/livrableSchedule";
 import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
 import type { LigneCalendrier } from "./PlanningCalendrierForm";
 import { findUnit, listUnits, type UnitLevel } from "@/lib/structureUnits";
@@ -408,10 +408,11 @@ export function MSProjectViewV2({
       phase: PhaseLignes,
       livrables: LigneCalendrier[],
       level: number,
-      t0?: string,
+      t0: string | undefined,
+      calendrierTravail: Calendrier,
       reference?: Planning["reference"],
     ) => {
-      const { livrables: avecMarge } = calculerCalendrierEtude(livrables, t0);
+      const { livrables: avecMarge } = calculerCalendrierEtude(livrables, t0, calendrierTravail);
       avecMarge.forEach((liv) => {
         // Une ligne ajoutée après le figeage n'a pas de repère : pas d'écart,
         // ce qui n'est pas la même chose qu'un écart nul.
@@ -490,8 +491,8 @@ export function MSProjectViewV2({
             ),
           });
           if (expandedIds.has(node.id)) {
-            pushLivrables(node.id, "etude", livrables, level + 1, t0De(planning), planning?.reference);
-            pushLivrables(node.id, "execution", tachesExecution, level + 1, t0De(planning), planning?.reference);
+            pushLivrables(node.id, "etude", livrables, level + 1, t0De(planning), calDe(planning), planning?.reference);
+            pushLivrables(node.id, "execution", tachesExecution, level + 1, t0De(planning), calDe(planning), planning?.reference);
           }
           return;
         }
@@ -655,6 +656,9 @@ export function MSProjectViewV2({
   /** Date T0 d'une planification : point de départ des livrables sans prédécesseur ni début saisi. */
   const t0De = (planning?: Planning) => toDay((planning?.dateDebutInitiale ?? planning?.dateT0Etude) as string | undefined);
 
+  /** Jours travaillés de l'activité : ils décident des durées et des échéances. */
+  const calDe = (planning?: Planning) => normaliserCalendrier(planning?.calendrier);
+
   /** Dérive en jours entre une échéance de référence et l'échéance courante. */
   const ecartJours = (reference?: string, courante?: string) =>
     reference && courante ? ecart(reference, courante, "jours") : undefined;
@@ -685,7 +689,7 @@ export function MSProjectViewV2({
       : {};
 
     const modifies = currentLivrables.map((l, i) => (i === index ? { ...l, ...patch } : l));
-    const { livrables: calcules } = calculerCalendrierEtude(modifies, t0De(planning));
+    const { livrables: calcules } = calculerCalendrierEtude(modifies, t0De(planning), calDe(planning));
     setModifiedLivrables((prev) => new Map(prev).set(cleLignes(activityPath, phase), calcules));
     setHasChanges(true);
   };
@@ -696,7 +700,7 @@ export function MSProjectViewV2({
     for (const [cle, lignes] of modifiedLivrables.entries()) {
       const [activityPath, phase] = cle.split("|");
       const planning = plannings.find((p) => p.activityPath === activityPath);
-      const { problemes } = calculerCalendrierEtude(lignes, t0De(planning));
+      const { problemes } = calculerCalendrierEtude(lignes, t0De(planning), calDe(planning));
       const libelle = `${planning?.activityName ?? activityPath} (${phase === "etude" ? "étude" : "exécution"})`;
       [...new Set(problemes.map((p) => p.message))].forEach((m) => messages.push(`${libelle} : ${m}`));
     }

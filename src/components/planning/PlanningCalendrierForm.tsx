@@ -17,7 +17,11 @@ import { useMemo, useState, type ReactNode } from "react";
 import { AlertCircle, ArrowDown, ArrowUp, Info, ListPlus, Plus, Scale, Trash2, Upload } from "lucide-react";
 import { FileImportModal } from "./FileImportModal";
 import {
+  CALENDRIER_PAR_DEFAUT,
+  LIBELLE_REGIME,
   calculerCalendrierEtude,
+  type Calendrier,
+  type RegimeCalendrier,
   deplacerLigne,
   ecart,
   insererApresLigne,
@@ -98,6 +102,8 @@ interface Props<T extends LigneCalendrier> {
   onChange: (lignes: T[]) => void;
   /** Date T0 de l'activité (AAAA-MM-JJ). */
   dateT0: string;
+  /** Jours travaillés de l'activité : ils décident des durées et des échéances. */
+  calendrierTravail?: Calendrier;
   readOnly: boolean;
   /**
    * Le contrôle d'enregistrement a été demandé : les champs obligatoires
@@ -121,6 +127,13 @@ const UNITES: { value: Unite; label: string }[] = [
   { value: "semaines", label: "sem." },
   { value: "mois", label: "mois" },
 ];
+
+/** Rappel du régime, affiché à côté du titre de la phase. */
+const RESUME_REGIME: Record<RegimeCalendrier, string | null> = {
+  calendaire: null,
+  "lun-ven": "jours ouvrés, lun.–ven.",
+  "lun-sam": "jours ouvrés, lun.–sam.",
+};
 
 // Classes complètes (Tailwind ne détecte pas les classes composées à l'exécution)
 const GRID = "grid-cols-[56px_minmax(180px,1fr)_68px_84px_132px_128px_128px_132px_72px_100px]";
@@ -165,12 +178,16 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({
   lignes,
   onChange,
   dateT0,
+  calendrierTravail = CALENDRIER_PAR_DEFAUT,
   readOnly,
   controleDemande = false,
   action,
 }: Props<T>) {
   const [showImportModal, setShowImportModal] = useState(false);
-  const calendrier = useMemo(() => calculerCalendrierEtude(lignes, dateT0), [lignes, dateT0]);
+  const calendrier = useMemo(
+    () => calculerCalendrierEtude(lignes, dateT0, calendrierTravail),
+    [lignes, dateT0, calendrierTravail],
+  );
 
   const problemeDe = (index: number, champ: ChampLivrable) =>
     calendrier.problemes.find((p) => p.index === index && p.champ === champ)?.message;
@@ -331,6 +348,14 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({
           <div>
             <h2 className="text-sm font-bold text-fg flex items-center gap-2">
               {phase.icone} {phase.titre}
+              {RESUME_REGIME[calendrierTravail.regime] && (
+                <span
+                  className="rounded border border-line bg-inset px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted"
+                  title="Les durées en jours et en semaines ne comptent que les jours travaillés."
+                >
+                  {RESUME_REGIME[calendrierTravail.regime]}
+                </span>
+              )}
             </h2>
             <p className="text-[11px] text-fg-muted mt-0.5">{phase.description}</p>
           </div>
@@ -612,7 +637,15 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({
               </li>
               <li><strong>Parallèle</strong> : sans prédécesseur, elle commence à la date de début saisie, sinon à T0.</li>
               <li><strong>Successeurs</strong> : déduits automatiquement des prédécesseurs.</li>
-              <li><strong>Mois</strong> : mois de calendrier (15 janv. + 1 mois = 15 févr.).</li>
+              <li><strong>Mois</strong> : mois de calendrier (15 janv. + 1 mois = 15 févr.), quel que soit le régime.</li>
+              {calendrierTravail.regime !== "calendaire" && (
+                <li>
+                  <strong>Jours ouvrés</strong> : {LIBELLE_REGIME[calendrierTravail.regime].toLowerCase()}. Une durée de
+                  3 jours commencée le lundi se termine le mercredi, dernier jour travaillé compris, et un successeur
+                  enchaîne le jour travaillé suivant. Un décalage de liaison, lui, saute les jours chômés sans en
+                  compter aucun.
+                </li>
+              )}
               <li><strong>Pondération</strong> : la somme des {motPluriel} doit être égale à 100 %.</li>
               {phase.quantites && <li><strong>Montant</strong> : quantité × prix unitaire, pour information.</li>}
             </ul>

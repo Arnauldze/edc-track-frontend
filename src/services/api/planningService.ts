@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { apiClient } from './client';
+import type { Calendrier } from '@/lib/livrableSchedule';
 
 // ── Types ──
 
@@ -156,7 +157,10 @@ export interface Planning {
   budgetInitialTotal?: number;
   budgetActualise: BudgetDevise[];
   budgetActualiseTotal?: number;
-  
+
+  /** Jours travaillés de l'activité ; absent, tous les jours comptent. */
+  calendrier?: Calendrier;
+
   // Délais
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
@@ -215,6 +219,7 @@ export interface CreatePlanningDto {
   hasExecution?: boolean;
   budgetInitial?: BudgetDevise[];
   budgetInitialTotal?: number;
+  calendrier?: Calendrier;
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
   delaiInitialMois?: number;

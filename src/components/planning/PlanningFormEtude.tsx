@@ -5,6 +5,7 @@
 import type { ReactNode } from "react";
 import { FileText } from "lucide-react";
 import type { Livrable } from "@/services/api/planningService";
+import type { Calendrier } from "@/lib/livrableSchedule";
 import { PlanningCalendrierForm, nouvelleLigne, type PhaseCalendrier } from "./PlanningCalendrierForm";
 
 const ETUDE: PhaseCalendrier = {
@@ -28,6 +29,8 @@ interface Props {
   livrables: Livrable[];
   onChange: (livrables: Livrable[]) => void;
   dateT0: string;
+  /** Jours travaillés de l'activité. */
+  calendrierTravail?: Calendrier;
   readOnly: boolean;
   /** Contrôle d'enregistrement demandé : champs obligatoires vides en rouge. */
   controleDemande?: boolean;
@@ -35,13 +38,14 @@ interface Props {
   action?: ReactNode;
 }
 
-export function PlanningFormEtude({ livrables, onChange, dateT0, readOnly, controleDemande, action }: Props) {
+export function PlanningFormEtude({ livrables, onChange, dateT0, calendrierTravail, readOnly, controleDemande, action }: Props) {
   return (
     <PlanningCalendrierForm
       phase={ETUDE}
       lignes={livrables}
       onChange={onChange}
       dateT0={dateT0}
+      calendrierTravail={calendrierTravail}
       readOnly={readOnly}
       controleDemande={controleDemande}
       action={action}
