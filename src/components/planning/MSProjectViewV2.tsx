@@ -10,7 +10,7 @@ import type { Planning, Livrable } from "@/services/api/planningService";
 import { planningService } from "@/services/api/planningService";
 import { projectService, type Component } from "@/services/api/projectService";
 import { toast } from "@/lib/toastStore";
-import { calculerCalendrierEtude, ecart, toDay } from "@/lib/livrableSchedule";
+import { calculerCalendrierEtude, ecart, toDay, EXEMPLES_LIAISON } from "@/lib/livrableSchedule";
 import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
 import type { LigneCalendrier } from "./PlanningCalendrierForm";
 import { findUnit, listUnits, type UnitLevel } from "@/lib/structureUnits";
@@ -415,7 +415,12 @@ export function MSProjectViewV2({
       avecMarge.forEach((liv) => {
         // Une ligne ajoutée après le figeage n'a pas de repère : pas d'écart,
         // ce qui n'est pas la même chose qu'un écart nul.
-        const fige = reference?.lignes?.find((l) => l.numero === liv.numero && l.phase === phase);
+        // L'identifiant interne d'abord : une ligne renumérotée depuis le
+        // figeage se retrouve quand même. Le numéro reste le repli pour les
+        // références figées avant son introduction.
+        const fige = reference?.lignes?.find(
+          (l) => (l.ligneId && liv.id ? l.ligneId === liv.id : l.numero === liv.numero) && l.phase === phase,
+        );
         const referenceFin = toDay(fige?.dateFin as string | undefined);
         rows.push({
           id: `${activityPath}.${phase}.${liv.numero}`,
@@ -1166,33 +1171,40 @@ export function MSProjectViewV2({
 
     if (isEditing && isLivrable && !isLocked) {
       if (field === 'predecesseur') {
+        // Saisie libre, comme dans MS Project : une liste déroulante ne peut
+        // pas porter une liaison typée (« T3FD+2sem »), et l'écraserait.
         const activityLivrables = tasks.filter(t => t.type === "livrable" && t.activityPath === task.activityPath && t.phase === task.phase && t.numero !== task.numero);
+        const listeId = `msp-pred-${task.id}`;
         return (
-          <select
-            value={value?.toString() || ''}
-            onChange={(e) => handleCellChange(task, field as any, e.target.value)}
-            onBlur={() => setEditingCell(null)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null);
-            }}
-            autoFocus
-            className="msp-cell-input"
-            style={{
-              width: "100%",
-              height: ROW_HEIGHT - 4,
-              padding: "0 4px",
-              border: `2px solid ${MSP_TODAY_COLOR}`,
-              borderRadius: 0,
-              outline: "none",
-              fontSize: 11,
-              fontFamily: "inherit",
-            }}
-          >
-            <option value="">— Aucun —</option>
-            {activityLivrables.map(l => (
-              <option key={l.id} value={l.numero}>{l.numero} - {l.nom}</option>
-            ))}
-          </select>
+          <>
+            <datalist id={listeId}>
+              {activityLivrables.map(l => (
+                <option key={l.id} value={l.numero}>{l.nom}</option>
+              ))}
+            </datalist>
+            <input
+              list={listeId}
+              value={value?.toString() || ''}
+              onChange={(e) => handleCellChange(task, field as any, e.target.value)}
+              onBlur={() => setEditingCell(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null);
+              }}
+              autoFocus
+              title={`Prédécesseur, décalage possible : ${EXEMPLES_LIAISON}`}
+              className="msp-cell-input"
+              style={{
+                width: "100%",
+                height: ROW_HEIGHT - 4,
+                padding: "0 4px",
+                border: `2px solid ${MSP_TODAY_COLOR}`,
+                borderRadius: 0,
+                outline: "none",
+                fontSize: 11,
+                fontFamily: "inherit",
+              }}
+            />
+          </>
         );
       }
 

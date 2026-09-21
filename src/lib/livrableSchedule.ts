@@ -11,7 +11,7 @@
 // Règles de l'équipe :
 //   Délai        temps depuis T0 jusqu'à l'échéance (T0 + 3 mois = échéance)
 //   Durée        temps d'exécution du livrable (début + 1 mois = fin)
-//   Prédécesseur la date de début = date de fin du prédécesseur (série)
+//   Prédécesseur la date de début se déduit du prédécesseur (voir Liaisons)
 //   Parallèle    sans prédécesseur, commence à la date de début fixée, sinon à T0
 //   Successeur   déduit des prédécesseurs
 //   Mois         mois de calendrier (15 janv. + 1 mois = 15 févr. ; 31 janv. + 1 mois = 28 févr.)
@@ -21,15 +21,43 @@
 //   duree  fin = début + durée      délai déduit
 //   delai  fin = T0 + délai         durée déduite
 //   fin    fin = date saisie        durée et délai déduits
+//
+// Liaisons, notées comme dans MS Project (colonne Préd.) :
+//   T3            fin à début, sans décalage : commence à la fin de T3
+//   T3FD+3sem     fin à début : 3 semaines après la fin de T3
+//   T3DD+2j       début à début : 2 jours après le début de T3
+//   Le décalage peut être négatif (T3FD-1sem = une semaine avant la fin de T3)
+//   et son unité vaut le jour par défaut (T3FD+5 = cinq jours).
+//   Les liaisons fin à fin et début à fin ne sont pas gérées.
 // ══════════════════════════════════════════════════════════════
 
 export type Unite = 'jours' | 'semaines' | 'mois';
 export type ModeFin = 'duree' | 'delai' | 'fin';
 
+/** Fin à début (la plus courante) ou début à début. */
+export type TypeLiaison = 'FD' | 'DD';
+
+export interface Liaison {
+  /** Numéro de la ligne dont celle-ci dépend. */
+  numero: string;
+  type: TypeLiaison;
+  /** Décalage appliqué après la date du prédécesseur ; négatif = avance. */
+  decalage: number;
+  unite: Unite;
+}
+
 export interface LivrableSaisi {
+  /**
+   * Identifiant interne, stable et jamais affiché. Le numéro, lui, est une
+   * étiquette : il se renomme et se renumérote à l'insertion comme dans
+   * Excel. Ce qui doit survivre à une renumérotation — la référence de base,
+   * et demain le suivi — s'accroche à cet identifiant, pas au numéro.
+   */
+  id?: string;
   numero: string;
   intitule?: string;
   ponderation?: number;
+  /** Liaison vers le prédécesseur : « T3 », « T3FD+2sem », « T3DD-1j »… */
   predecesseur?: string;
   /** Début ; pris en compte seulement s'il a été fixé (`debutFixe`) et sans prédécesseur. */
   dateDebut?: string | Date;
@@ -56,7 +84,15 @@ export interface LivrableCalcule {
   delai?: number;
   delaiUnite: Unite;
   modeFin: ModeFin;
+  /** Liaison sous sa forme canonique, vide si la ligne n'a pas de prédécesseur. */
   predecesseur?: string;
+  /** Liaison analysée : sert à l'écran pour expliquer d'où vient le début. */
+  liaison?: Liaison;
+  /**
+   * Identifiant interne du prédécesseur résolu. Suivre les liaisons par là
+   * plutôt que par le numéro, qui change à la renumérotation.
+   */
+  predecesseurId?: string;
   /** Numéros des livrables qui suivent celui-ci, séparés par des virgules. */
   successeur?: string;
   /**
@@ -145,6 +181,234 @@ export function ecart(from: string, to: string, unite: Unite): number {
   return signe * round2(mois + fraction);
 }
 
+// ── Liaisons ──
+
+const UNITES_LIAISON: Record<string, Unite> = {
+  j: 'jours',
+  jr: 'jours',
+  jour: 'jours',
+  jours: 'jours',
+  s: 'semaines',
+  sem: 'semaines',
+  semaine: 'semaines',
+  semaines: 'semaines',
+  m: 'mois',
+  mois: 'mois',
+};
+
+/** Exemple affiché dans les messages d'erreur de la colonne Préd. */
+export const EXEMPLES_LIAISON = 'T3, T3FD+2sem, T3DD-1j';
+
+const MOTIF_LIAISON = /^(.+?)(FD|DD|FF|DF)?(?:([+-])(\d+(?:[.,]\d+)?)([a-zé]*))?$/i;
+
+/**
+ * Analyse une saisie de la colonne Préd. Renvoie la liaison, un motif de
+ * refus, ou `undefined` si la case est vide. Le numéro n'est pas vérifié ici :
+ * c'est le calendrier qui sait quelles lignes existent.
+ */
+export function analyserLiaison(texte: string | undefined): Liaison | { erreur: string } | undefined {
+  const compact = (texte ?? '').replace(/\s+/g, '');
+  if (!compact) return undefined;
+
+  const trouve = MOTIF_LIAISON.exec(compact);
+  if (!trouve) return { erreur: `« ${texte!.trim()} » n'est pas une liaison valide (${EXEMPLES_LIAISON}).` };
+
+  const [, numero, typeBrut, signe, nombre, uniteBrute] = trouve;
+  const type = (typeBrut ?? 'FD').toUpperCase();
+
+  if (type === 'FF' || type === 'DF') {
+    return { erreur: `les liaisons ${type === 'FF' ? 'fin à fin (FF)' : 'début à fin (DF)'} ne sont pas gérées.` };
+  }
+
+  let decalage = 0;
+  let unite: Unite = 'jours';
+
+  if (nombre) {
+    decalage = Number(nombre.replace(',', '.')) * (signe === '-' ? -1 : 1);
+    if (!isFinite(decalage)) return { erreur: `décalage illisible dans « ${texte!.trim()} » (${EXEMPLES_LIAISON}).` };
+    if (uniteBrute) {
+      const reconnue = UNITES_LIAISON[uniteBrute.toLowerCase()];
+      if (!reconnue) return { erreur: `unité « ${uniteBrute} » inconnue : j, sem ou mois (${EXEMPLES_LIAISON}).` };
+      unite = reconnue;
+    }
+  }
+
+  return { numero, type: type as TypeLiaison, decalage, unite };
+}
+
+const ABREGE_UNITE: Record<Unite, string> = { jours: 'j', semaines: 'sem', mois: 'mois' };
+
+/** Notation canonique d'une liaison, telle qu'elle est réaffichée. */
+export function formaterLiaison(liaison: Liaison): string {
+  if (liaison.type === 'FD' && liaison.decalage === 0) return liaison.numero;
+  if (liaison.decalage === 0) return `${liaison.numero}${liaison.type}`;
+  const signe = liaison.decalage < 0 ? '-' : '+';
+  return `${liaison.numero}${liaison.type}${signe}${Math.abs(liaison.decalage)}${ABREGE_UNITE[liaison.unite]}`;
+}
+
+/**
+ * Identifiant interne d'une ligne. Court et sans signification : il ne sert
+ * qu'à reconnaître la ligne quand son numéro change.
+ */
+export function nouvelIdentifiant(): string {
+  const aleatoire = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto?.randomUUID;
+  const tirage = aleatoire ? aleatoire.call((globalThis as { crypto?: unknown }).crypto).replace(/-/g, '') : Math.random().toString(36).slice(2);
+  return `l-${tirage.slice(0, 8)}${Date.now().toString(36).slice(-4)}`;
+}
+
+/**
+ * Réécrit les liaisons après un changement de numéros — renommage d'une ligne,
+ * ou renumérotation d'un tableau entier. Le type et le décalage sont conservés :
+ * un simple remplacement de texte transformerait « T3FD+2sem » en une liaison
+ * vers une ligne inexistante, ou l'effacerait.
+ *
+ * @param nouveauNumero ancien numéro → nouveau numéro
+ */
+export function reetiqueterLiaisons<T extends LivrableSaisi>(lignes: T[], nouveauNumero: Map<string, string>): T[] {
+  if (!nouveauNumero.size) return lignes;
+
+  return lignes.map((ligne) => {
+    const brut = (ligne.predecesseur ?? '').trim();
+    if (!brut) return ligne;
+
+    // Un numéro reconnu tel quel prime, comme au calcul.
+    if (nouveauNumero.has(brut)) return { ...ligne, predecesseur: nouveauNumero.get(brut)! };
+
+    const liaison = analyserLiaison(brut);
+    if (!liaison || 'erreur' in liaison) return ligne;
+
+    const remplacant = nouveauNumero.get(liaison.numero);
+    return remplacant ? { ...ligne, predecesseur: formaterLiaison({ ...liaison, numero: remplacant }) } : ligne;
+  });
+}
+
+// ── Opérations de structure ──
+//
+// Le numéro est une étiquette positionnelle, comme dans Excel : insérer,
+// supprimer ou déplacer renumérote tout le tableau. Les liaisons suivent, et
+// l'identifiant interne ne bouge jamais — c'est lui qui rattache la référence
+// de base à la bonne ligne.
+
+/** Numéro visé par la liaison d'une ligne, ou rien si elle n'en a pas. */
+function cibleLiaison(lignes: LivrableSaisi[], index: number, numeros: Set<string>): string | undefined {
+  const brut = (lignes[index]?.predecesseur ?? '').trim();
+  if (!brut) return undefined;
+  if (numeros.has(brut)) return brut;
+  const liaison = analyserLiaison(brut);
+  return liaison && !('erreur' in liaison) ? liaison.numero : undefined;
+}
+
+const numerosDe = (lignes: LivrableSaisi[]) =>
+  new Set(lignes.map((l) => (l.numero ?? '').trim()).filter(Boolean));
+
+/** Renumérote les lignes selon leur position (T1, T2…) et réétiquette les liaisons. */
+export function renumeroterLignes<T extends LivrableSaisi>(lignes: T[], prefixe: string): T[] {
+  const nouveaux = new Map<string, string>();
+  const renumerotees = lignes.map((ligne, i) => {
+    const numero = `${prefixe}${i + 1}`;
+    if (ligne.numero && ligne.numero !== numero) nouveaux.set(ligne.numero, numero);
+    return { ...ligne, numero };
+  });
+  return reetiqueterLiaisons(renumerotees, nouveaux);
+}
+
+/** La ligne suit-elle simplement celle du dessus ? */
+function enchainee(lignes: LivrableSaisi[], index: number, numeros: Set<string>): boolean {
+  return index > 0 && cibleLiaison(lignes, index, numeros) === (lignes[index - 1].numero ?? '').trim();
+}
+
+/** Repointe une liaison vers une autre ligne, type et décalage conservés. */
+const repointer = <T extends LivrableSaisi>(ligne: T, ancienne: string, nouvelle: string): T =>
+  reetiqueterLiaisons([ligne], new Map([[ancienne, nouvelle]]))[0];
+
+/**
+ * Insère une ligne sous une autre et referme la chaîne, comme MS Project :
+ * T1 → T2 devient T1 → nouvelle → T2. Seule la ligne immédiatement suivante
+ * est raccrochée, et seulement si elle suivait déjà celle du dessus : une
+ * liaison choisie à la main n'est jamais détournée.
+ */
+export function insererApresLigne<T extends LivrableSaisi>(
+  lignes: T[],
+  index: number,
+  nouvelle: T,
+  prefixe: string,
+): T[] {
+  const numeros = numerosDe(lignes);
+  const aRaccrocher = enchainee(lignes, index + 1, numeros);
+
+  const avec = [
+    ...lignes.slice(0, index + 1),
+    { ...nouvelle, predecesseur: lignes[index]?.numero },
+    ...lignes.slice(index + 1),
+  ];
+  const renumerotees = renumeroterLignes(avec, prefixe);
+
+  if (!aRaccrocher || !renumerotees[index + 2]) return renumerotees;
+
+  const parent = renumerotees[index].numero;
+  const inseree = renumerotees[index + 1].numero;
+  return renumerotees.map((l, i) => (i === index + 2 ? repointer(l, parent, inseree) : l));
+}
+
+/**
+ * Supprime une ligne : ses successeurs reprennent sa propre liaison
+ * (T1 → T2 → T3 devient T1 → T3). Un décalage propre au successeur n'est pas
+ * combiné avec celui de la ligne retirée ; c'est la liaison de cette dernière
+ * qui est reprise telle quelle.
+ */
+export function supprimerLigne<T extends LivrableSaisi>(lignes: T[], index: number, prefixe: string): T[] {
+  const numeros = numerosDe(lignes);
+  const retire = (lignes[index]?.numero ?? '').trim();
+  const relais = lignes[index]?.predecesseur ?? '';
+
+  const restantes = lignes
+    .map((ligne, i) => (cibleLiaison(lignes, i, numeros) === retire ? { ...ligne, predecesseur: relais } : ligne))
+    .filter((_, i) => i !== index);
+
+  return renumeroterLignes(restantes, prefixe);
+}
+
+/**
+ * Monte ou descend une ligne. Celles qui suivaient simplement leur voisine du
+ * dessus se raccrochent à la nouvelle : le trou se referme et la chaîne se
+ * reforme à la nouvelle place. Une liaison pointant ailleurs est conservée.
+ */
+export function deplacerLigne<T extends LivrableSaisi>(
+  lignes: T[],
+  index: number,
+  direction: -1 | 1,
+  prefixe: string,
+): T[] {
+  const cible = index + direction;
+  if (cible < 0 || cible >= lignes.length) return lignes;
+
+  const numeros = numerosDe(lignes);
+  const enchainees = new Set(lignes.filter((_, i) => enchainee(lignes, i, numeros)).map((l) => l.id ?? l.numero));
+  const cibleAvant = new Map(lignes.map((l, i) => [l.id ?? l.numero, cibleLiaison(lignes, i, numeros)]));
+
+  const copie = [...lignes];
+  [copie[index], copie[cible]] = [copie[cible], copie[index]];
+
+  const raccordees = copie.map((ligne, i) => {
+    const clef = ligne.id ?? ligne.numero;
+    if (!enchainees.has(clef)) return ligne;
+    const voisine = copie[i - 1];
+    if (!voisine) return { ...ligne, predecesseur: undefined };
+    const ancienne = cibleAvant.get(clef);
+    return ancienne && ancienne !== voisine.numero ? repointer(ligne, ancienne, voisine.numero) : ligne;
+  });
+
+  return renumeroterLignes(raccordees, prefixe);
+}
+
+/** Date d'ancrage d'une liaison : fin du prédécesseur, ou son début en début à début. */
+const ancreDe = (liaison: Liaison, predecesseur: LivrableCalcule | undefined) =>
+  liaison.type === 'DD' ? predecesseur?.dateDebut : predecesseur?.dateFin;
+
+/** Applique un décalage, en laissant la date intacte quand il est nul. */
+const decaler = (jour: string | undefined, quantite: number, unite: Unite) =>
+  jour && quantite !== 0 ? ajouter(jour, quantite, unite) : jour;
+
 // ── Calcul ──
 
 const positif = (value: number | undefined): value is number => typeof value === 'number' && isFinite(value) && value > 0;
@@ -181,18 +445,29 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
     }
   });
 
-  const predecesseurs = livrables.map((l, index) => {
-    const pred = (l.predecesseur ?? '').trim();
-    if (!pred) return undefined;
-    if (pred === numeros[index]) {
-      problemes.push({ numero: numeros[index], index, champ: 'predecesseur', message: `${numeros[index]} ne peut pas se précéder lui-même.` });
+  const liens = livrables.map((l, index): (Liaison & { index: number }) | undefined => {
+    const brut = (l.predecesseur ?? '').trim();
+    if (!brut) return undefined;
+
+    const signaler = (message: string) => {
+      problemes.push({ numero: numeros[index], index, champ: 'predecesseur', message });
       return undefined;
-    }
-    if (!indexParNumero.has(pred)) {
-      problemes.push({ numero: numeros[index], index, champ: 'predecesseur', message: `${numeros[index]} : le prédécesseur ${pred} n'existe pas.` });
-      return undefined;
-    }
-    return indexParNumero.get(pred)!;
+    };
+
+    // Un numéro existant est reconnu tel quel : sans cela, une ligne nommée
+    // « T3DD » serait lue comme une liaison début à début vers « T3 ».
+    const liaison = indexParNumero.has(brut)
+      ? ({ numero: brut, type: 'FD', decalage: 0, unite: 'jours' } as Liaison)
+      : analyserLiaison(brut);
+
+    if (!liaison) return undefined;
+    if ('erreur' in liaison) return signaler(`${numeros[index]} : ${liaison.erreur}`);
+    if (liaison.numero === numeros[index]) return signaler(`${numeros[index]} ne peut pas se précéder lui-même.`);
+
+    const pred = indexParNumero.get(liaison.numero);
+    if (pred === undefined) return signaler(`${numeros[index]} : le prédécesseur ${liaison.numero} n'existe pas.`);
+
+    return { ...liaison, index: pred };
   });
 
   // Ordre de calcul : chaque prédécesseur avant ses successeurs ; boucles relevées.
@@ -206,7 +481,7 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
       return;
     }
     etat[index] = 'en-cours';
-    const pred = predecesseurs[index];
+    const pred = liens[index]?.index;
     if (pred !== undefined) visiter(pred, [...chemin, index]);
     etat[index] = 'fait';
     ordre.push(index);
@@ -226,10 +501,14 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
     const modeFin = modeParDefaut(saisi);
     const dureeUnite = normaliserUnite(saisi.dureeUnite);
     const delaiUnite = normaliserUnite(saisi.delaiUnite);
-    const pred = enBoucle.has(index) ? undefined : predecesseurs[index];
+    const lien = enBoucle.has(index) ? undefined : liens[index];
 
-    const debutFixe = pred === undefined && (saisi.debutFixe ?? !!toDay(saisi.dateDebut)) && !!toDay(saisi.dateDebut);
-    const debut = pred !== undefined ? resultats[pred]?.dateFin : debutFixe ? toDay(saisi.dateDebut) : t0;
+    const debutFixe = lien === undefined && (saisi.debutFixe ?? !!toDay(saisi.dateDebut)) && !!toDay(saisi.dateDebut);
+    const debut = lien
+      ? decaler(ancreDe(lien, resultats[lien.index]), lien.decalage, lien.unite)
+      : debutFixe
+        ? toDay(saisi.dateDebut)
+        : t0;
 
     let fin: string | undefined;
     if (modeFin === 'duree') {
@@ -251,7 +530,9 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
     resultats[index] = {
       ...saisi,
       numero,
-      predecesseur: pred !== undefined ? numeros[pred] : (saisi.predecesseur ?? '').trim() || undefined,
+      predecesseur: lien ? formaterLiaison(lien) : (saisi.predecesseur ?? '').trim() || undefined,
+      liaison: lien ? { numero: lien.numero, type: lien.type, decalage: lien.decalage, unite: lien.unite } : undefined,
+      predecesseurId: lien ? livrables[lien.index].id : undefined,
       modeFin,
       dureeUnite,
       delaiUnite,
@@ -265,18 +546,18 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
   }
 
   resultats.forEach((livrable, index) => {
-    const suivants = predecesseurs
-      .map((pred, i) => (pred === index && !enBoucle.has(i) ? numeros[i] : undefined))
+    const suivants = liens
+      .map((lien, i) => (lien?.index === index && !enBoucle.has(i) ? numeros[i] : undefined))
       .filter((n): n is string => !!n);
     livrable.successeur = suivants.length ? suivants.join(', ') : undefined;
   });
 
   // ── Passe arrière : marge totale et chemin critique ──
   // La phase se termine à la plus tardive des échéances. Une ligne sans
-  // successeur doit donc finir là ; une ligne qui en a doit finir avant que le
-  // premier de ses successeurs ne commence, puisque l'enchaînement est
-  // fin → début. La marge totale est le report qu'une ligne peut absorber sans
-  // décaler la fin de la phase : une marge nulle la met sur le chemin critique.
+  // successeur doit donc finir là ; une ligne qui en a doit finir assez tôt
+  // pour qu'aucun d'eux ne démarre en retard. La marge totale est le report
+  // qu'une ligne peut absorber sans décaler la fin de la phase : une marge
+  // nulle la met sur le chemin critique.
   const finPhase = resultats
     .map((l) => l.dateFin)
     .filter((d): d is string => !!d)
@@ -285,8 +566,8 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
 
   if (finPhase) {
     const successeursDe: number[][] = livrables.map(() => []);
-    predecesseurs.forEach((pred, i) => {
-      if (pred !== undefined && !enBoucle.has(i)) successeursDe[pred].push(i);
+    liens.forEach((lien, i) => {
+      if (lien && !enBoucle.has(i)) successeursDe[lien.index].push(i);
     });
 
     // Calculée pour les successeurs avant leurs prédécesseurs : l'ordre
@@ -296,20 +577,35 @@ export function calculerCalendrierEtude<T extends LivrableSaisi>(
       const ligne = resultats[index];
       if (!ligne?.dateFin) continue;
 
-      const contraintes = successeursDe[index]
-        .map((i) => debutAuPlusTard[i])
-        .filter((d): d is string => !!d)
-        .sort();
-      const finAuPlusTard = contraintes.length ? contraintes[0] : finPhase;
-
-      ligne.margeTotale = ecart(ligne.dateFin, finAuPlusTard, 'jours');
-      ligne.critique = ligne.margeTotale <= 0;
       // Durée ramenée à zéro si l'échéance précède le début : la contrainte est
       // intenable et déjà signalée, elle ne doit pas inventer de la marge pour
       // le prédécesseur en remontant.
-      const dureeJours = ligne.dateDebut
-        ? Math.max(0, ecart(ligne.dateDebut, ligne.dateFin, 'jours'))
-        : 0;
+      const dureeJours = ligne.dateDebut ? Math.max(0, ecart(ligne.dateDebut, ligne.dateFin, 'jours')) : 0;
+
+      // Ce que chaque successeur impose à la fin de cette ligne :
+      //   fin à début   elle doit finir au plus tard au début au plus tard du
+      //                 successeur, décalage retranché ;
+      //   début à début c'est son DÉBUT qui est contraint, sa fin peut donc
+      //                 aller jusqu'à cette borne augmentée de sa propre durée.
+      const contraintes = successeursDe[index]
+        .map((i) => {
+          const tard = debutAuPlusTard[i];
+          const lien = liens[i];
+          if (!tard || !lien) return undefined;
+          const borne = decaler(tard, -lien.decalage, lien.unite)!;
+          return lien.type === 'DD' ? ajouter(borne, dureeJours, 'jours') : borne;
+        })
+        .filter((d): d is string => !!d)
+        .sort();
+      // La fin de la phase borne aussi les lignes qui ont des successeurs :
+      // sans décalage, la contrainte d'un successeur lui est toujours
+      // antérieure, mais un décalage (ou une liaison début à début) peut la
+      // repousser au-delà et inventerait de la marge à une ligne qui, elle,
+      // termine la phase.
+      const finAuPlusTard = [finPhase, ...contraintes].sort()[0];
+
+      ligne.margeTotale = ecart(ligne.dateFin, finAuPlusTard, 'jours');
+      ligne.critique = ligne.margeTotale <= 0;
       debutAuPlusTard[index] = ajouter(finAuPlusTard, -dureeJours, 'jours');
     }
   }

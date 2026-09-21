@@ -13,6 +13,8 @@ export interface BudgetDevise {
 }
 
 export interface Livrable {
+  /** Identifiant interne stable, attribué à la création ou par le serveur. */
+  id?: string;
   numero: string;
   intitule: string;
   ponderation: number;
@@ -110,6 +112,8 @@ export interface LignePassationApi {
 }
 
 export interface TacheExecution {
+  /** Identifiant interne stable, attribué à la création ou par le serveur. */
+  id?: string;
   numero: string;
   designation: string;
   ponderation?: number;
@@ -256,6 +260,8 @@ export interface PlanningStats {
 
 /** Échéances d'une ligne au moment du figeage. */
 export interface LigneReference {
+  /** Identifiant interne de la ligne photographiée ; absent des références anciennes. */
+  ligneId?: string;
   numero: string;
   /** 'etude' ou 'execution' : deux lignes peuvent porter le même numéro. */
   phase: string;

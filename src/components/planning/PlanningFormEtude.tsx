@@ -17,6 +17,9 @@ const ETUDE: PhaseCalendrier = {
   placeholderNom: "Nom du livrable…",
   mot: "livrable",
   importType: "etude",
+  // Une étude se planifie au délai depuis T0 : c'est la date de remise du
+  // livrable qui compte, pas son enchaînement (décision de l'équipe).
+  modeDefaut: "delai",
 };
 
 export const nouveauLivrable = (numero: string): Livrable => ({ ...nouvelleLigne<Livrable>(ETUDE, numero), statut: "en_attente" });
@@ -26,10 +29,22 @@ interface Props {
   onChange: (livrables: Livrable[]) => void;
   dateT0: string;
   readOnly: boolean;
+  /** Contrôle d'enregistrement demandé : champs obligatoires vides en rouge. */
+  controleDemande?: boolean;
   /** Action placée dans l'en-tête de la carte. */
   action?: ReactNode;
 }
 
-export function PlanningFormEtude({ livrables, onChange, dateT0, readOnly, action }: Props) {
-  return <PlanningCalendrierForm phase={ETUDE} lignes={livrables} onChange={onChange} dateT0={dateT0} readOnly={readOnly} action={action} />;
+export function PlanningFormEtude({ livrables, onChange, dateT0, readOnly, controleDemande, action }: Props) {
+  return (
+    <PlanningCalendrierForm
+      phase={ETUDE}
+      lignes={livrables}
+      onChange={onChange}
+      dateT0={dateT0}
+      readOnly={readOnly}
+      controleDemande={controleDemande}
+      action={action}
+    />
+  );
 }

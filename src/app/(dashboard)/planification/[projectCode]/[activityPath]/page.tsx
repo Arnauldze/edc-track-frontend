@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Flag, FlagOff, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertCircle, BarChart3, Flag, FlagOff, Plus, Save, Trash2, X } from "lucide-react";
 import { getProjectById, getLeafActivities, type Project } from "@/lib/projectStore";
 import { planningService, type CreatePlanningDto, type Livrable, type Planning, type TacheExecution, type UpdatePlanningDto } from "@/services/api/planningService";
 import { toast } from "@/lib/toastStore";
@@ -36,6 +36,7 @@ import { DEFAULT_EXCHANGE_RATES } from "@/lib/helpers/currencyHelpers";
 import { typeActivite, voile, type ActivityType } from "@/lib/activityTypes";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/LoadingSpinner";
+import { useBrouillon } from "@/hooks/useBrouillon";
 
 type Budget = { devise: string; montant: number; pourcentage?: number };
 
@@ -85,8 +86,12 @@ export default function ActivityPlanningPage() {
     execution: setHasExecution,
   };
 
-  /** @param ouvrirPremierePhase au chargement, ouvrir la première phase prévue ; après un enregistrement, garder la phase ouverte. */
-  function populateFormFromPlanning(p: Planning, ouvrirPremierePhase = true) {
+  /**
+   * @param ouvrirPremierePhase au chargement, ouvrir la première phase prévue ; après un enregistrement, garder la phase ouverte.
+   * @param type nature de l'activité. Passée explicitement au chargement : le
+   *   setState qui la range dans l'état n'a pas encore pris effet à cet instant.
+   */
+  function populateFormFromPlanning(p: Planning, ouvrirPremierePhase = true, type: ActivityType = activityType) {
     setHasEtudePrealable(!!p.hasEtudePrealable);
     setHasPassation(!!p.hasPassation);
     setHasExecution(!!p.hasExecution);
@@ -114,7 +119,9 @@ export default function ActivityPlanningPage() {
           }
         : ancienne?.synthese ?? {},
     });
-    setTaches(p.tachesExecution?.length ? p.tachesExecution : [nouvelleTache("T1")]);
+    // La première tâche suit le type de planification propre à la nature de
+    // l'activité (travaux : début + durée ; sinon délai depuis T0).
+    setTaches(p.tachesExecution?.length ? p.tachesExecution : [nouvelleTache("T1", type)]);
     const premiere = PHASE_ORDER.find((k) => ({ etude: p.hasEtudePrealable, passation: p.hasPassation, execution: p.hasExecution })[k]);
     if (premiere && ouvrirPremierePhase) setSelected(premiere);
   }
@@ -130,6 +137,22 @@ export default function ActivityPlanningPage() {
     }),
     [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches],
   );
+  /** Tout ce qui se saisit sur cette page, pour le brouillon automatique. */
+  const etatFormulaire = useMemo(
+    () => ({
+      budgetInitial,
+      dateT0,
+      responsablePrincipal,
+      hasEtudePrealable,
+      hasPassation,
+      hasExecution,
+      livrables,
+      passation,
+      taches,
+    }),
+    [budgetInitial, dateT0, responsablePrincipal, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches],
+  );
+
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
   const [reference, setReference] = useState<typeof sections | null>(null);
@@ -147,6 +170,31 @@ export default function ActivityPlanningPage() {
   };
   const dirty = !isEditMode || Object.values(modifiees).some(Boolean);
   const aDesModifications = !!reference && Object.values(modifiees).some(Boolean);
+
+  // Brouillon local : ce qui est saisi survit à la fermeture de l'onglet et à
+  // une déconnexion, en attendant un vrai enregistrement.
+  const brouillon = useBrouillon({
+    clef: `${projectCode}:${activityPath}`,
+    etat: etatFormulaire,
+    signature: Object.values(sections).join("|"),
+    actif: aDesModifications && !readOnly,
+  });
+
+  const reprendreBrouillon = () => {
+    if (!brouillon.disponible) return;
+    const e = brouillon.disponible.etat;
+    setBudgetInitial(e.budgetInitial);
+    setDateT0(e.dateT0);
+    setResponsablePrincipal(e.responsablePrincipal);
+    setHasEtudePrealable(e.hasEtudePrealable);
+    setHasPassation(e.hasPassation);
+    setHasExecution(e.hasExecution);
+    setLivrables(e.livrables);
+    setPassation(e.passation);
+    setTaches(e.taches);
+    brouillon.effacer();
+    toast.success("Brouillon repris ; il reste à enregistrer");
+  };
 
   useEffect(() => {
     if (!aDesModifications || readOnly) return;
@@ -186,7 +234,7 @@ export default function ActivityPlanningPage() {
         }
         const existante = await chargerPlanification();
         setPlanning(existante);
-        if (existante) populateFormFromPlanning(existante);
+        if (existante) populateFormFromPlanning(existante, true, (leaf?.type as ActivityType) ?? activityType);
       } catch (error) {
         console.error("Erreur chargement:", error);
         toast.error("Erreur lors du chargement");
@@ -208,6 +256,17 @@ export default function ActivityPlanningPage() {
     const units = listUnits(project.components);
     return unit.ancestors.map((id) => units.find((u) => u.id === id)?.name).filter(Boolean) as string[];
   }, [project, unit]);
+
+  // Contrôle d'enregistrement : allumé au premier enregistrement refusé,
+  // il fait passer en rouge les champs obligatoires restés vides.
+  const [controleDemande, setControleDemande] = useState(false);
+  const intitulesManquants = useMemo(
+    () => ({
+      etude: hasEtudePrealable ? livrables.filter((l) => !l.intitule?.trim()).length : 0,
+      execution: hasExecution ? taches.filter((t) => !t.designation?.trim()).length : 0,
+    }),
+    [hasEtudePrealable, livrables, hasExecution, taches],
+  );
 
   const calendrierEtude = useMemo(() => calculerCalendrierEtude(livrables, dateT0), [livrables, dateT0]);
   const problemesEtude = useMemo(() => [...new Set(calendrierEtude.problemes.map((p) => p.message))], [calendrierEtude]);
@@ -276,6 +335,8 @@ export default function ActivityPlanningPage() {
 
   // ── Enregistrement ──
   async function handleSave() {
+    setControleDemande(true);
+
     if (!hasEtudePrealable && !hasPassation && !hasExecution) {
       toast.error("Planifiez au moins une phase");
       return;
@@ -292,6 +353,14 @@ export default function ActivityPlanningPage() {
     if (hasExecution && problemesExecution.length) {
       setSelected("execution");
       toast.error(`Exécution : ${problemesExecution[0]}${problemesExecution.length > 1 ? ` (+${problemesExecution.length - 1})` : ""}`);
+      return;
+    }
+    // Le serveur les refuserait ligne par ligne : autant les montrer d'un coup.
+    const phaseIncomplete = (["etude", "execution"] as const).find((k) => intitulesManquants[k] > 0);
+    if (phaseIncomplete) {
+      setSelected(phaseIncomplete);
+      const mot = phaseIncomplete === "etude" ? "livrable" : "tâche";
+      toast.error(`Complétez ${pluriel(intitulesManquants[phaseIncomplete], `intitulé de ${mot}`)} (cases en rouge)`);
       return;
     }
 
@@ -342,6 +411,8 @@ export default function ActivityPlanningPage() {
       setPlanning(enregistree);
       if (enregistree) populateFormFromPlanning(enregistree, false);
       figerReference();
+      brouillon.effacer();
+      setControleDemande(false);
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
       toast.error(messageApi(error, "Erreur lors de l'enregistrement"));
@@ -491,6 +562,30 @@ export default function ActivityPlanningPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        {brouillon.disponible && !readOnly && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-3 rounded-md border border-warning/20 bg-warning-subtle px-3 py-2 text-[12px] text-warning"
+          >
+            <AlertCircle aria-hidden size={15} className="shrink-0" />
+            <span className="flex-1 min-w-0">
+              Une saisie non enregistrée a été retrouvée sur ce poste
+              {" ("}
+              {new Date(brouillon.disponible.enregistreLe).toLocaleString("fr-FR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })}
+              {")."}
+            </span>
+            <Button variant="secondary" size="sm" onClick={reprendreBrouillon}>
+              Reprendre
+            </Button>
+            <Button variant="ghost" size="sm" onClick={brouillon.effacer}>
+              Ignorer
+            </Button>
+          </div>
+        )}
+
         {/* ── 2. Ses phases ── */}
         <ActivityPhaseBar phases={phases} selected={selected} onSelect={setSelected} dateT0={dateT0 || undefined} />
 
@@ -509,7 +604,14 @@ export default function ActivityPlanningPage() {
         {/* Les phases prévues restent montées : leur saisie est conservée d'un onglet à l'autre. */}
         {hasEtudePrealable && (
           <div hidden={selected !== "etude"}>
-            <PlanningFormEtude livrables={livrables} onChange={setLivrables} dateT0={dateT0} readOnly={readOnly} action={boutonRetirer} />
+            <PlanningFormEtude
+              livrables={livrables}
+              onChange={setLivrables}
+              dateT0={dateT0}
+              readOnly={readOnly}
+              controleDemande={controleDemande}
+              action={boutonRetirer}
+            />
           </div>
         )}
 
@@ -528,7 +630,15 @@ export default function ActivityPlanningPage() {
 
         {hasExecution && (
           <div hidden={selected !== "execution"}>
-            <PlanningFormExecution taches={taches} onChange={setTaches} dateT0={dateT0} readOnly={readOnly} action={boutonRetirer} />
+            <PlanningFormExecution
+              taches={taches}
+              onChange={setTaches}
+              dateT0={dateT0}
+              readOnly={readOnly}
+              typeActivite={activityType}
+              controleDemande={controleDemande}
+              action={boutonRetirer}
+            />
           </div>
         )}
       </div>
