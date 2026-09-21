@@ -20,8 +20,11 @@ import type { TacheExecution } from "@/services/api/planningService";
 import type { ActivityType } from "@/lib/activityTypes";
 import type { Calendrier } from "@/lib/livrableSchedule";
 import type { Fiscalite, LigneDqe } from "@/lib/dqe";
+import type { Echelle } from "@/lib/repartition";
 import { PlanningFormExecution } from "./PlanningFormExecution";
 import { DqeTable } from "./DqeTable";
+import { RepartitionTable } from "./RepartitionTable";
+import { CourbesExecution } from "./CourbesExecution";
 
 export type OngletExecution = "devis" | "planning" | "repartition" | "courbes";
 
@@ -39,6 +42,8 @@ interface Props {
   onDqe: (lignes: LigneDqe[]) => void;
   fiscalite: Fiscalite;
   onFiscalite: (fiscalite: Fiscalite) => void;
+  echelle: Echelle;
+  onEchelle: (echelle: Echelle) => void;
   dateT0: string;
   calendrierTravail?: Calendrier;
   readOnly: boolean;
@@ -55,6 +60,8 @@ export function PlanningExecution({
   onDqe,
   fiscalite,
   onFiscalite,
+  echelle,
+  onEchelle,
   dateT0,
   calendrierTravail,
   readOnly,
@@ -93,6 +100,7 @@ export function PlanningExecution({
         <DqeTable
           lignes={dqe}
           onChange={onDqe}
+          taches={taches}
           fiscalite={fiscalite}
           onFiscalite={onFiscalite}
           readOnly={readOnly}
@@ -114,21 +122,23 @@ export function PlanningExecution({
         />
       </div>
 
-      {onglet === "repartition" && <ABatir titre="Répartition" aide={ONGLETS[2].aide} />}
-      {onglet === "courbes" && <ABatir titre="Courbes" aide={ONGLETS[3].aide} />}
-    </div>
-  );
-}
+      {/* Répartition et courbes se recalculent entièrement : inutile de les
+          garder montées, et leurs tableaux sont larges. */}
+      {onglet === "repartition" && (
+        <RepartitionTable
+          dqe={dqe}
+          taches={taches}
+          echelle={echelle}
+          onEchelle={onEchelle}
+          fiscalite={fiscalite}
+          calendrierTravail={calendrierTravail}
+          readOnly={readOnly}
+        />
+      )}
 
-/** Onglet annoncé mais pas encore livré : mieux vaut le dire que le cacher. */
-function ABatir({ titre, aide }: { titre: string; aide: string }) {
-  return (
-    <section className="rounded-lg border border-dashed border-line bg-surface px-4 py-10 text-center">
-      <h2 className="text-sm font-bold text-fg">{titre}</h2>
-      <p className="mx-auto mt-1 max-w-md text-[12px] text-fg-muted">{aide}</p>
-      <p className="mt-3 text-[11px] text-fg-subtle">
-        Se calcule à partir du devis et du planning. Lot suivant.
-      </p>
-    </section>
+      {onglet === "courbes" && (
+        <CourbesExecution dqe={dqe} taches={taches} echelle={echelle} calendrierTravail={calendrierTravail} />
+      )}
+    </div>
   );
 }

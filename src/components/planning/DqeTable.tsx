@@ -14,11 +14,14 @@
 // ══════════════════════════════════════════════════════════════
 
 import { useMemo, useState, type ReactNode } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Folder, Plus, Receipt, Trash2, Upload } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Folder, Plus, Receipt, Trash2, Upload, Wand2 } from "lucide-react";
 import { FileImportModal } from "./FileImportModal";
+import { SelecteurTaches, type TacheLiable } from "./SelecteurTaches";
 import {
   UNITES_DQE,
   analyserDqe,
+  apparierParNumero,
+  coherenceDqe,
   decalerNiveau,
   montantLigne,
   niveauDe,
@@ -32,7 +35,7 @@ import {
 } from "@/lib/dqe";
 import { Button } from "@/components/ui/button";
 
-const GRID = "grid-cols-[110px_minmax(220px,1fr)_88px_112px_140px_150px_88px]";
+const GRID = "grid-cols-[110px_minmax(200px,1fr)_88px_112px_140px_150px_minmax(120px,160px)_88px]";
 
 const formatQuantite = (value: number | undefined) =>
   value === undefined ? "" : value.toLocaleString("fr-FR", { maximumFractionDigits: 3 });
@@ -49,6 +52,8 @@ const formatTaux = (value: number) => value.toLocaleString("fr-FR", { maximumFra
 interface Props {
   lignes: LigneDqe[];
   onChange: (lignes: LigneDqe[]) => void;
+  /** Tâches d'exécution auxquelles les lignes du devis se relient. */
+  taches: TacheLiable[];
   fiscalite: Fiscalite;
   onFiscalite: (fiscalite: Fiscalite) => void;
   readOnly: boolean;
@@ -58,11 +63,14 @@ interface Props {
   action?: ReactNode;
 }
 
-export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, controleDemande = false, action }: Props) {
+export function DqeTable({ lignes, onChange, taches, fiscalite, onFiscalite, readOnly, controleDemande = false, action }: Props) {
   const [showImportModal, setShowImportModal] = useState(false);
+  /** Lignes écartées au dernier import, pour ne pas les escamoter. */
+  const [ignorees, setIgnorees] = useState(0);
 
   const problemes = useMemo(() => analyserDqe(lignes, fiscalite), [lignes, fiscalite]);
   const totaux = useMemo(() => totauxDqe(lignes, fiscalite), [lignes, fiscalite]);
+  const coherence = useMemo(() => coherenceDqe(lignes, taches), [lignes, taches]);
 
   const problemeDe = (index: number, champ: ChampDqe) =>
     problemes.find((p) => p.index === index && p.champ === champ)?.message;
@@ -109,6 +117,7 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
 
     const importees: LigneDqe[] = [];
     let ouverte: string | undefined;
+    let ecartees = 0;
 
     for (const row of data) {
       const feuille = texte(row.__feuille);
@@ -120,6 +129,15 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
       const numero = texte(row.numero);
       const designation = texte(row.designation);
       if (!numero && !designation) continue;
+
+      // Un devis se termine par ses totaux — « Total série 100 », « SOUS TOTAL
+      // PRIX 501 » — qui n'ont pas de numéro de prix et n'ont rien à faire
+      // dans le bordereau : l'appli les recalcule. L'un d'eux porte même un
+      // montant, qui gonflerait le total s'il était repris.
+      if (!numero) {
+        ecartees++;
+        continue;
+      }
 
       const quantite = parseNombre(texte(row.quantite));
       const prixUnitaire = parseNombre(texte(row.prixUnitaire));
@@ -139,6 +157,7 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
     }
 
     onChange(importees);
+    setIgnorees(ecartees);
     setShowImportModal(false);
   };
 
@@ -153,7 +172,11 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
     ].join(" ");
 
   const prestations = lignes.filter((l) => !l.titre && (l.numero ?? "").trim()).length;
-  const entetes = ["N° prix", "Désignation des prix", "Unité", "Quantité", "Prix unitaire", "Montant HT", ""];
+  const entetes = ["N° prix", "Désignation des prix", "Unité", "Quantité", "Prix unitaire", "Montant HT", "Tâches", ""];
+
+  /** Rapprochement automatique : sur le numéro de prix, puis sur la désignation. */
+  const rapprocher = () => onChange(apparierParNumero(lignes, taches));
+  const arapprocher = taches.some((t) => t.id) && coherence.sansTache.length > 0;
 
   const manquant = (ligne: LigneDqe, champName: "numero" | "designation") =>
     controleDemande && !(ligne[champName] ?? "").trim() ? "Champ obligatoire" : undefined;
@@ -189,7 +212,7 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
         </header>
 
         <div className="overflow-x-auto">
-          <div className="min-w-[940px]">
+          <div className="min-w-[1100px]">
             <div className={`grid ${GRID} bg-inset border-b border-line text-[10px] font-bold uppercase tracking-wide text-fg-subtle`}>
               {entetes.map((entete, i) => (
                 <div key={i} className="px-1.5 py-2 border-r border-line last:border-r-0">
@@ -310,6 +333,19 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
                     {montant ? formatMontant(montant) : "—"}
                   </div>
 
+                  {/* Une série ne se réalise pas : ce sont ses prestations qui
+                      se relient au planning. */}
+                  <div className={cellule}>
+                    {!ligne.titre && (
+                      <SelecteurTaches
+                        taches={taches}
+                        valeur={ligne.tacheIds ?? []}
+                        onChange={(ids) => modifier(index, { tacheIds: ids.length ? ids : undefined })}
+                        disabled={readOnly}
+                      />
+                    )}
+                  </div>
+
                   <div className={`${cellule} justify-center`}>
                     {!readOnly && (
                       <button
@@ -340,7 +376,25 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
               <Button type="button" variant="secondary" size="sm" onClick={() => setShowImportModal(true)}>
                 <Upload size={13} /> Importer depuis Excel
               </Button>
+              {arapprocher && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={rapprocher}
+                  title="Relie chaque ligne encore libre à la tâche de même numéro, ou de même désignation."
+                >
+                  <Wand2 size={13} /> Rapprocher du planning
+                </Button>
+              )}
             </div>
+          )}
+
+          {ignorees > 0 && (
+            <p className="text-[11px] text-fg-subtle">
+              {ignorees} ligne(s) sans numéro de prix écartée(s) à l&apos;import — les totaux et sous-totaux du
+              fichier, que l&apos;application recalcule.
+            </p>
           )}
 
           {messages.length > 0 && (
@@ -352,6 +406,36 @@ export function DqeTable({ lignes, onChange, fiscalite, onFiscalite, readOnly, c
                 {messages.map((message) => (
                   <li key={message}>{message}</li>
                 ))}
+              </ul>
+            </div>
+          )}
+
+          {/* ── Cohérence avec le planning ──
+              Le devis et le planning doivent décrire les mêmes travaux. EDC le
+              garantit en principe à la source, mais leur planning est parfois
+              reconstitué après coup : autant le vérifier. */}
+          {taches.some((t) => t.id) && (coherence.sansTache.length > 0 || coherence.sansLigne.length > 0) && (
+            <div className="rounded-md border border-warning/30 bg-warning-subtle px-3 py-2 text-[11px] text-warning">
+              <p className="font-semibold">Devis et planning ne se recouvrent pas entièrement</p>
+              <ul className="mt-1 space-y-0.5">
+                {coherence.sansTache.length > 0 && (
+                  <li>
+                    <strong>{coherence.sansTache.length}</strong> ligne(s) du devis qu&apos;aucune tâche ne réalise :{" "}
+                    <span className="opacity-80">
+                      {coherence.sansTache.slice(0, 8).map((l) => l.numero).join(", ")}
+                      {coherence.sansTache.length > 8 ? "…" : ""}
+                    </span>
+                  </li>
+                )}
+                {coherence.sansLigne.length > 0 && (
+                  <li>
+                    <strong>{coherence.sansLigne.length}</strong> tâche(s) hors devis :{" "}
+                    <span className="opacity-80">
+                      {coherence.sansLigne.slice(0, 8).map((t) => t.numero).join(", ")}
+                      {coherence.sansLigne.length > 8 ? "…" : ""}
+                    </span>
+                  </li>
+                )}
               </ul>
             </div>
           )}

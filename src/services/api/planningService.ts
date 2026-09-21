@@ -5,6 +5,7 @@
 import { apiClient } from './client';
 import type { Calendrier } from '@/lib/livrableSchedule';
 import type { Fiscalite, LigneDqe } from '@/lib/dqe';
+import type { Echelle } from '@/lib/repartition';
 
 // ── Types ──
 
@@ -165,6 +166,8 @@ export interface Planning {
   /** Devis quantitatif et estimatif du marché. */
   dqe?: LigneDqe[];
   fiscalite?: Fiscalite;
+  /** Pas de temps de la répartition et des courbes. */
+  echelle?: Echelle;
 
   // Délais
   dateDebutInitiale?: Date;
@@ -227,6 +230,7 @@ export interface CreatePlanningDto {
   calendrier?: Calendrier;
   dqe?: LigneDqe[];
   fiscalite?: Fiscalite;
+  echelle?: Echelle;
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
   delaiInitialMois?: number;

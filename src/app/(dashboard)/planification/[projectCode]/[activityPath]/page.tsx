@@ -23,6 +23,7 @@ import { PlanningFormPassation, nouvellePassation, type PassationSaisie } from "
 import { nouvelleTache } from "@/components/planning/PlanningFormExecution";
 import { PlanningExecution } from "@/components/planning/PlanningExecution";
 import { FISCALITE_PAR_DEFAUT, normaliserFiscalite, type Fiscalite, type LigneDqe } from "@/lib/dqe";
+import { ECHELLE_PAR_DEFAUT, normaliserEchelle, type Echelle } from "@/lib/repartition";
 import { ActivityGeneralStrip } from "@/components/planning/ActivityGeneralStrip";
 import { ActivityPhaseBar, type PhaseSummary } from "@/components/planning/ActivityPhaseBar";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -84,6 +85,8 @@ export default function ActivityPlanningPage() {
   // Devis du marché : il appartient à l'activité, comme le planning.
   const [dqe, setDqe] = useState<LigneDqe[]>([]);
   const [fiscalite, setFiscalite] = useState<Fiscalite>(FISCALITE_PAR_DEFAUT);
+  // Maille de suivi : en mois pour les gros chantiers, en semaines pour les petits.
+  const [echelle, setEchelle] = useState<Echelle>(ECHELLE_PAR_DEFAUT);
 
   const isEditMode = planning !== null;
   const actives: Record<PhaseKey, boolean> = { etude: hasEtudePrealable, passation: hasPassation, execution: hasExecution };
@@ -108,6 +111,7 @@ export default function ActivityPlanningPage() {
     setCalendrier(normaliserCalendrier(p.calendrier));
     setDqe(p.dqe ?? []);
     setFiscalite(normaliserFiscalite(p.fiscalite));
+    setEchelle(normaliserEchelle(p.echelle));
     setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
     // Une passation saisie dans l'ancien tableau reprend sa première ligne ;
     // une passation jamais planifiée part des colonnes du modèle.
@@ -143,9 +147,9 @@ export default function ActivityPlanningPage() {
       general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal, calendrier }),
       etude: JSON.stringify(hasEtudePrealable ? livrables.map(livrablePourApi) : null),
       passation: JSON.stringify(hasPassation ? passation : null),
-      execution: JSON.stringify(hasExecution ? { taches: taches.map(tachePourApi), dqe, fiscalite } : null),
+      execution: JSON.stringify(hasExecution ? { taches: taches.map(tachePourApi), dqe, fiscalite, echelle } : null),
     }),
-    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches, dqe, fiscalite],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches, dqe, fiscalite, echelle],
   );
   /** Tout ce qui se saisit sur cette page, pour le brouillon automatique. */
   const etatFormulaire = useMemo(
@@ -162,8 +166,9 @@ export default function ActivityPlanningPage() {
       taches,
       dqe,
       fiscalite,
+      echelle,
     }),
-    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches, dqe, fiscalite],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches, dqe, fiscalite, echelle],
   );
 
   const sectionsRef = useRef(sections);
@@ -208,6 +213,7 @@ export default function ActivityPlanningPage() {
     setTaches(e.taches);
     setDqe(e.dqe ?? []);
     setFiscalite(normaliserFiscalite(e.fiscalite));
+    setEchelle(normaliserEchelle(e.echelle));
     brouillon.effacer();
     toast.success("Brouillon repris ; il reste à enregistrer");
   };
@@ -417,6 +423,7 @@ export default function ActivityPlanningPage() {
         // Le devis reste attaché au marché : il n'a de sens qu'avec l'exécution.
         dqe: hasExecution ? dqe : [],
         fiscalite,
+        echelle,
       };
 
       if (isEditMode) {
@@ -660,6 +667,8 @@ export default function ActivityPlanningPage() {
               onDqe={setDqe}
               fiscalite={fiscalite}
               onFiscalite={setFiscalite}
+              echelle={echelle}
+              onEchelle={setEchelle}
               dateT0={dateT0}
               calendrierTravail={calendrier}
               readOnly={readOnly}
