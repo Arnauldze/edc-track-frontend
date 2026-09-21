@@ -4,6 +4,7 @@
 
 import { apiClient } from './client';
 import type { Calendrier } from '@/lib/livrableSchedule';
+import type { Fiscalite, LigneDqe } from '@/lib/dqe';
 
 // ── Types ──
 
@@ -161,6 +162,10 @@ export interface Planning {
   /** Jours travaillés de l'activité ; absent, tous les jours comptent. */
   calendrier?: Calendrier;
 
+  /** Devis quantitatif et estimatif du marché. */
+  dqe?: LigneDqe[];
+  fiscalite?: Fiscalite;
+
   // Délais
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
@@ -220,6 +225,8 @@ export interface CreatePlanningDto {
   budgetInitial?: BudgetDevise[];
   budgetInitialTotal?: number;
   calendrier?: Calendrier;
+  dqe?: LigneDqe[];
+  fiscalite?: Fiscalite;
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
   delaiInitialMois?: number;

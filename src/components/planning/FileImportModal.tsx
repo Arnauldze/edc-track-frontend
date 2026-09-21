@@ -19,7 +19,45 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onImport: (data: any, calibrage: Record<string, number>) => void;
-  importType: "etude" | "passation" | "execution";
+  importType: "etude" | "passation" | "execution" | "dqe";
+}
+
+/** Toutes les feuilles du classeur : chacune devient une serie de prix. */
+const TOUTES = "*";
+
+/** Ce qu'une cellule de tableur peut contenir une fois lue par XLSX. */
+type CelluleExcel = string | number | boolean | Date | null | undefined;
+type LigneExcel = CelluleExcel[];
+
+/** Lettre de colonne du tableur : 0 -> A, 26 -> AA. */
+function lettreColonne(index: number): string {
+  let reste = index;
+  let lettre = "";
+  do {
+    lettre = String.fromCharCode(65 + (reste % 26)) + lettre;
+    reste = Math.floor(reste / 26) - 1;
+  } while (reste >= 0);
+  return lettre;
+}
+
+/**
+ * Premiere ligne qui ressemble a des en-tetes. Les devis d'EDC commencent par
+ * un cartouche - titre du projet, du lot - et la vraie ligne d'en-tetes n'est
+ * souvent qu'en troisieme ou quatrieme position.
+ */
+function ligneEntetesProbable(rows: LigneExcel[]): number {
+  const remplies = (row: LigneExcel = []) =>
+    row.filter((c) => c !== null && c !== undefined && String(c).trim() !== "").length;
+  let meilleure = 0;
+  let score = 0;
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    const n = remplies(rows[i]);
+    if (n > score) {
+      score = n;
+      meilleure = i;
+    }
+  }
+  return meilleure;
 }
 
 const COLUMN_MAPPINGS = {
@@ -40,6 +78,13 @@ const COLUMN_MAPPINGS = {
     { field: "nom", label: "Nom de l'étape", required: true },
     { field: "delaiJours", label: "Délai (jours)", required: true },
   ],
+  dqe: [
+    { field: "numero", label: "N° de prix", required: true },
+    { field: "designation", label: "Désignation des prix", required: true },
+    { field: "unite", label: "Unité", required: false },
+    { field: "quantite", label: "Quantité", required: false },
+    { field: "prixUnitaire", label: "Prix unitaire retenu", required: false },
+  ],
   execution: [
     { field: "numero", label: "Numéro", required: true },
     { field: "designation", label: "Désignation", required: true },
@@ -59,8 +104,21 @@ const COLUMN_MAPPINGS = {
 export function FileImportModal({ isOpen, onClose, onImport, importType }: Props) {
   const [step, setStep] = useState<"upload" | "calibrate" | "preview">("upload");
   const [file, setFile] = useState<File | null>(null);
+  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const [feuilles, setFeuilles] = useState<string[]>([]);
+  const [feuille, setFeuille] = useState<string>("");
+  const [ligneEntetes, setLigneEntetes] = useState(0);
   const [rawData, setRawData] = useState<any[][]>([]);
+  /** Feuille d'origine de chaque ligne, alignée sur rawData. */
+  const [origines, setOrigines] = useState<string[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  /**
+   * Ligne au-dessus des en-têtes. Un devis d'EDC présente plusieurs blocs de
+   * prix côte à côte — « Base », « Proposition finale (EDC) » — dont les
+   * colonnes portent exactement les mêmes intitulés. Sans ce surtitre, les
+   * deux « Quantité » sont indiscernables dans la liste.
+   */
+  const [surEntetes, setSurEntetes] = useState<string[]>([]);
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
   const [previewData, setPreviewData] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,34 +131,70 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
     parseExcelFile(selectedFile);
   };
 
+  const lignesDe = (wb: XLSX.WorkBook, nom: string) =>
+    XLSX.utils.sheet_to_json(wb.Sheets[nom], { header: 1 }) as LigneExcel[];
+
+  /**
+   * Relit le classeur pour la feuille et la ligne d'en-têtes choisies. Sur
+   * « toutes les feuilles », chaque feuille apporte ses lignes et donne son nom
+   * à la série ; les en-têtes sont ceux de la première.
+   */
+  const recharger = (wb: XLSX.WorkBook, choix: string, entetes: number) => {
+    const noms = choix === TOUTES ? wb.SheetNames : [choix];
+    const utile = (row: LigneExcel = []) =>
+      row.some((c) => c !== null && c !== undefined && String(c).trim() !== "");
+
+    const lignes: LigneExcel[] = [];
+    const sources: string[] = [];
+    for (const nom of noms) {
+      for (const row of lignesDe(wb, nom).slice(entetes + 1)) {
+        if (!utile(row)) continue;
+        lignes.push(row);
+        sources.push(nom);
+      }
+    }
+
+    const feuilleRef = lignesDe(wb, noms[0]);
+    setHeaders((feuilleRef[entetes] ?? []).map((h) => String(h ?? "")));
+    setSurEntetes(entetes > 0 ? (feuilleRef[entetes - 1] ?? []).map((h) => String(h ?? "")) : []);
+    setRawData(lignes);
+    setOrigines(sources);
+  };
+
+  const changerFeuille = (choix: string) => {
+    setFeuille(choix);
+    if (!workbook) return;
+    // Chaque feuille peut avoir son propre cartouche : on redétecte.
+    const entetes = ligneEntetesProbable(lignesDe(workbook, choix === TOUTES ? workbook.SheetNames[0] : choix));
+    setLigneEntetes(entetes);
+    recharger(workbook, choix, entetes);
+  };
+
+  const changerLigneEntetes = (index: number) => {
+    setLigneEntetes(index);
+    if (workbook) recharger(workbook, feuille, index);
+  };
+
   const parseExcelFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
-
-        if (jsonData.length === 0) {
+        const wb = XLSX.read(data, { type: "array" });
+        if (!wb.SheetNames.length) {
           alert("Le fichier est vide");
           return;
         }
 
-        // Première ligne = headers
-        const fileHeaders = jsonData[0].map((h: any) => String(h || ""));
-        const dataRows = jsonData.slice(1);
+        const premiere = wb.SheetNames[0];
+        const entetes = ligneEntetesProbable(lignesDe(wb, premiere));
 
-        setHeaders(fileHeaders);
-        setRawData(dataRows);
-
-        // Initialiser les mappings
-        const initialMappings = COLUMN_MAPPINGS[importType].map((m) => ({
-          ...m,
-          columnIndex: null,
-        }));
-        setMappings(initialMappings);
-
+        setWorkbook(wb);
+        setFeuilles(wb.SheetNames);
+        setFeuille(premiere);
+        setLigneEntetes(entetes);
+        recharger(wb, premiere, entetes);
+        setMappings(COLUMN_MAPPINGS[importType].map((m) => ({ ...m, columnIndex: null })));
         setStep("calibrate");
       } catch (error) {
         console.error("Erreur parsing Excel:", error);
@@ -121,6 +215,19 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
     );
   };
 
+  /**
+   * Bloc auquel appartient une colonne : la dernière valeur non vide du
+   * surtitre, à cette colonne ou avant. C'est ainsi que se lisent les cellules
+   * fusionnées d'un tableur, qui ne remplissent que leur première colonne.
+   */
+  const blocDe = (colIndex: number): string => {
+    for (let i = colIndex; i >= 0; i--) {
+      const valeur = (surEntetes[i] ?? "").trim();
+      if (valeur) return valeur;
+    }
+    return "";
+  };
+
   const validateMappings = (): boolean => {
     const requiredMappings = mappings.filter((m) => m.required);
     return requiredMappings.every((m) => m.columnIndex !== null);
@@ -134,9 +241,9 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
 
     // Transformer les données selon le mapping
     const transformed = rawData
-      .filter((row) => row.some((cell) => cell !== null && cell !== undefined && cell !== ""))
-      .map((row) => {
-        const obj: any = {};
+      .map((row, indexLigne) => {
+        // La feuille d'origine suit la ligne : c'est elle qui nomme la série.
+        const obj: any = { __feuille: origines[indexLigne] };
         mappings.forEach((mapping) => {
           if (mapping.columnIndex !== null) {
             const value = row[mapping.columnIndex];
@@ -192,8 +299,14 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
   const handleClose = () => {
     setStep("upload");
     setFile(null);
+    setWorkbook(null);
+    setFeuilles([]);
+    setFeuille("");
+    setLigneEntetes(0);
     setRawData([]);
+    setOrigines([]);
     setHeaders([]);
+    setSurEntetes([]);
     setMappings([]);
     setPreviewData([]);
     onClose();
@@ -233,8 +346,9 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
               <div className="flex gap-3 p-4 rounded-[var(--radius-lg)] border border-primary/20 bg-primary-subtle">
                 <AlertCircle size={18} className="mt-0.5 shrink-0 text-primary-fg" />
                 <div className="text-[12px] leading-relaxed text-primary-fg">
-                  <strong>Format attendu :</strong> La première ligne doit contenir les en-têtes de colonnes.
-                  Les données commencent à la ligne 2. Vous pourrez mapper les colonnes à l'étape suivante.
+                  <strong>Format attendu :</strong> une ligne d&apos;en-têtes, puis les données. Si le fichier
+                  commence par un cartouche, vous indiquerez à l&apos;étape suivante à quelle ligne se trouvent les
+                  en-têtes - et, pour un classeur à plusieurs feuilles, laquelle importer.
                 </div>
               </div>
 
@@ -278,6 +392,43 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
                 <div className="text-[10px] text-[var(--text-secondary)]">
                   {rawData.length} ligne(s) de données • {headers.length} colonne(s)
                 </div>
+
+                <div className="mt-3 flex flex-wrap gap-4">
+                  {feuilles.length > 1 && (
+                    <label className="flex items-center gap-2 text-[11px]">
+                      <span className="font-semibold text-[var(--text-secondary)]">Feuille</span>
+                      <select
+                        value={feuille}
+                        onChange={(e) => changerFeuille(e.target.value)}
+                        className="px-2 py-1 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-surface)] text-[11px]"
+                      >
+                        {feuilles.map((nom) => (
+                          <option key={nom} value={nom}>
+                            {nom}
+                          </option>
+                        ))}
+                        <option value={TOUTES}>Toutes les feuilles ({feuilles.length})</option>
+                      </select>
+                    </label>
+                  )}
+
+                  <label className="flex items-center gap-2 text-[11px]">
+                    <span className="font-semibold text-[var(--text-secondary)]">Ligne des en-têtes</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={ligneEntetes + 1}
+                      onChange={(e) => changerLigneEntetes(Math.max(0, (parseInt(e.target.value) || 1) - 1))}
+                      className="w-16 px-2 py-1 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-surface)] text-[11px]"
+                    />
+                  </label>
+                </div>
+
+                {headers.length > 0 && (
+                  <div className="mt-2 text-[10px] text-[var(--text-tertiary)] truncate" title={headers.join(" | ")}>
+                    En-têtes lus : {headers.filter(Boolean).join(" | ") || "(ligne vide - corrigez le numéro de ligne)"}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -304,7 +455,8 @@ export function FileImportModal({ isOpen, onClose, onImport, importType }: Props
                       <option value={-1}>-- Sélectionnez une colonne --</option>
                       {headers.map((header, colIndex) => (
                         <option key={colIndex} value={colIndex}>
-                          Colonne {colIndex + 1}: {header || "(vide)"}
+                          {lettreColonne(colIndex)} · {blocDe(colIndex) ? `${blocDe(colIndex)} · ` : ""}
+                          {header || "(vide)"}
                         </option>
                       ))}
                     </select>

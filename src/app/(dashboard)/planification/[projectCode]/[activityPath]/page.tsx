@@ -20,7 +20,9 @@ import { planningService, type CreatePlanningDto, type Livrable, type Planning, 
 import { toast } from "@/lib/toastStore";
 import { PlanningFormEtude, nouveauLivrable } from "@/components/planning/PlanningFormEtude";
 import { PlanningFormPassation, nouvellePassation, type PassationSaisie } from "@/components/planning/PlanningFormPassation";
-import { PlanningFormExecution, nouvelleTache } from "@/components/planning/PlanningFormExecution";
+import { nouvelleTache } from "@/components/planning/PlanningFormExecution";
+import { PlanningExecution } from "@/components/planning/PlanningExecution";
+import { FISCALITE_PAR_DEFAUT, normaliserFiscalite, type Fiscalite, type LigneDqe } from "@/lib/dqe";
 import { ActivityGeneralStrip } from "@/components/planning/ActivityGeneralStrip";
 import { ActivityPhaseBar, type PhaseSummary } from "@/components/planning/ActivityPhaseBar";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -79,6 +81,9 @@ export default function ActivityPlanningPage() {
   const [livrables, setLivrables] = useState<Livrable[]>([nouveauLivrable("R1")]);
   const [passation, setPassation] = useState<PassationSaisie>(nouvellePassation);
   const [taches, setTaches] = useState<TacheExecution[]>([nouvelleTache("T1")]);
+  // Devis du marché : il appartient à l'activité, comme le planning.
+  const [dqe, setDqe] = useState<LigneDqe[]>([]);
+  const [fiscalite, setFiscalite] = useState<Fiscalite>(FISCALITE_PAR_DEFAUT);
 
   const isEditMode = planning !== null;
   const actives: Record<PhaseKey, boolean> = { etude: hasEtudePrealable, passation: hasPassation, execution: hasExecution };
@@ -101,6 +106,8 @@ export default function ActivityPlanningPage() {
     setDateT0(toDay(p.dateDebutInitiale as unknown as string) ?? "");
     setResponsablePrincipal(p.responsablePrincipal || "");
     setCalendrier(normaliserCalendrier(p.calendrier));
+    setDqe(p.dqe ?? []);
+    setFiscalite(normaliserFiscalite(p.fiscalite));
     setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
     // Une passation saisie dans l'ancien tableau reprend sa première ligne ;
     // une passation jamais planifiée part des colonnes du modèle.
@@ -136,9 +143,9 @@ export default function ActivityPlanningPage() {
       general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal, calendrier }),
       etude: JSON.stringify(hasEtudePrealable ? livrables.map(livrablePourApi) : null),
       passation: JSON.stringify(hasPassation ? passation : null),
-      execution: JSON.stringify(hasExecution ? taches.map(tachePourApi) : null),
+      execution: JSON.stringify(hasExecution ? { taches: taches.map(tachePourApi), dqe, fiscalite } : null),
     }),
-    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches, dqe, fiscalite],
   );
   /** Tout ce qui se saisit sur cette page, pour le brouillon automatique. */
   const etatFormulaire = useMemo(
@@ -153,8 +160,10 @@ export default function ActivityPlanningPage() {
       livrables,
       passation,
       taches,
+      dqe,
+      fiscalite,
     }),
-    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches, dqe, fiscalite],
   );
 
   const sectionsRef = useRef(sections);
@@ -197,6 +206,8 @@ export default function ActivityPlanningPage() {
     setLivrables(e.livrables);
     setPassation(e.passation);
     setTaches(e.taches);
+    setDqe(e.dqe ?? []);
+    setFiscalite(normaliserFiscalite(e.fiscalite));
     brouillon.effacer();
     toast.success("Brouillon repris ; il reste à enregistrer");
   };
@@ -403,6 +414,9 @@ export default function ActivityPlanningPage() {
           : { colonnesPassation: [] }),
         // Une phase retirée n'emporte pas ses tâches
         tachesExecution: hasExecution ? taches.map(tachePourApi) : [],
+        // Le devis reste attaché au marché : il n'a de sens qu'avec l'exécution.
+        dqe: hasExecution ? dqe : [],
+        fiscalite,
       };
 
       if (isEditMode) {
@@ -639,9 +653,13 @@ export default function ActivityPlanningPage() {
 
         {hasExecution && (
           <div hidden={selected !== "execution"}>
-            <PlanningFormExecution
+            <PlanningExecution
               taches={taches}
-              onChange={setTaches}
+              onTaches={setTaches}
+              dqe={dqe}
+              onDqe={setDqe}
+              fiscalite={fiscalite}
+              onFiscalite={setFiscalite}
               dateT0={dateT0}
               calendrierTravail={calendrier}
               readOnly={readOnly}
