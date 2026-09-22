@@ -30,6 +30,11 @@
 // Une ligne réalisée par PLUSIEURS tâches — la même prestation menée par zone
 // ou par bâtiment — additionne les jours de ses tâches : la formule ci-dessus
 // s'applique alors telle quelle.
+//
+// Vient ensuite le RÉEL. L'entreprise dépose périodiquement ses décomptes, et
+// on n'en saisit qu'une chose : la quantité réellement exécutée. Le montant,
+// les cumuls et l'avancement s'en déduisent, et se superposent au prévu —
+// l'écart entre les deux courbes est le métier du maître d'ouvrage.
 // ══════════════════════════════════════════════════════════════
 
 import {
@@ -373,6 +378,174 @@ export function repartir(
   });
 
   return { periodes, lignes, synthese, totalHT, debut, fin, problemes: [...new Set(problemes)] };
+}
+
+// ══════════════════════════════════════════════════════════════
+// RÉEL
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Un décompte : ce que l'entreprise déclare avoir réalisé d'une ligne du devis
+ * au titre d'une période.
+ *
+ * La période est désignée par son PREMIER JOUR, et non par son rang. Un rang
+ * ne veut rien dire dès qu'on change de pas de temps, alors qu'un décompte
+ * reste attaché aux dates que le marché lui donne : passer l'affichage du mois
+ * à la semaine ne doit pas déplacer ce qui a été constaté.
+ */
+export interface Realisation {
+  ligneId: string;
+  /** Premier jour de la période à laquelle le décompte se rapporte. */
+  periode: string;
+  quantite: number;
+}
+
+export interface CelluleReel {
+  quantite: number;
+  quantiteCumulee: number;
+  montant: number;
+  montantCumule: number;
+  pourcentageCumule: number;
+}
+
+export interface LigneComparee {
+  ligneId?: string;
+  numero: string;
+  designation: string;
+  unite?: string;
+  /** Quantité du devis. */
+  quantite: number;
+  prixUnitaire: number;
+  montantTotal: number;
+  prevu: CelluleRepartition[];
+  reel: CelluleReel[];
+  /** Quantité déclarée, toutes périodes confondues. */
+  quantiteReelle: number;
+}
+
+export interface ComparaisonPeriode {
+  rang: number;
+  montantPrevu: number;
+  montantPrevuCumule: number;
+  avancementPrevu: number;
+  montantReel: number;
+  montantReelCumule: number;
+  avancementReel: number;
+  /** Réel moins prévu, en points d'avancement : négatif, le chantier est en retard. */
+  ecart: number;
+}
+
+export interface Comparaison {
+  periodes: Periode[];
+  lignes: LigneComparee[];
+  synthese: ComparaisonPeriode[];
+  totalHT: number;
+  /**
+   * Rang de la dernière période où un décompte a été saisi. Au-delà, il n'y a
+   * pas de réel : une courbe qui continuerait à plat laisserait croire à un
+   * chantier à l'arrêt, ce qui n'est pas la même chose que « pas encore
+   * constaté ».
+   */
+  dernierePeriodeSaisie?: number;
+}
+
+/**
+ * Superpose les décomptes à la répartition prévue.
+ *
+ * Seule la quantité se saisit ; le montant suit le prix unitaire du devis,
+ * comme dans les décomptes de l'entreprise.
+ */
+export function comparer(repartition: Repartition, realisations: Realisation[]): Comparaison {
+  const { periodes, lignes: prevues, totalHT } = repartition;
+
+  // Les décomptes se rangent dans la période qui contient leur date.
+  const rangDe = (jour: string): number => {
+    const index = periodes.findIndex((p) => jour >= p.debut && jour <= p.fin);
+    if (index >= 0) return index;
+    // Un décompte antérieur au chantier se rattache à la première période ;
+    // postérieur, à la dernière. Mieux vaut le compter que le perdre.
+    if (!periodes.length) return -1;
+    return jour < periodes[0].debut ? 0 : periodes.length - 1;
+  };
+
+  const parLigne = new Map<string, number[]>();
+  let derniere = -1;
+  for (const declaration of realisations) {
+    const index = rangDe(toDay(declaration.periode) ?? '');
+    if (index < 0) continue;
+    const quantites = parLigne.get(declaration.ligneId) ?? periodes.map(() => 0);
+    quantites[index] = round2(quantites[index] + nombre(declaration.quantite));
+    parLigne.set(declaration.ligneId, quantites);
+    if (index > derniere) derniere = index;
+  }
+
+  const lignes: LigneComparee[] = prevues.map((ligne) => {
+    const quantites = (ligne.ligneId && parLigne.get(ligne.ligneId)) || periodes.map(() => 0);
+    let quantiteCumulee = 0;
+    let montantCumule = 0;
+
+    const reel: CelluleReel[] = quantites.map((quantite) => {
+      const montant = round2(quantite * ligne.prixUnitaire);
+      quantiteCumulee = round2(quantiteCumulee + quantite);
+      montantCumule = round2(montantCumule + montant);
+      return {
+        quantite,
+        quantiteCumulee,
+        montant,
+        montantCumule,
+        pourcentageCumule: ligne.montantTotal ? round2((montantCumule / ligne.montantTotal) * 100) : 0,
+      };
+    });
+
+    return {
+      ligneId: ligne.ligneId,
+      numero: ligne.numero,
+      designation: ligne.designation,
+      unite: ligne.unite,
+      quantite: ligne.quantite,
+      prixUnitaire: ligne.prixUnitaire,
+      montantTotal: ligne.montantTotal,
+      prevu: ligne.periodes,
+      reel,
+      quantiteReelle: quantiteCumulee,
+    };
+  });
+
+  let cumulPrevu = 0;
+  let cumulReel = 0;
+  const synthese: ComparaisonPeriode[] = periodes.map((periode, i) => {
+    const montantPrevu = round2(lignes.reduce((somme, l) => somme + l.prevu[i].montant, 0));
+    const montantReel = round2(lignes.reduce((somme, l) => somme + l.reel[i].montant, 0));
+    cumulPrevu = round2(cumulPrevu + montantPrevu);
+    cumulReel = round2(cumulReel + montantReel);
+    const avancementPrevu = totalHT ? round2((cumulPrevu / totalHT) * 100) : 0;
+    const avancementReel = totalHT ? round2((cumulReel / totalHT) * 100) : 0;
+    return {
+      rang: periode.rang,
+      montantPrevu,
+      montantPrevuCumule: cumulPrevu,
+      avancementPrevu,
+      montantReel,
+      montantReelCumule: cumulReel,
+      avancementReel,
+      ecart: round2(avancementReel - avancementPrevu),
+    };
+  });
+
+  return {
+    periodes,
+    lignes,
+    synthese,
+    totalHT,
+    dernierePeriodeSaisie: derniere >= 0 ? derniere + 1 : undefined,
+  };
+}
+
+/** Décomptes lus d'un enregistrement : on écarte ce qui n'est pas exploitable. */
+export function normaliserRealisations(valeurs: Array<Partial<Realisation>> | undefined | null): Realisation[] {
+  return (valeurs ?? [])
+    .map((v) => ({ ligneId: String(v?.ligneId ?? ''), periode: toDay(v?.periode) ?? '', quantite: nombre(v?.quantite) }))
+    .filter((v) => v.ligneId && v.periode);
 }
 
 /** Échelle lue d'un enregistrement, où elle peut manquer ou être incomplète. */

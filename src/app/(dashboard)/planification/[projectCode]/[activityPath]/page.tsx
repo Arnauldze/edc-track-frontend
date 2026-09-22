@@ -23,7 +23,7 @@ import { PlanningFormPassation, nouvellePassation, type PassationSaisie } from "
 import { nouvelleTache } from "@/components/planning/PlanningFormExecution";
 import { PlanningExecution } from "@/components/planning/PlanningExecution";
 import { FISCALITE_PAR_DEFAUT, normaliserFiscalite, type Fiscalite, type LigneDqe } from "@/lib/dqe";
-import { ECHELLE_PAR_DEFAUT, normaliserEchelle, type Echelle } from "@/lib/repartition";
+import { ECHELLE_PAR_DEFAUT, normaliserEchelle, normaliserRealisations, type Echelle, type Realisation } from "@/lib/repartition";
 import { ActivityGeneralStrip } from "@/components/planning/ActivityGeneralStrip";
 import { ActivityPhaseBar, type PhaseSummary } from "@/components/planning/ActivityPhaseBar";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -87,6 +87,8 @@ export default function ActivityPlanningPage() {
   const [fiscalite, setFiscalite] = useState<Fiscalite>(FISCALITE_PAR_DEFAUT);
   // Maille de suivi : en mois pour les gros chantiers, en semaines pour les petits.
   const [echelle, setEchelle] = useState<Echelle>(ECHELLE_PAR_DEFAUT);
+  // Décomptes de l'entreprise : le réel constaté, période par période.
+  const [realisations, setRealisations] = useState<Realisation[]>([]);
 
   const isEditMode = planning !== null;
   const actives: Record<PhaseKey, boolean> = { etude: hasEtudePrealable, passation: hasPassation, execution: hasExecution };
@@ -112,6 +114,7 @@ export default function ActivityPlanningPage() {
     setDqe(p.dqe ?? []);
     setFiscalite(normaliserFiscalite(p.fiscalite));
     setEchelle(normaliserEchelle(p.echelle));
+    setRealisations(normaliserRealisations(p.realisations));
     setLivrables(p.livrables?.length ? p.livrables : [nouveauLivrable("R1")]);
     // Une passation saisie dans l'ancien tableau reprend sa première ligne ;
     // une passation jamais planifiée part des colonnes du modèle.
@@ -147,9 +150,9 @@ export default function ActivityPlanningPage() {
       general: JSON.stringify({ budgetInitial, dateT0, responsablePrincipal, calendrier }),
       etude: JSON.stringify(hasEtudePrealable ? livrables.map(livrablePourApi) : null),
       passation: JSON.stringify(hasPassation ? passation : null),
-      execution: JSON.stringify(hasExecution ? { taches: taches.map(tachePourApi), dqe, fiscalite, echelle } : null),
+      execution: JSON.stringify(hasExecution ? { taches: taches.map(tachePourApi), dqe, fiscalite, echelle, realisations } : null),
     }),
-    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches, dqe, fiscalite, echelle],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, livrables, hasPassation, passation, hasExecution, taches, dqe, fiscalite, echelle, realisations],
   );
   /** Tout ce qui se saisit sur cette page, pour le brouillon automatique. */
   const etatFormulaire = useMemo(
@@ -167,8 +170,9 @@ export default function ActivityPlanningPage() {
       dqe,
       fiscalite,
       echelle,
+      realisations,
     }),
-    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches, dqe, fiscalite, echelle],
+    [budgetInitial, dateT0, responsablePrincipal, calendrier, hasEtudePrealable, hasPassation, hasExecution, livrables, passation, taches, dqe, fiscalite, echelle, realisations],
   );
 
   const sectionsRef = useRef(sections);
@@ -214,6 +218,7 @@ export default function ActivityPlanningPage() {
     setDqe(e.dqe ?? []);
     setFiscalite(normaliserFiscalite(e.fiscalite));
     setEchelle(normaliserEchelle(e.echelle));
+    setRealisations(normaliserRealisations(e.realisations));
     brouillon.effacer();
     toast.success("Brouillon repris ; il reste à enregistrer");
   };
@@ -424,6 +429,8 @@ export default function ActivityPlanningPage() {
         dqe: hasExecution ? dqe : [],
         fiscalite,
         echelle,
+        // Sans exécution, il n'y a rien à constater.
+        realisations: hasExecution ? realisations : [],
       };
 
       if (isEditMode) {
@@ -669,6 +676,8 @@ export default function ActivityPlanningPage() {
               onFiscalite={setFiscalite}
               echelle={echelle}
               onEchelle={setEchelle}
+              realisations={realisations}
+              onRealisations={setRealisations}
               dateT0={dateT0}
               calendrierTravail={calendrier}
               readOnly={readOnly}

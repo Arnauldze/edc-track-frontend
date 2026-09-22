@@ -5,7 +5,7 @@
 import { apiClient } from './client';
 import type { Calendrier } from '@/lib/livrableSchedule';
 import type { Fiscalite, LigneDqe } from '@/lib/dqe';
-import type { Echelle } from '@/lib/repartition';
+import type { Echelle, Realisation } from '@/lib/repartition';
 
 // ── Types ──
 
@@ -168,6 +168,8 @@ export interface Planning {
   fiscalite?: Fiscalite;
   /** Pas de temps de la répartition et des courbes. */
   echelle?: Echelle;
+  /** Décomptes de l'entreprise : ce qui a réellement été exécuté. */
+  realisations?: Realisation[];
 
   // Délais
   dateDebutInitiale?: Date;
@@ -231,6 +233,7 @@ export interface CreatePlanningDto {
   dqe?: LigneDqe[];
   fiscalite?: Fiscalite;
   echelle?: Echelle;
+  realisations?: Realisation[];
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
   delaiInitialMois?: number;
