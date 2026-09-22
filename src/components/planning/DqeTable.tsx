@@ -185,6 +185,14 @@ export function DqeTable({ lignes, onChange, taches, fiscalite, onFiscalite, rea
     <>
       <FileImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} onImport={importer} importType="dqe" />
 
+      {/* Une seule liste d'unités pour tout le tableau : la répéter à chaque
+          ligne donnerait autant d'éléments portant le même identifiant. */}
+      <datalist id="unites-dqe">
+        {UNITES_DQE.map((u) => (
+          <option key={u} value={u} />
+        ))}
+      </datalist>
+
       <section className="bg-surface rounded-lg border border-line overflow-hidden">
         <header className="px-4 py-2.5 border-b border-line-subtle flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -283,21 +291,14 @@ export function DqeTable({ lignes, onChange, taches, fiscalite, onFiscalite, rea
                       son montant est la somme de ce qu'elle couvre. */}
                   <div className={cellule}>
                     {!ligne.titre && (
-                      <>
-                        <input
-                          list="unites-dqe"
-                          value={ligne.unite ?? ""}
-                          onChange={(e) => modifier(index, { unite: e.target.value || undefined })}
-                          disabled={readOnly}
-                          placeholder="m³"
-                          className={`${champ()} text-center`}
-                        />
-                        <datalist id="unites-dqe">
-                          {UNITES_DQE.map((u) => (
-                            <option key={u} value={u} />
-                          ))}
-                        </datalist>
-                      </>
+                      <input
+                        list="unites-dqe"
+                        value={ligne.unite ?? ""}
+                        onChange={(e) => modifier(index, { unite: e.target.value || undefined })}
+                        disabled={readOnly}
+                        placeholder="m³"
+                        className={`${champ()} text-center`}
+                      />
                     )}
                   </div>
 

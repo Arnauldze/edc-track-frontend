@@ -12,7 +12,7 @@
 // le pas de temps d'affichage ne déplace pas ce qui a été constaté.
 // ══════════════════════════════════════════════════════════════
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ClipboardCheck } from "lucide-react";
 import {
   comparer,
@@ -169,14 +169,12 @@ export function ReelTable({ dqe, taches, echelle, realisations, onRealisations, 
 
                 {c.periodes.map((periode, i) => (
                   <td key={periode.rang} className="border-r border-b border-line p-0">
-                    <input
-                      inputMode="decimal"
-                      value={quantiteSaisie(ligne.ligneId, periode.debut) ?? ""}
-                      onChange={(e) => saisir(ligne.ligneId, periode.debut, parseNombre(e.target.value))}
+                    <ChampQuantite
+                      valeur={quantiteSaisie(ligne.ligneId, periode.debut)}
+                      onValeur={(v) => saisir(ligne.ligneId, periode.debut, v)}
                       disabled={readOnly}
                       placeholder={ligne.prevu[i].quantite ? nf(ligne.prevu[i].quantite, 2) : "—"}
                       title={`Prévu : ${nf(ligne.prevu[i].quantite, 3)} ${ligne.unite ?? ""}`}
-                      className="w-full min-w-[92px] bg-transparent px-2 py-1.5 text-right text-[11px] tabular-nums placeholder:text-fg-subtle placeholder:italic focus:outline-none focus:bg-primary-subtle disabled:cursor-not-allowed"
                     />
                   </td>
                 ))}
@@ -210,5 +208,46 @@ export function ReelTable({ dqe, taches, echelle, realisations, onRealisations, 
         décompte reste attaché aux dates de sa période : changer le pas de temps d&apos;affichage ne le déplace pas.
       </p>
     </section>
+  );
+}
+
+/**
+ * Saisie d'une quantité.
+ *
+ * Le champ garde le texte tapé tant qu'on y est. Le lier directement à la
+ * valeur enregistrée rendrait les décimales impossibles à écrire : « 0, » vaut
+ * zéro, la saisie serait effacée avant même qu'on ait tapé le chiffre suivant.
+ * À la sortie du champ, l'affichage reprend la valeur enregistrée, remise en
+ * forme.
+ */
+function ChampQuantite({
+  valeur,
+  onValeur,
+  disabled,
+  placeholder,
+  title,
+}: {
+  valeur: number | undefined;
+  onValeur: (valeur: number) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  title?: string;
+}) {
+  const [brouillon, setBrouillon] = useState<string | null>(null);
+
+  return (
+    <input
+      inputMode="decimal"
+      value={brouillon ?? (valeur === undefined ? "" : nf(valeur, 3))}
+      onChange={(e) => {
+        setBrouillon(e.target.value);
+        onValeur(parseNombre(e.target.value));
+      }}
+      onBlur={() => setBrouillon(null)}
+      disabled={disabled}
+      placeholder={placeholder}
+      title={title}
+      className="w-full min-w-[92px] bg-transparent px-2 py-1.5 text-right text-[11px] tabular-nums placeholder:text-fg-subtle placeholder:italic focus:outline-none focus:bg-primary-subtle disabled:cursor-not-allowed"
+    />
   );
 }
