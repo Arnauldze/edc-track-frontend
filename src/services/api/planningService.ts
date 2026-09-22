@@ -3,6 +3,9 @@
 // ══════════════════════════════════════════════════════════════
 
 import { apiClient } from './client';
+import type { Calendrier } from '@/lib/livrableSchedule';
+import type { Fiscalite, LigneDqe } from '@/lib/dqe';
+import type { Echelle, Realisation } from '@/lib/repartition';
 
 // ── Types ──
 
@@ -13,6 +16,8 @@ export interface BudgetDevise {
 }
 
 export interface Livrable {
+  /** Identifiant interne stable, attribué à la création ou par le serveur. */
+  id?: string;
   numero: string;
   intitule: string;
   ponderation: number;
@@ -110,6 +115,8 @@ export interface LignePassationApi {
 }
 
 export interface TacheExecution {
+  /** Identifiant interne stable, attribué à la création ou par le serveur. */
+  id?: string;
   numero: string;
   designation: string;
   ponderation?: number;
@@ -152,7 +159,18 @@ export interface Planning {
   budgetInitialTotal?: number;
   budgetActualise: BudgetDevise[];
   budgetActualiseTotal?: number;
-  
+
+  /** Jours travaillés de l'activité ; absent, tous les jours comptent. */
+  calendrier?: Calendrier;
+
+  /** Devis quantitatif et estimatif du marché. */
+  dqe?: LigneDqe[];
+  fiscalite?: Fiscalite;
+  /** Pas de temps de la répartition et des courbes. */
+  echelle?: Echelle;
+  /** Décomptes de l'entreprise : ce qui a réellement été exécuté. */
+  realisations?: Realisation[];
+
   // Délais
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
@@ -211,6 +229,11 @@ export interface CreatePlanningDto {
   hasExecution?: boolean;
   budgetInitial?: BudgetDevise[];
   budgetInitialTotal?: number;
+  calendrier?: Calendrier;
+  dqe?: LigneDqe[];
+  fiscalite?: Fiscalite;
+  echelle?: Echelle;
+  realisations?: Realisation[];
   dateDebutInitiale?: Date;
   dateFinInitiale?: Date;
   delaiInitialMois?: number;
@@ -256,6 +279,8 @@ export interface PlanningStats {
 
 /** Échéances d'une ligne au moment du figeage. */
 export interface LigneReference {
+  /** Identifiant interne de la ligne photographiée ; absent des références anciennes. */
+  ligneId?: string;
   numero: string;
   /** 'etude' ou 'execution' : deux lignes peuvent porter le même numéro. */
   phase: string;

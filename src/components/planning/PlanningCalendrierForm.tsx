@@ -14,12 +14,43 @@
 // ══════════════════════════════════════════════════════════════
 
 import { useMemo, useState, type ReactNode } from "react";
-import { AlertCircle, ArrowDown, ArrowUp, Info, Plus, Scale, Trash2, Upload } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, Info, ListPlus, Plus, Scale, Trash2, Upload } from "lucide-react";
 import { FileImportModal } from "./FileImportModal";
-import { calculerCalendrierEtude, ecart, toDay, type ChampLivrable, type ModeFin, type Unite } from "@/lib/livrableSchedule";
+import {
+  CALENDRIER_PAR_DEFAUT,
+  LIBELLE_REGIME,
+  calculerCalendrierEtude,
+  type Calendrier,
+  type RegimeCalendrier,
+  deplacerLigne,
+  ecart,
+  insererApresLigne,
+  nouvelIdentifiant,
+  reetiqueterLiaisons,
+  renumeroterLignes,
+  supprimerLigne,
+  toDay,
+  EXEMPLES_LIAISON,
+  type ChampLivrable,
+  type LivrableCalcule,
+  type ModeFin,
+  type Unite,
+} from "@/lib/livrableSchedule";
+
+const ABREGE_UNITE: Record<Unite, string> = { jours: "j", semaines: "sem", mois: "mois" };
+
+/** D'où vient le début d'une ligne, pour l'infobulle du champ verrouillé. */
+function origineDebut(l: LivrableCalcule): string {
+  if (!l.liaison) return l.debutFixe ? "Date de début saisie (videz pour suivre T0)" : "Démarre à T0";
+  const { numero, type, decalage, unite } = l.liaison;
+  const ancre = type === "DD" ? `Début de ${numero}` : `Fin de ${numero}`;
+  return decalage ? `${ancre} ${decalage < 0 ? "−" : "+"} ${Math.abs(decalage)} ${ABREGE_UNITE[unite]}` : ancre;
+}
 
 /** Champs communs aux livrables et aux tâches, plus ceux propres à chaque phase. */
 export interface LigneCalendrier {
+  /** Identifiant interne stable, jamais affiché (cf. lib/livrableSchedule.ts). */
+  id?: string;
   numero: string;
   ponderation?: number;
   predecesseur?: string;
@@ -56,6 +87,11 @@ export interface PhaseCalendrier {
   /** « livrable » ou « tâche », pour les textes. */
   mot: string;
   importType: "etude" | "execution";
+  /**
+   * Type de planification proposé par défaut. Décision de l'équipe : les
+   * études se planifient au délai depuis T0, les travaux au début + durée.
+   */
+  modeDefaut: ModeFin;
   /** Colonnes unité, quantité, prix unitaire et montant. */
   quantites?: boolean;
 }
@@ -66,10 +102,25 @@ interface Props<T extends LigneCalendrier> {
   onChange: (lignes: T[]) => void;
   /** Date T0 de l'activité (AAAA-MM-JJ). */
   dateT0: string;
+  /** Jours travaillés de l'activité : ils décident des durées et des échéances. */
+  calendrierTravail?: Calendrier;
   readOnly: boolean;
+  /**
+   * Le contrôle d'enregistrement a été demandé : les champs obligatoires
+   * restés vides passent en rouge. Faux tant qu'on saisit, pour ne pas
+   * souligner en rouge une ligne qu'on vient tout juste d'ajouter.
+   */
+  controleDemande?: boolean;
   /** Action placée dans l'en-tête de la carte (retirer la phase…). */
   action?: ReactNode;
 }
+
+/** Les trois types de planification, tels que l'équipe les nomme. */
+const TYPES_PLANIFICATION: { value: ModeFin; label: string; aide: string }[] = [
+  { value: "delai", label: "Suivant délai (T0 + x)", aide: "L'échéance se compte depuis T0 ; durée et dates en sont déduites." },
+  { value: "fin", label: "Début et fin", aide: "On saisit la date de fin ; la durée en est déduite." },
+  { value: "duree", label: "Début et durée", aide: "On saisit la durée ; l'échéance en est déduite." },
+];
 
 const UNITES: { value: Unite; label: string }[] = [
   { value: "jours", label: "jours" },
@@ -77,13 +128,21 @@ const UNITES: { value: Unite; label: string }[] = [
   { value: "mois", label: "mois" },
 ];
 
+/** Rappel du régime, affiché à côté du titre de la phase. */
+const RESUME_REGIME: Record<RegimeCalendrier, string | null> = {
+  calendaire: null,
+  "lun-ven": "jours ouvrés, lun.–ven.",
+  "lun-sam": "jours ouvrés, lun.–sam.",
+};
+
 // Classes complètes (Tailwind ne détecte pas les classes composées à l'exécution)
-const GRID = "grid-cols-[56px_minmax(180px,1fr)_68px_84px_132px_128px_128px_132px_72px_76px]";
-const GRID_QUANTITES = "grid-cols-[56px_minmax(180px,1fr)_68px_64px_76px_104px_112px_84px_132px_128px_128px_132px_72px_76px]";
+const GRID = "grid-cols-[56px_minmax(180px,1fr)_68px_84px_132px_128px_128px_132px_72px_100px]";
+const GRID_QUANTITES = "grid-cols-[56px_minmax(180px,1fr)_68px_64px_76px_104px_112px_84px_132px_128px_128px_132px_72px_100px]";
 
 /** Nouvelle ligne : durée d'un mois, sans prédécesseur. */
 export function nouvelleLigne<T extends LigneCalendrier>(phase: Pick<PhaseCalendrier, "champNom">, numero: string): T {
   return {
+    id: nouvelIdentifiant(),
     numero,
     [phase.champNom]: "",
     ponderation: 0,
@@ -114,9 +173,21 @@ const formatJour = (day?: string) =>
 
 const formatMontant = (value: number) => Math.round(value).toLocaleString("fr-FR");
 
-export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, lignes, onChange, dateT0, readOnly, action }: Props<T>) {
+export function PlanningCalendrierForm<T extends LigneCalendrier>({
+  phase,
+  lignes,
+  onChange,
+  dateT0,
+  calendrierTravail = CALENDRIER_PAR_DEFAUT,
+  readOnly,
+  controleDemande = false,
+  action,
+}: Props<T>) {
   const [showImportModal, setShowImportModal] = useState(false);
-  const calendrier = useMemo(() => calculerCalendrierEtude(lignes, dateT0), [lignes, dateT0]);
+  const calendrier = useMemo(
+    () => calculerCalendrierEtude(lignes, dateT0, calendrierTravail),
+    [lignes, dateT0, calendrierTravail],
+  );
 
   const problemeDe = (index: number, champ: ChampLivrable) =>
     calendrier.problemes.find((p) => p.index === index && p.champ === champ)?.message;
@@ -128,28 +199,80 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
   // ── Modifications ──
   const modifier = (index: number, patch: Partial<T>) => onChange(lignes.map((l, i) => (i === index ? { ...l, ...patch } : l)));
 
+  /**
+   * Renommer une ligne suit ses liaisons : « T3FD+2sem » devient
+   * « T9FD+2sem », et non une liaison vers une ligne disparue.
+   */
   const renommer = (index: number, numero: string) => {
     const ancien = lignes[index].numero;
-    onChange(lignes.map((l, i) => (i === index ? { ...l, numero } : l.predecesseur && l.predecesseur === ancien ? { ...l, predecesseur: numero } : l)));
+    const renommees = lignes.map((l, i) => (i === index ? { ...l, numero } : l));
+    onChange(ancien && ancien !== numero ? reetiqueterLiaisons(renommees, new Map([[ancien, numero]])) : renommees);
   };
 
   const fixerFin = (index: number, mode: ModeFin, patch: Partial<T>) => modifier(index, { ...patch, modeFin: mode });
 
-  const ajouter = () => onChange([...lignes, nouvelleLigne<T>(phase, prochainNumero(lignes, phase.prefixe))]);
+  /**
+   * Type commun à tout le tableau, ou « mixte » pour une planification
+   * ancienne dont les lignes ne suivent pas toutes la même règle.
+   */
+  const typeTableau: ModeFin | "mixte" | undefined = useMemo(() => {
+    const modes = new Set(calendrier.livrables.map((l) => l.modeFin));
+    if (modes.size === 0) return phase.modeDefaut;
+    return modes.size === 1 ? [...modes][0] : "mixte";
+  }, [calendrier.livrables, phase.modeDefaut]);
 
-  /** Comme MS Project : les successeurs de la ligne retirée se rattachent à son prédécesseur (T1 → T2 → T3 devient T1 → T3). */
-  const supprimer = (index: number) => {
-    const { numero: retire, predecesseur: relais } = lignes[index];
-    onChange(lignes.filter((_, i) => i !== index).map((l) => (l.predecesseur === retire ? { ...l, predecesseur: relais ?? "" } : l)));
+  /** Colonne verrouillée : elle est déduite dans le type choisi. */
+  const verrouille = (mode: ModeFin) => typeTableau !== "mixte" && typeTableau !== mode;
+
+  const aideColonne = (mode: ModeFin, modeLigne: ModeFin, determinante: string, deduite: string) =>
+    modeLigne === mode ? determinante : verrouille(mode) ? "Déduite du type de planification choisi" : deduite;
+
+  /**
+   * Bascule tout le tableau. Les dates ne bougent pas : la valeur déduite que
+   * le moteur vient de calculer devient la valeur saisie. Sans cela, changer
+   * de type effacerait la planification.
+   */
+  const appliquerType = (mode: ModeFin) => {
+    onChange(
+      lignes.map((ligne, index) => {
+        const calcule = calendrier.livrables[index];
+        if (!calcule) return ligne;
+        if (mode === "duree") return { ...ligne, modeFin: mode, duree: calcule.duree ?? ligne.duree };
+        if (mode === "delai") return { ...ligne, modeFin: mode, delai: calcule.delai ?? ligne.delai };
+        return { ...ligne, modeFin: mode, dateFin: calcule.dateFin ?? ligne.dateFin };
+      }),
+    );
   };
 
-  const deplacer = (index: number, direction: -1 | 1) => {
-    const cible = index + direction;
-    if (cible < 0 || cible >= lignes.length) return;
-    const copie = [...lignes];
-    [copie[index], copie[cible]] = [copie[cible], copie[index]];
-    onChange(copie);
-  };
+  /**
+   * Le serveur refuse une ligne sans intitulé (@IsNotEmpty) : autant le dire
+   * sur la case, au moment du contrôle, plutôt que par une erreur 400.
+   */
+  const nomManquant = (index: number) =>
+    controleDemande && !String(lignes[index]?.[phase.champNom] ?? "").trim();
+
+  const nomsManquants = controleDemande ? lignes.filter((_, i) => nomManquant(i)).length : 0;
+
+  /** Ligne neuve au type du tableau : sinon celui-ci deviendrait « mixte ». */
+  const nouvelleLigneDuTableau = () =>
+    ({
+      ...nouvelleLigne<T>(phase, prochainNumero(lignes, phase.prefixe)),
+      modeFin: typeTableau && typeTableau !== "mixte" ? typeTableau : phase.modeDefaut,
+    }) as T;
+
+  const ajouter = () => onChange(renumeroterLignes([...lignes, nouvelleLigneDuTableau()], phase.prefixe));
+
+  // ── Opérations de structure ──
+  // Renumérotation positionnelle et liaisons automatiques : les règles sont
+  // dans le moteur partagé (lib/livrableSchedule.ts), où elles sont testées.
+
+  const insererApres = (index: number) =>
+    onChange(insererApresLigne(lignes, index, nouvelleLigneDuTableau(), phase.prefixe));
+
+  const supprimer = (index: number) => onChange(supprimerLigne(lignes, index, phase.prefixe));
+
+  const deplacer = (index: number, direction: -1 | 1) =>
+    onChange(deplacerLigne(lignes, index, direction, phase.prefixe));
 
   /** Répartit 100 % à parts égales, l'arrondi sur la dernière ligne. */
   const equilibrer = () => {
@@ -188,7 +311,8 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
 
   // ── Styles ──
   const grille = phase.quantites ? GRID_QUANTITES : GRID;
-  const largeurMin = phase.quantites ? "min-w-[1400px]" : "min-w-[1060px]";
+  const listeNumeros = `numeros-${phase.champNom}`;
+  const largeurMin = phase.quantites ? "min-w-[1424px]" : "min-w-[1084px]";
   const cellule = "px-1.5 py-1.5 flex items-center gap-1 border-r border-b border-line min-w-0";
   const champ = (options: { deduit?: boolean; erreur?: string }) =>
     [
@@ -224,12 +348,39 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
           <div>
             <h2 className="text-sm font-bold text-fg flex items-center gap-2">
               {phase.icone} {phase.titre}
+              {RESUME_REGIME[calendrierTravail.regime] && (
+                <span
+                  className="rounded border border-line bg-inset px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted"
+                  title="Les durées en jours et en semaines ne comptent que les jours travaillés."
+                >
+                  {RESUME_REGIME[calendrierTravail.regime]}
+                </span>
+              )}
             </h2>
             <p className="text-[11px] text-fg-muted mt-0.5">{phase.description}</p>
           </div>
 
           {/* Synthèse de la phase */}
           <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-[9px] uppercase tracking-wider font-bold text-fg-subtle">Type de planification</span>
+              <select
+                value={typeTableau === "mixte" ? "" : (typeTableau ?? phase.modeDefaut)}
+                onChange={(e) => appliquerType(e.target.value as ModeFin)}
+                disabled={readOnly}
+                title={
+                  typeTableau === "mixte"
+                    ? "Cette planification mélange les règles ; choisir un type les aligne sans déplacer les dates."
+                    : TYPES_PLANIFICATION.find((t) => t.value === typeTableau)?.aide
+                }
+                className="px-2 py-1 rounded-md border border-line bg-surface text-[11px] font-semibold text-fg focus:outline-none focus:border-primary disabled:opacity-60"
+              >
+                {typeTableau === "mixte" && <option value="">Mixte</option>}
+                {TYPES_PLANIFICATION.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </label>
           <dl className="flex flex-wrap gap-1.5 text-[11px]">
             {[
               { label: `${motPluriel[0].toUpperCase()}${motPluriel.slice(1)}`, value: String(nombre) },
@@ -282,9 +433,14 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                 ))}
               </div>
 
+              <datalist id={listeNumeros}>
+                {lignes.map((ligne) => ligne.numero).filter(Boolean).map((numero) => (
+                  <option key={numero} value={numero} />
+                ))}
+              </datalist>
+
               {calendrier.livrables.map((l, index) => {
                 const saisi = lignes[index];
-                const autres = lignes.filter((_, i) => i !== index && lignes[i].numero);
                 return (
                   <div key={index} className={`grid ${grille} text-[12px] hover:bg-hover`}>
                     <div className={cellule}>
@@ -302,7 +458,8 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                         onChange={(e) => modifier(index, { [phase.champNom]: e.target.value } as Partial<T>)}
                         disabled={readOnly}
                         placeholder={phase.placeholderNom}
-                        className={champ({})}
+                        title={nomManquant(index) ? `${phase.libelleNom} : à renseigner` : undefined}
+                        className={champ({ erreur: nomManquant(index) ? phase.libelleNom : undefined })}
                       />
                     </div>
                     <div className={cellule}>
@@ -332,19 +489,19 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                       </>
                     )}
                     <div className={cellule}>
-                      <select
+                      <input
+                        list={listeNumeros}
                         value={saisi.predecesseur ?? ""}
                         onChange={(e) => modifier(index, { predecesseur: e.target.value } as Partial<T>)}
+                        onBlur={() => l.predecesseur && modifier(index, { predecesseur: l.predecesseur } as Partial<T>)}
                         disabled={readOnly}
-                        title={problemeDe(index, "predecesseur") ?? `${phase.mot[0].toUpperCase()}${phase.mot.slice(1)} qui doit être terminé(e) avant (série)`}
+                        placeholder="—"
+                        title={
+                          problemeDe(index, "predecesseur") ??
+                          `${phase.mot[0].toUpperCase()}${phase.mot.slice(1)} dont celle-ci dépend. Décalage possible : ${EXEMPLES_LIAISON}`
+                        }
                         className={`${champ({ erreur: problemeDe(index, "predecesseur") })} text-center`}
-                      >
-                        <option value="">—</option>
-                        {autres.map((o) => (
-                          <option key={o.numero} value={o.numero}>{o.numero}</option>
-                        ))}
-                        {saisi.predecesseur && !autres.some((o) => o.numero === saisi.predecesseur) && <option value={saisi.predecesseur}>{saisi.predecesseur} ?</option>}
-                      </select>
+                      />
                     </div>
                     <div className={cellule}>
                       <input
@@ -352,7 +509,7 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                         value={l.dateDebut ?? ""}
                         onChange={(e) => modifier(index, (e.target.value ? { dateDebut: e.target.value, debutFixe: true } : { dateDebut: undefined, debutFixe: false }) as Partial<T>)}
                         disabled={readOnly || !!l.predecesseur}
-                        title={l.predecesseur ? `Fin de ${l.predecesseur}` : l.debutFixe ? "Date de début saisie (videz pour suivre T0)" : "Démarre à T0"}
+                        title={origineDebut(l)}
                         className={champ({ deduit: !l.debutFixe, erreur: problemeDe(index, "dateDebut") })}
                       />
                     </div>
@@ -361,8 +518,8 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                         inputMode="decimal"
                         value={formatQuantite(l.duree)}
                         onChange={(e) => fixerFin(index, "duree", { duree: parseQuantite(e.target.value) } as Partial<T>)}
-                        disabled={readOnly}
-                        title={l.modeFin === "duree" ? "La durée fixe l'échéance" : "Déduite — saisir une durée fixe l'échéance"}
+                        disabled={readOnly || verrouille("duree")}
+                        title={aideColonne("duree", l.modeFin, "La durée fixe l'échéance", "Déduite — saisir une durée fixe l'échéance")}
                         className={`${champ({ deduit: l.modeFin !== "duree" })} text-center`}
                       />
                       <select value={l.dureeUnite} onChange={(e) => modifier(index, { dureeUnite: e.target.value as Unite } as Partial<T>)} disabled={readOnly} className={selectUnite}>
@@ -374,8 +531,11 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                         inputMode="decimal"
                         value={formatQuantite(l.delai)}
                         onChange={(e) => fixerFin(index, "delai", { delai: parseQuantite(e.target.value) } as Partial<T>)}
-                        disabled={readOnly}
-                        title={problemeDe(index, "delai") ?? (l.modeFin === "delai" ? "Le délai depuis T0 fixe l'échéance" : "Déduit — saisir un délai fixe l'échéance")}
+                        disabled={readOnly || verrouille("delai")}
+                        title={
+                          problemeDe(index, "delai") ??
+                          aideColonne("delai", l.modeFin, "Le délai depuis T0 fixe l'échéance", "Déduit — saisir un délai fixe l'échéance")
+                        }
                         className={`${champ({ deduit: l.modeFin !== "delai", erreur: problemeDe(index, "delai") })} text-center`}
                       />
                       <select value={l.delaiUnite} onChange={(e) => modifier(index, { delaiUnite: e.target.value as Unite } as Partial<T>)} disabled={readOnly} className={selectUnite}>
@@ -387,8 +547,11 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                         type="date"
                         value={l.dateFin ?? ""}
                         onChange={(e) => fixerFin(index, "fin", { dateFin: e.target.value || undefined } as Partial<T>)}
-                        disabled={readOnly}
-                        title={problemeDe(index, "dateFin") ?? (l.modeFin === "fin" ? "Échéance saisie" : "Déduite — saisir une date fixe l'échéance")}
+                        disabled={readOnly || verrouille("fin")}
+                        title={
+                          problemeDe(index, "dateFin") ??
+                          aideColonne("fin", l.modeFin, "Échéance saisie", "Déduite — saisir une date fixe l'échéance")
+                        }
                         className={champ({ deduit: l.modeFin !== "fin", erreur: problemeDe(index, "dateFin") })}
                       />
                     </div>
@@ -403,6 +566,14 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
                           </button>
                           <button type="button" onClick={() => deplacer(index, 1)} disabled={index === lignes.length - 1} title="Descendre" className="p-1 rounded text-fg-subtle hover:bg-inset disabled:opacity-25">
                             <ArrowDown size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insererApres(index)}
+                            title={`Insérer une ${phase.mot} en dessous`}
+                            className="p-1 rounded text-fg-subtle hover:bg-inset"
+                          >
+                            <ListPlus size={13} />
                           </button>
                           <button type="button" onClick={() => supprimer(index)} title="Supprimer" className="p-1 rounded text-fg-subtle hover:bg-danger-subtle hover:text-danger">
                             <Trash2 size={13} />
@@ -435,10 +606,17 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
           )}
 
           {/* Problèmes à corriger avant d'enregistrer */}
-          {(problemesLignes.length > 0 || (!pondValide && lignes.length > 0)) && (
+          {(problemesLignes.length > 0 || nomsManquants > 0 || (!pondValide && lignes.length > 0)) && (
             <div className="flex gap-2 px-3 py-2 rounded-md border border-warning/20 bg-warning-subtle text-[11px] text-warning">
               <AlertCircle size={15} className="shrink-0 mt-px" />
               <ul className="space-y-0.5">
+                {nomsManquants > 0 && (
+                  <li>
+                    {nomsManquants === 1
+                      ? `Une ${phase.mot} n'a pas d'intitulé (case en rouge).`
+                      : `${nomsManquants} ${motPluriel} n'ont pas d'intitulé (cases en rouge).`}
+                  </li>
+                )}
                 {problemesLignes.map((message) => <li key={message}>{message}</li>)}
                 {!pondValide && lignes.length > 0 && <li>La somme des pondérations doit être égale à 100 % (actuellement {formatQuantite(calendrier.totalPonderation)} %).</li>}
               </ul>
@@ -452,9 +630,22 @@ export function PlanningCalendrierForm<T extends LigneCalendrier>({ phase, ligne
               <li><strong>Durée</strong> : temps d&apos;exécution (début + 1 mois = fin).</li>
               <li><strong>Échéance</strong> : fixée par la durée, le délai ou une date saisie ; les deux autres valeurs sont déduites et affichées en italique. Saisir une valeur en italique la rend déterminante.</li>
               <li><strong>Série</strong> : avec un prédécesseur, la ligne commence à la fin du prédécesseur.</li>
+              <li>
+                <strong>Liaisons</strong> : comme dans MS&nbsp;Project. <code>T3</code> démarre à la fin de T3 ;
+                <code>T3FD+2sem</code> deux semaines après la fin de T3 ; <code>T3DD+2j</code> deux jours après le
+                <em> début</em> de T3. Le décalage peut être négatif et vaut des jours si l&apos;unité est omise.
+              </li>
               <li><strong>Parallèle</strong> : sans prédécesseur, elle commence à la date de début saisie, sinon à T0.</li>
               <li><strong>Successeurs</strong> : déduits automatiquement des prédécesseurs.</li>
-              <li><strong>Mois</strong> : mois de calendrier (15 janv. + 1 mois = 15 févr.).</li>
+              <li><strong>Mois</strong> : mois de calendrier (15 janv. + 1 mois = 15 févr.), quel que soit le régime.</li>
+              {calendrierTravail.regime !== "calendaire" && (
+                <li>
+                  <strong>Jours ouvrés</strong> : {LIBELLE_REGIME[calendrierTravail.regime].toLowerCase()}. Une durée de
+                  3 jours commencée le lundi se termine le mercredi, dernier jour travaillé compris, et un successeur
+                  enchaîne le jour travaillé suivant. Un décalage de liaison, lui, saute les jours chômés sans en
+                  compter aucun.
+                </li>
+              )}
               <li><strong>Pondération</strong> : la somme des {motPluriel} doit être égale à 100 %.</li>
               {phase.quantites && <li><strong>Montant</strong> : quantité × prix unitaire, pour information.</li>}
             </ul>

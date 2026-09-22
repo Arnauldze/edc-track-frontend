@@ -10,7 +10,7 @@ import type { Planning, Livrable } from "@/services/api/planningService";
 import { planningService } from "@/services/api/planningService";
 import { projectService, type Component } from "@/services/api/projectService";
 import { toast } from "@/lib/toastStore";
-import { calculerCalendrierEtude, ecart, toDay } from "@/lib/livrableSchedule";
+import { calculerCalendrierEtude, ecart, normaliserCalendrier, toDay, EXEMPLES_LIAISON, type Calendrier } from "@/lib/livrableSchedule";
 import { livrablePourApi, messageApi, tachePourApi } from "@/lib/livrableApi";
 import type { LigneCalendrier } from "./PlanningCalendrierForm";
 import { findUnit, listUnits, type UnitLevel } from "@/lib/structureUnits";
@@ -408,14 +408,20 @@ export function MSProjectViewV2({
       phase: PhaseLignes,
       livrables: LigneCalendrier[],
       level: number,
-      t0?: string,
+      t0: string | undefined,
+      calendrierTravail: Calendrier,
       reference?: Planning["reference"],
     ) => {
-      const { livrables: avecMarge } = calculerCalendrierEtude(livrables, t0);
+      const { livrables: avecMarge } = calculerCalendrierEtude(livrables, t0, calendrierTravail);
       avecMarge.forEach((liv) => {
         // Une ligne ajoutée après le figeage n'a pas de repère : pas d'écart,
         // ce qui n'est pas la même chose qu'un écart nul.
-        const fige = reference?.lignes?.find((l) => l.numero === liv.numero && l.phase === phase);
+        // L'identifiant interne d'abord : une ligne renumérotée depuis le
+        // figeage se retrouve quand même. Le numéro reste le repli pour les
+        // références figées avant son introduction.
+        const fige = reference?.lignes?.find(
+          (l) => (l.ligneId && liv.id ? l.ligneId === liv.id : l.numero === liv.numero) && l.phase === phase,
+        );
         const referenceFin = toDay(fige?.dateFin as string | undefined);
         rows.push({
           id: `${activityPath}.${phase}.${liv.numero}`,
@@ -485,8 +491,8 @@ export function MSProjectViewV2({
             ),
           });
           if (expandedIds.has(node.id)) {
-            pushLivrables(node.id, "etude", livrables, level + 1, t0De(planning), planning?.reference);
-            pushLivrables(node.id, "execution", tachesExecution, level + 1, t0De(planning), planning?.reference);
+            pushLivrables(node.id, "etude", livrables, level + 1, t0De(planning), calDe(planning), planning?.reference);
+            pushLivrables(node.id, "execution", tachesExecution, level + 1, t0De(planning), calDe(planning), planning?.reference);
           }
           return;
         }
@@ -650,6 +656,9 @@ export function MSProjectViewV2({
   /** Date T0 d'une planification : point de départ des livrables sans prédécesseur ni début saisi. */
   const t0De = (planning?: Planning) => toDay((planning?.dateDebutInitiale ?? planning?.dateT0Etude) as string | undefined);
 
+  /** Jours travaillés de l'activité : ils décident des durées et des échéances. */
+  const calDe = (planning?: Planning) => normaliserCalendrier(planning?.calendrier);
+
   /** Dérive en jours entre une échéance de référence et l'échéance courante. */
   const ecartJours = (reference?: string, courante?: string) =>
     reference && courante ? ecart(reference, courante, "jours") : undefined;
@@ -680,7 +689,7 @@ export function MSProjectViewV2({
       : {};
 
     const modifies = currentLivrables.map((l, i) => (i === index ? { ...l, ...patch } : l));
-    const { livrables: calcules } = calculerCalendrierEtude(modifies, t0De(planning));
+    const { livrables: calcules } = calculerCalendrierEtude(modifies, t0De(planning), calDe(planning));
     setModifiedLivrables((prev) => new Map(prev).set(cleLignes(activityPath, phase), calcules));
     setHasChanges(true);
   };
@@ -691,7 +700,7 @@ export function MSProjectViewV2({
     for (const [cle, lignes] of modifiedLivrables.entries()) {
       const [activityPath, phase] = cle.split("|");
       const planning = plannings.find((p) => p.activityPath === activityPath);
-      const { problemes } = calculerCalendrierEtude(lignes, t0De(planning));
+      const { problemes } = calculerCalendrierEtude(lignes, t0De(planning), calDe(planning));
       const libelle = `${planning?.activityName ?? activityPath} (${phase === "etude" ? "étude" : "exécution"})`;
       [...new Set(problemes.map((p) => p.message))].forEach((m) => messages.push(`${libelle} : ${m}`));
     }
@@ -1166,33 +1175,40 @@ export function MSProjectViewV2({
 
     if (isEditing && isLivrable && !isLocked) {
       if (field === 'predecesseur') {
+        // Saisie libre, comme dans MS Project : une liste déroulante ne peut
+        // pas porter une liaison typée (« T3FD+2sem »), et l'écraserait.
         const activityLivrables = tasks.filter(t => t.type === "livrable" && t.activityPath === task.activityPath && t.phase === task.phase && t.numero !== task.numero);
+        const listeId = `msp-pred-${task.id}`;
         return (
-          <select
-            value={value?.toString() || ''}
-            onChange={(e) => handleCellChange(task, field as any, e.target.value)}
-            onBlur={() => setEditingCell(null)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null);
-            }}
-            autoFocus
-            className="msp-cell-input"
-            style={{
-              width: "100%",
-              height: ROW_HEIGHT - 4,
-              padding: "0 4px",
-              border: `2px solid ${MSP_TODAY_COLOR}`,
-              borderRadius: 0,
-              outline: "none",
-              fontSize: 11,
-              fontFamily: "inherit",
-            }}
-          >
-            <option value="">— Aucun —</option>
-            {activityLivrables.map(l => (
-              <option key={l.id} value={l.numero}>{l.numero} - {l.nom}</option>
-            ))}
-          </select>
+          <>
+            <datalist id={listeId}>
+              {activityLivrables.map(l => (
+                <option key={l.id} value={l.numero}>{l.nom}</option>
+              ))}
+            </datalist>
+            <input
+              list={listeId}
+              value={value?.toString() || ''}
+              onChange={(e) => handleCellChange(task, field as any, e.target.value)}
+              onBlur={() => setEditingCell(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null);
+              }}
+              autoFocus
+              title={`Prédécesseur, décalage possible : ${EXEMPLES_LIAISON}`}
+              className="msp-cell-input"
+              style={{
+                width: "100%",
+                height: ROW_HEIGHT - 4,
+                padding: "0 4px",
+                border: `2px solid ${MSP_TODAY_COLOR}`,
+                borderRadius: 0,
+                outline: "none",
+                fontSize: 11,
+                fontFamily: "inherit",
+              }}
+            />
+          </>
         );
       }
 

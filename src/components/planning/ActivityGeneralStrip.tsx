@@ -4,7 +4,8 @@
 // responsable. Chaque valeur s'ouvre dans un petit panneau pour être modifiée.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, X } from "lucide-react";
+import { LIBELLE_REGIME, type Calendrier, type RegimeCalendrier } from "@/lib/livrableSchedule";
 import { BudgetMultiDevise } from "./BudgetMultiDevise";
 import { controlClasses } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/helpers/currencyHelpers";
@@ -20,8 +21,20 @@ interface Props {
   budgetTotalFCFA: number;
   responsable: string;
   onResponsable: (value: string) => void;
+  calendrier: Calendrier;
+  onCalendrier: (value: Calendrier) => void;
   readOnly: boolean;
 }
+
+/** Étiquette compacte du régime, pour l'en-tête. */
+const REGIME_COURT: Record<RegimeCalendrier, string> = {
+  calendaire: "7 j/7",
+  "lun-ven": "Lun–Ven",
+  "lun-sam": "Lun–Sam",
+};
+
+const jourCourt = (jour: string) =>
+  new Date(`${jour}T00:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 
 function Champ({
   label,
@@ -81,8 +94,21 @@ function Champ({
 
 const inputClass = cn(controlClasses, "h-8 px-2.5");
 
-export function ActivityGeneralStrip({ dateT0, onDateT0, budgets, onBudgets, budgetTotalFCFA, responsable, onResponsable, readOnly }: Props) {
+export function ActivityGeneralStrip({
+  dateT0,
+  onDateT0,
+  budgets,
+  onBudgets,
+  budgetTotalFCFA,
+  responsable,
+  onResponsable,
+  calendrier,
+  onCalendrier,
+  readOnly,
+}: Props) {
   const plusieursDevises = budgets.some((b) => b.devise !== "FCFA" && b.montant);
+  const feries = calendrier.feries ?? [];
+  const chomes = (jours: string[]) => [...new Set(jours)].sort();
   return (
     <div className="flex flex-wrap items-center gap-1">
       <Champ label="T0" valeur={dateT0 ? new Date(`${dateT0}T00:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "À définir"} manquant={!dateT0} readOnly={readOnly}>
@@ -98,6 +124,62 @@ export function ActivityGeneralStrip({ dateT0, onDateT0, budgets, onBudgets, bud
           <p className="mt-1.5 text-[11px] text-fg-muted">
             Total converti : <strong>{formatCurrency(budgetTotalFCFA, "FCFA")}</strong> (taux du financement du projet)
           </p>
+        )}
+      </Champ>
+
+      <Champ
+        label="Calendrier"
+        valeur={REGIME_COURT[calendrier.regime] + (feries.length ? ` · ${feries.length} chômé${feries.length > 1 ? "s" : ""}` : "")}
+        readOnly={readOnly}
+        largeur={320}
+      >
+        <label className="block text-[11px] font-bold text-fg-muted mb-1.5">Jours travaillés</label>
+        <select
+          value={calendrier.regime}
+          onChange={(e) => onCalendrier({ ...calendrier, regime: e.target.value as RegimeCalendrier })}
+          className={inputClass}
+          autoFocus
+        >
+          {(Object.keys(LIBELLE_REGIME) as RegimeCalendrier[]).map((regime) => (
+            <option key={regime} value={regime}>
+              {LIBELLE_REGIME[regime]}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1.5 text-[10px] text-fg-subtle">
+          Les durées en jours et en semaines ne comptent que les jours travaillés ; un mois reste un mois de
+          calendrier. Changer de régime redate toute l&apos;activité.
+        </p>
+
+        {calendrier.regime !== "calendaire" && (
+          <div className="mt-3 border-t border-line pt-2.5">
+            <label className="block text-[11px] font-bold text-fg-muted mb-1.5">Jours chômés</label>
+            {feries.length > 0 && (
+              <div className="mb-1.5 flex flex-wrap gap-1">
+                {chomes(feries).map((jour) => (
+                  <button
+                    key={jour}
+                    type="button"
+                    onClick={() => onCalendrier({ ...calendrier, feries: feries.filter((f) => f !== jour) })}
+                    className="group inline-flex items-center gap-1 rounded border border-line bg-inset px-1.5 py-0.5 text-[11px] text-fg-muted hover:border-danger/40 hover:text-danger"
+                    title="Retirer ce jour"
+                  >
+                    {jourCourt(jour)}
+                    <X size={10} />
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
+              type="date"
+              value=""
+              onChange={(e) => e.target.value && onCalendrier({ ...calendrier, feries: chomes([...feries, e.target.value]) })}
+              className={inputClass}
+            />
+            <p className="mt-1.5 text-[10px] text-fg-subtle">
+              Fériés, congés, saison des pluies : ces jours ne comptent pas dans les durées.
+            </p>
+          </div>
         )}
       </Champ>
 
